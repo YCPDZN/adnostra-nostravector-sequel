@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AD-NOSTRA — Anno Domini 2137</title>
+<style>
+:root{
+  --cyan:#3ee6ff; --cyan-d:#1a8fa3; --crimson:#ff2b4a; --gold:#e8c46a; --ink:#d6e4ee; --dim:#7d8fa0;
+  --panel:rgba(7,11,17,.82); --line:rgba(62,230,255,.28);
+  --font:'Bahnschrift','DIN Alternate','Segoe UI','Roboto Condensed',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#04070b;color:var(--ink);font-family:var(--font);user-select:none}
+canvas#scene{position:fixed;inset:0;width:100%;height:100%;display:block}
+.hidden{display:none!important}
+button{font-family:var(--font);cursor:pointer}
+.cut{clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px)}
+.panel{background:var(--panel);border:1px solid var(--line);backdrop-filter:blur(6px)}
+.scan::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 1px,transparent 1px 3px)}
+
+/* ---------- SPLASH ---------- */
+#splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#0b1520 0%,#030508 70%);z-index:50;transition:opacity 1s}
+#splash .logo{font-size:min(11vw,120px)}
+#splash .press{margin-top:48px;letter-spacing:.6em;font-size:14px;color:var(--cyan);animation:pulse 1.8s infinite}
+#splash .load{margin-top:48px;width:320px;height:2px;background:rgba(62,230,255,.15)}
+#splash .load i{display:block;height:100%;width:0;background:var(--cyan);box-shadow:0 0 12px var(--cyan);transition:width .3s}
+#splash .status{margin-top:14px;font-size:12px;letter-spacing:.3em;color:var(--dim)}
+@keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+
+.logo{font-weight:700;letter-spacing:.18em;color:#eaf6ff;text-shadow:0 0 24px rgba(62,230,255,.55),0 0 2px #fff;font-stretch:condensed;line-height:1}
+.logo b{color:var(--cyan);font-weight:700}
+.sub{letter-spacing:.42em;font-size:12px;color:var(--dim);margin-top:10px}
+
+/* ---------- MAIN MENU ---------- */
+#menu{position:fixed;inset:0;pointer-events:none;z-index:10}
+#menu > *{pointer-events:auto}
+#menu::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(3,6,10,.92) 0%,rgba(3,6,10,.55) 32%,transparent 55%),linear-gradient(0deg,rgba(3,6,10,.8) 0%,transparent 25%),radial-gradient(ellipse 28% 22% at 84% 24%,rgba(3,6,10,.75),transparent)}
+.menu-left{position:absolute;left:6vw;top:11vh;width:560px}
+.menu-left .logo{white-space:nowrap}
+.menu-left .logo{font-size:76px}
+.menu-left .era{white-space:nowrap;margin-top:14px;display:flex;gap:10px;align-items:center;font-size:12px;letter-spacing:.32em;color:var(--dim)}
+.menu-left .era i{display:inline-block;width:40px;height:1px;background:var(--cyan)}
+nav.mainnav{margin-top:7vh;display:flex;flex-direction:column;gap:6px}
+.mbtn{position:relative;text-align:left;background:transparent;border:none;color:var(--ink);font-size:20px;letter-spacing:.28em;padding:14px 22px;transition:all .18s;border-left:2px solid transparent}
+.mbtn small{display:block;font-size:10px;letter-spacing:.3em;color:var(--dim);margin-top:4px}
+.mbtn:hover,.mbtn:focus-visible{outline:none;color:#fff;border-left-color:var(--cyan);background:linear-gradient(90deg,rgba(62,230,255,.16),transparent);padding-left:32px}
+.mbtn:disabled{opacity:.3;pointer-events:none}
+.server{margin-top:5vh;font-size:11px;letter-spacing:.2em;color:var(--dim)}
+.server select{margin-top:8px;display:block;width:300px;background:rgba(7,11,17,.9);color:var(--ink);border:1px solid var(--line);padding:8px 10px;font-family:var(--font);letter-spacing:.12em;font-size:12px}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#4dff9a;box-shadow:0 0 8px #4dff9a;margin-right:6px}
+.nameplate{position:absolute;right:5vw;top:16vh;text-align:right;max-width:440px}
+.np-title{font-size:12px;letter-spacing:.5em;color:var(--cyan)}
+.np-name{white-space:nowrap;font-size:44px;letter-spacing:.12em;font-weight:700;margin-top:6px;text-shadow:0 0 18px rgba(62,230,255,.35)}
+.np-rule{height:1px;margin:14px 0 14px auto;width:260px;background:linear-gradient(270deg,var(--cyan),transparent)}
+.np-quote{font-size:15px;line-height:1.55;color:#b9c9d6;font-style:italic}
+.np-quote span{display:block;margin-top:8px;font-style:normal;font-size:11px;letter-spacing:.3em;color:var(--dim)}
+.menu-foot{position:absolute;left:6vw;right:6vw;bottom:3.5vh;display:flex;justify-content:space-between;font-size:11px;letter-spacing:.25em;color:#5d6d7c}
+.hint-drag{position:absolute;right:6vw;top:4vh;font-size:10px;letter-spacing:.3em;color:#4d5d6b}
+
+/* ---------- MODALS ---------- */
+.modal{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:rgba(2,4,7,.6)}
+.modal .box{position:relative;width:min(920px,92vw);max-height:84vh;padding:28px 32px;overflow:auto}
+.box h2{font-size:22px;letter-spacing:.35em;font-weight:600;color:#fff}
+.box h2 small{display:block;font-size:10px;letter-spacing:.35em;color:var(--cyan);margin-bottom:6px;font-weight:400}
+.xbtn{position:absolute;right:16px;top:14px;background:none;border:1px solid var(--line);color:var(--ink);width:32px;height:32px;font-size:16px}
+.xbtn:hover{border-color:var(--cyan);color:var(--cyan)}
+.btn{background:rgba(62,230,255,.1);border:1px solid var(--cyan-d);color:#e9fbff;padding:11px 22px;font-size:13px;letter-spacing:.25em;transition:.15s}
+.btn:hover{background:rgba(62,230,255,.25);border-color:var(--cyan);box-shadow:0 0 14px rgba(62,230,255,.3)}
+.btn.gold{border-color:#a8873e;background:rgba(232,196,106,.12)}
+.btn.gold:hover{background:rgba(232,196,106,.28);border-color:var(--gold);box-shadow:0 0 14px rgba(232,196,106,.3)}
+.btn.ghost{background:none;border-color:rgba(255,255,255,.18)}
+.btn:disabled{opacity:.35;pointer-events:none}
+
+/* codex */
+.codex{display:grid;grid-template-columns:230px 1fr;gap:26px;margin-top:22px}
+.codex ul{list-style:none;border-right:1px solid var(--line)}
+.codex li{padding:10px 12px;font-size:13px;letter-spacing:.14em;color:var(--dim);cursor:pointer;border-left:2px solid transparent}
+.codex li:hover{color:#fff}
+.codex li.on{color:#fff;border-left-color:var(--cyan);background:linear-gradient(90deg,rgba(62,230,255,.12),transparent)}
+.codex article h3{font-size:24px;letter-spacing:.12em;font-weight:600}
+.codex article .tag{font-size:10px;letter-spacing:.35em;color:var(--crimson);margin:6px 0 16px}
+.codex article p{font-size:15px;line-height:1.7;color:#c3d1dc;margin-bottom:12px}
+
+/* settings */
+.setgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px 40px;margin-top:22px}
+.setgrid label{display:flex;justify-content:space-between;align-items:center;font-size:13px;letter-spacing:.15em;color:#c3d1dc;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+input[type=range]{accent-color:var(--cyan);width:160px}
+input[type=checkbox]{accent-color:var(--cyan);width:18px;height:18px}
+
+/* ---------- CHARACTER CREATION ---------- */
+#create{position:fixed;inset:0;z-index:30;background:radial-gradient(ellipse at 70% 40%,rgba(10,22,32,.75),rgba(3,5,8,.96));display:flex;flex-direction:column;padding:5vh 6vw;overflow:auto}
+#create .head{display:flex;justify-content:space-between;align-items:flex-end}
+.classes{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:4vh}
+.ccard{position:relative;padding:22px;cursor:pointer;transition:.2s;border:1px solid rgba(255,255,255,.08);background:rgba(8,12,18,.75)}
+.ccard:hover{border-color:var(--line);transform:translateY(-3px)}
+.ccard.on{border-color:var(--c);box-shadow:0 0 0 1px var(--c),0 0 30px -6px var(--c)}
+.ccard .cico{font-size:34px;color:var(--c);text-shadow:0 0 16px var(--c)}
+.ccard h3{font-size:22px;letter-spacing:.25em;margin-top:10px}
+.ccard .role{font-size:10px;letter-spacing:.35em;color:var(--c);margin-top:4px}
+.ccard p{font-size:13px;line-height:1.6;color:#aebdca;margin-top:12px;min-height:84px}
+.ccard .stats{display:flex;gap:16px;font-size:11px;letter-spacing:.15em;color:var(--dim);margin-top:10px}
+.ccard .stats b{color:#fff;font-weight:600}
+.ccard ul{list-style:none;margin-top:14px;border-top:1px solid rgba(255,255,255,.07);padding-top:10px}
+.ccard li{font-size:12px;color:#c6d3de;padding:4px 0;letter-spacing:.06em}
+.ccard li span{color:var(--c);display:inline-block;width:22px}
+.crow{display:flex;gap:40px;align-items:flex-end;margin-top:4vh;flex-wrap:wrap}
+.field label{display:block;font-size:10px;letter-spacing:.35em;color:var(--cyan);margin-bottom:8px}
+.field input{background:rgba(7,11,17,.9);border:1px solid var(--line);color:#fff;font-family:var(--font);font-size:20px;letter-spacing:.15em;padding:10px 14px;width:320px;outline:none}
+.field input:focus{border-color:var(--cyan)}
+.swatches{display:flex;gap:10px}
+.sw{width:34px;height:34px;border:2px solid transparent;cursor:pointer;background:var(--c);box-shadow:inset 0 0 0 3px #070b11}
+.sw.on{border-color:#fff}
+.oath{margin-left:auto;text-align:right}
+.oath .warn{font-size:11px;letter-spacing:.15em;color:var(--crimson);margin-bottom:8px}
+
+/* ---------- LOADING ---------- */
+#loading{position:fixed;inset:0;z-index:45;background:#030508;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#loading .zone{font-size:12px;letter-spacing:.6em;color:var(--cyan)}
+#loading .title{font-size:52px;letter-spacing:.2em;margin-top:10px;font-weight:700}
+#loading .bar{margin-top:40px;width:420px;height:2px;background:rgba(62,230,255,.15)}
+#loading .bar i{display:block;height:100%;width:0;background:var(--cyan);box-shadow:0 0 12px var(--cyan)}
+#loading .tip{margin-top:26px;max-width:560px;text-align:center;font-size:14px;line-height:1.6;color:var(--dim)}
+
+/* ---------- HUD ---------- */
+#hud{position:fixed;inset:0;z-index:20;pointer-events:none}
+#hud .pe{pointer-events:auto}
+.frame{position:absolute;padding:10px 14px;width:280px}
+#pframe{left:18px;top:18px}
+#tframe{left:50%;top:18px;transform:translateX(-50%)}
+.frame .fn{display:flex;justify-content:space-between;font-size:14px;letter-spacing:.14em}
+.frame .fn em{font-style:normal;color:var(--dim);font-size:12px}
+.frame .ft{font-size:10px;letter-spacing:.25em;color:var(--dim);margin-top:2px}
+.bar2{position:relative;height:14px;margin-top:7px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);overflow:hidden}
+.bar2 i{position:absolute;left:0;top:0;bottom:0;transition:width .15s}
+.bar2 span{position:absolute;inset:0;font-size:10px;line-height:13px;text-align:center;letter-spacing:.1em;text-shadow:0 1px 2px #000}
+.hp i{background:linear-gradient(90deg,#1f9e6a,#4dff9a)}
+.hp .sh{background:rgba(160,230,255,.55)}
+.en i{background:linear-gradient(90deg,#1a6fa3,var(--cyan))}
+.ehp i{background:linear-gradient(90deg,#8a1023,var(--crimson))}
+.buffs{display:flex;gap:4px;margin-top:6px;min-height:4px}
+.buff{font-size:10px;padding:2px 6px;border:1px solid var(--line);color:var(--cyan);letter-spacing:.1em}
+#bossbar{position:absolute;top:108px;left:50%;transform:translateX(-50%);width:520px;text-align:center}
+#bossbar .bn{font-size:13px;letter-spacing:.4em;color:var(--crimson);text-shadow:0 0 10px var(--crimson)}
+#bossbar .bar2{height:10px}
+#mapwrap{position:absolute;right:18px;top:18px;width:200px;padding:8px}
+#minimap{display:block;width:184px;height:184px;border-radius:50%;background:#05080c}
+#zone-name{font-size:12px;letter-spacing:.2em;text-align:center;margin-top:8px;color:#fff}
+#zone-sub{font-size:10px;letter-spacing:.25em;text-align:center;margin-top:3px;color:var(--dim)}
+#tracker{position:absolute;right:18px;top:270px;width:250px;padding:12px 14px}
+#tracker h4{font-size:10px;letter-spacing:.35em;color:var(--gold);font-weight:500}
+#tracker .qt{font-size:14px;letter-spacing:.08em;margin-top:6px;color:#fff}
+#tracker .qo{font-size:12px;color:#aebdca;margin-top:5px;line-height:1.5}
+#tracker .qo.done{color:#4dff9a}
+#chat{position:absolute;left:18px;bottom:46px;width:420px}
+#chat-log{height:190px;overflow-y:auto;padding:8px 10px;font-size:13px;line-height:1.45;scrollbar-width:thin;mask-image:linear-gradient(0deg,#000 80%,transparent)}
+#chat-log div{text-shadow:0 1px 2px #000;margin-bottom:1px}
+.ch-world{color:#e3c99a}.ch-zone{color:#9ad1e3}.ch-sys{color:#f2df6f}.ch-gov{color:var(--cyan)}.ch-say{color:#fff}.ch-whisper{color:#e59bf0}.ch-loot{color:#4dff9a}.ch-err{color:#ff7f8f}
+.ch-name{color:#fff;cursor:default}
+#chat-input{width:100%;margin-top:4px;background:rgba(7,11,17,.88);border:1px solid var(--line);color:#fff;font-family:var(--font);font-size:13px;padding:7px 10px;outline:none;letter-spacing:.05em}
+#chat-input:not(:focus){opacity:.35}
+#hotbar{position:absolute;left:50%;bottom:30px;transform:translateX(-50%);display:flex;gap:6px;padding:8px}
+.slot{position:relative;width:58px;height:58px;border:1px solid rgba(255,255,255,.15);background:radial-gradient(circle at 50% 35%,rgba(62,230,255,.18),rgba(5,8,12,.9));display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--cyan);text-shadow:0 0 10px var(--cyan);cursor:pointer}
+.slot:hover{border-color:var(--cyan)}
+.slot .k{position:absolute;left:4px;top:2px;font-size:10px;color:#fff;text-shadow:none}
+.slot .c{position:absolute;right:4px;bottom:2px;font-size:10px;color:#9fd;text-shadow:none}
+.slot .cd{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.72)}
+.slot .cdt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;text-shadow:0 0 4px #000}
+.slot.noen{filter:grayscale(1) brightness(.6)}
+.slot.flash{animation:sflash .25s}
+@keyframes sflash{0%{box-shadow:0 0 0 2px #fff inset}100%{box-shadow:none}}
+#tooltip{position:fixed;z-index:60;max-width:260px;padding:10px 12px;font-size:12px;line-height:1.5;pointer-events:none}
+#tooltip b{display:block;font-size:13px;letter-spacing:.12em;color:#fff;margin-bottom:3px}
+#tooltip i{font-style:normal;color:var(--dim);font-size:11px}
+#xpbar{position:absolute;left:0;right:0;bottom:0;height:12px;background:rgba(0,0,0,.7);border-top:1px solid rgba(255,255,255,.08)}
+#xpbar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#6a3ec7,#b07bff);transition:width .3s}
+#xpbar span{position:absolute;inset:0;text-align:center;font-size:9px;line-height:11px;letter-spacing:.2em}
+#wallet{position:absolute;left:calc(50% + 190px);bottom:44px;font-size:12px;letter-spacing:.15em;color:var(--gold)}
+#keys{position:absolute;right:18px;bottom:22px;font-size:10px;letter-spacing:.12em;color:#5d6d7c;text-align:right;line-height:1.7}
+#prompt{position:absolute;left:50%;top:62%;transform:translateX(-50%);padding:8px 16px;font-size:13px;letter-spacing:.18em}
+#prompt b{color:var(--gold)}
+#center-msg{position:absolute;left:50%;top:24%;transform:translateX(-50%);font-size:16px;letter-spacing:.2em;color:#ff7f8f;text-shadow:0 0 8px #000;transition:opacity .4s}
+#banner{position:absolute;left:50%;top:30%;transform:translateX(-50%);text-align:center;transition:opacity .8s;pointer-events:none}
+#banner .b1{font-size:12px;letter-spacing:.6em;color:var(--cyan)}
+#banner .b2{font-size:42px;letter-spacing:.22em;font-weight:700;margin-top:6px;text-shadow:0 0 22px rgba(62,230,255,.5)}
+#banner .b3{font-size:12px;letter-spacing:.3em;color:var(--dim);margin-top:8px}
+#banner.lv .b2{color:var(--gold);text-shadow:0 0 22px rgba(232,196,106,.6)}
+#plates,#floaters{position:absolute;inset:0;overflow:hidden}
+.plate{position:absolute;left:0;top:0;text-align:center;white-space:nowrap;transform-origin:50% 100%;will-change:transform}
+.plate .n{font-size:12px;letter-spacing:.08em;text-shadow:0 1px 2px #000,0 0 6px #000}
+.plate .g{font-size:10px;color:#9fb3c4;text-shadow:0 1px 2px #000}
+.plate .hb{width:64px;height:4px;margin:3px auto 0;background:rgba(0,0,0,.6)}
+.plate .hb i{display:block;height:100%;background:var(--crimson)}
+.plate.npc .n{color:var(--gold)}
+.plate.bot .n{color:#7fe3ff}
+.plate.enemy .n{color:#ff6b7f}
+.plate.tgt .n{text-decoration:underline}
+.plate .qm{font-size:26px;font-weight:700;color:var(--gold);text-shadow:0 0 10px var(--gold),0 1px 2px #000;line-height:1}
+.fl{position:absolute;left:0;top:0;font-weight:700;font-size:20px;text-shadow:0 2px 3px #000,0 0 6px #000;white-space:nowrap;will-change:transform,opacity}
+.fl.crit{font-size:28px}
+.say-bubble{position:absolute;left:0;top:0;max-width:220px;padding:6px 10px;font-size:12px;background:rgba(7,11,17,.85);border:1px solid rgba(255,255,255,.15);white-space:normal;text-align:center}
+
+/* dialog / vendor / sheet */
+#dialog,#vendor,#sheet,#pause,#death{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:auto}
+#dialog{width:min(620px,92vw);padding:24px 28px}
+#dialog .who{font-size:10px;letter-spacing:.4em;color:var(--gold)}
+#dialog .whn{font-size:24px;letter-spacing:.15em;font-weight:600;margin-top:4px}
+#dialog .qtitle{font-size:12px;letter-spacing:.3em;color:var(--cyan);margin-top:16px}
+#dialog .txt{font-size:15px;line-height:1.75;color:#cfdbe5;margin-top:10px;white-space:pre-line}
+#dialog .rew{font-size:12px;letter-spacing:.15em;color:var(--gold);margin-top:12px}
+#dialog .opts{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
+#vendor{width:min(520px,92vw);padding:24px 28px}
+.vitem{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+.vitem b{font-size:14px;letter-spacing:.1em;font-weight:600}
+.vitem p{font-size:12px;color:var(--dim);margin-top:3px}
+#sheet{width:min(460px,92vw);padding:24px 28px}
+.srow{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px;letter-spacing:.12em;color:#c3d1dc}
+.srow b{color:#fff;font-weight:600}
+#pause{width:360px;padding:26px;text-align:center}
+#pause .btn{display:block;width:100%;margin-top:10px}
+#pause p{font-size:11px;letter-spacing:.2em;color:var(--dim);margin-top:14px}
+#death{text-align:center;padding:32px 48px;border-color:rgba(255,43,74,.4)}
+#death h2{font-size:34px;letter-spacing:.3em;color:var(--crimson);text-shadow:0 0 18px var(--crimson)}
+#death p{margin:14px 0 22px;color:#c3d1dc;font-size:14px;letter-spacing:.1em}
+#vignette{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 160px rgba(255,20,50,0);transition:box-shadow .3s}
+#farewell{position:fixed;inset:0;z-index:70;background:#030508;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+#farewell p{margin-top:22px;color:var(--dim);letter-spacing:.2em;font-size:13px;line-height:1.8}
+#err{position:fixed;left:50%;top:20px;transform:translateX(-50%);z-index:99;padding:12px 18px;color:#ff9aa8;font-size:13px;max-width:80vw}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<!-- SPLASH -->
+<div id="splash">
+  <div class="logo">AD<b>-</b>NOSTRA</div>
+  <div class="sub">ANNO DOMINI 2137</div>
+  <div class="load" id="splash-load"><i id="splash-bar"></i></div>
+  <div class="status" id="splash-status">ESTABLISHING UPLINK TO AD-NOSTRA</div>
+  <div class="press hidden" id="splash-press">PRESS ANY KEY</div>
+</div>
+
+<!-- MAIN MENU -->
+<div id="menu" class="hidden">
+  <div class="menu-left">
+    <div class="logo">AD<b>-</b>NOSTRA</div>
+    <div class="era"><i></i>ANNO DOMINI 2137 · AFTER THE CATHARSIS</div>
+    <nav class="mainnav">
+      <button class="mbtn" id="btn-continue">CONTINUE<small id="continue-sub">—</small></button>
+      <button class="mbtn" id="btn-new">NEW ASCENDANT<small>TAKE THE GOVERNOR'S OATH</small></button>
+      <button class="mbtn" id="btn-codex">CODEX<small>THE WORLD AFTER THE FALL</small></button>
+      <button class="mbtn" id="btn-settings">SETTINGS</button>
+      <button class="mbtn" id="btn-quit">QUIT</button>
+    </nav>
+    <div class="server">
+      <div><span class="dot"></span>REALM</div>
+      <select id="realm">
+        <option>NOSTRA-PRIME · EU · 28ms</option>
+        <option>CATHARSIS-FALL · NA · 94ms</option>
+        <option>MERIDIAN SPIRE · ASIA · 211ms</option>
+        <option>SEA-WALL · OCE · 263ms</option>
+      </select>
+    </div>
+  </div>
+  <div class="hint-drag">DRAG TO TURN THE GOVERNOR</div>
+  <div class="nameplate">
+    <div class="np-title">GOVERNOR OF AD-NOSTRA</div>
+    <div class="np-name">CROXIAN MASCAR</div>
+    <div class="np-rule"></div>
+    <div class="np-quote">“We did not win the war to inherit ashes. We won it to build.”<span>— ADDRESS TO THE CONCORD SENATE, 2136</span></div>
+  </div>
+  <div class="menu-foot"><span>CONCORD BUILD 2137.03 · v0.1.0</span><span><span class="dot"></span><span id="online">4,812</span> ASCENDANTS ONLINE</span></div>
+</div>
+
+<!-- CODEX -->
+<div id="codex" class="modal hidden">
+  <div class="box panel cut scan">
+    <button class="xbtn" data-close="codex">✕</button>
+    <h2><small>ARCHIVES OF THE CONCORD</small>CODEX</h2>
+    <div class="codex"><ul id="codex-list"></ul><article id="codex-body"></article></div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div id="settings" class="modal hidden">
+  <div class="box panel cut" style="width:min(640px,92vw)">
+    <button class="xbtn" data-close="settings">✕</button>
+    <h2><small>SYSTEM</small>SETTINGS</h2>
+    <div class="setgrid">
+      <label>MASTER VOLUME <input type="range" id="set-volume" min="0" max="1" step="0.05"></label>
+      <label>MUSIC <input type="checkbox" id="set-music"></label>
+      <label>BLOOM / GLOW <input type="checkbox" id="set-bloom"></label>
+      <label>SHADOWS <input type="checkbox" id="set-shadows"></label>
+      <label>CAMERA SENSITIVITY <input type="range" id="set-sens" min="0.3" max="2" step="0.1"></label>
+      <label>NAMEPLATES <input type="checkbox" id="set-plates"></label>
+    </div>
+  </div>
+</div>
+
+<!-- CHARACTER CREATION -->
+<div id="create" class="hidden">
+  <div class="head">
+    <div><div class="sub" style="margin:0 0 8px">CONCORD REGISTRY · NEW CITIZEN</div><div class="logo" style="font-size:44px">BECOME AN ASCENDANT</div></div>
+    <button class="btn ghost" id="create-back">◂ BACK</button>
+  </div>
+  <div class="classes" id="classes"></div>
+  <div class="crow">
+    <div class="field"><label>NAME</label><input id="cname" maxlength="16" spellcheck="false"></div>
+    <div class="field"><label>VISOR SIGIL</label><div class="swatches" id="swatches"></div></div>
+    <div class="oath">
+      <div class="warn hidden" id="overwrite">THIS WILL REPLACE YOUR CURRENT ASCENDANT</div>
+      <button class="btn gold" id="create-go" style="font-size:15px;padding:15px 30px">TAKE THE GOVERNOR'S OATH ▸</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div id="loading" class="hidden">
+  <div class="zone">ENTERING</div>
+  <div class="title">AD-NOSTRA</div>
+  <div class="bar"><i id="load-bar"></i></div>
+  <div class="tip" id="load-tip"></div>
+</div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div id="vignette"></div>
+  <div id="plates"></div>
+  <div id="floaters"></div>
+
+  <div id="pframe" class="frame panel cut">
+    <div class="fn"><span id="p-name">—</span><em id="p-lvl">LV 1</em></div>
+    <div class="ft" id="p-title">ASCENDANT</div>
+    <div class="bar2 hp"><i class="sh" id="p-sh" style="width:0"></i><i id="p-hp"></i><span id="p-hpt"></span></div>
+    <div class="bar2 en"><i id="p-en"></i><span id="p-ent"></span></div>
+    <div class="buffs" id="p-buffs"></div>
+  </div>
+
+  <div id="tframe" class="frame panel cut hidden">
+    <div class="fn"><span id="t-name">—</span><em id="t-lvl"></em></div>
+    <div class="ft" id="t-sub"></div>
+    <div class="bar2 ehp" id="t-bar"><i id="t-hp"></i><span id="t-hpt"></span></div>
+  </div>
+
+  <div id="bossbar" class="hidden"><div class="bn">REMNANT OF THE CATHARSIS</div><div class="bar2 ehp"><i id="boss-hp"></i></div></div>
+
+  <div id="mapwrap" class="panel cut">
+    <canvas id="minimap" width="184" height="184"></canvas>
+    <div id="zone-name">CONCORDIA PLAZA</div>
+    <div id="zone-sub">SANCTUARY</div>
+  </div>
+
+  <div id="tracker" class="panel cut"></div>
+
+  <div id="chat" class="pe">
+    <div id="chat-log"></div>
+    <input id="chat-input" maxlength="140" placeholder="Press Enter to chat · /help" autocomplete="off" spellcheck="false">
+  </div>
+
+  <div id="hotbar" class="panel cut pe"></div>
+  <div id="wallet">⬡ 0 CR</div>
+  <div id="xpbar"><i id="xp-fill"></i><span id="xp-text"></span></div>
+  <div id="keys">WASD MOVE · SHIFT SPRINT · SPACE JUMP · DRAG CAMERA · WHEEL ZOOM<br>CLICK / TAB TARGET · 1–4 ABILITIES · 5 MEDKIT · E INTERACT<br>ENTER CHAT · C CHARACTER · ESC MENU</div>
+
+  <div id="prompt" class="panel hidden"></div>
+  <div id="center-msg" style="opacity:0"></div>
+  <div id="banner" style="opacity:0"><div class="b1"></div><div class="b2"></div><div class="b3"></div></div>
+
+  <div id="dialog" class="panel cut scan hidden">
+    <div class="who" id="dlg-who"></div>
+    <div class="whn" id="dlg-name"></div>
+    <div class="qtitle" id="dlg-q"></div>
+    <div class="txt" id="dlg-text"></div>
+    <div class="rew" id="dlg-rew"></div>
+    <div class="opts" id="dlg-opts"></div>
+  </div>
+
+  <div id="vendor" class="panel cut hidden">
+    <button class="xbtn" id="vendor-x">✕</button>
+    <div class="who" style="font-size:10px;letter-spacing:.4em;color:var(--gold)">CONCORD QUARTERMASTER</div>
+    <div style="font-size:24px;letter-spacing:.15em;font-weight:600;margin-top:4px">ILSE VARN</div>
+    <p style="font-size:14px;color:#aebdca;margin:10px 0 6px;font-style:italic">“Credits for kit. Concord prices — which means fair, not cheap.”</p>
+    <div id="vendor-items"></div>
+    <div style="margin-top:14px;font-size:12px;letter-spacing:.15em;color:var(--gold)" id="vendor-wallet"></div>
+  </div>
+
+  <div id="sheet" class="panel cut hidden">
+    <button class="xbtn" id="sheet-x">✕</button>
+    <h2 style="font-size:20px;letter-spacing:.3em"><small style="display:block;font-size:10px;color:var(--cyan);letter-spacing:.35em;margin-bottom:6px;font-weight:400">CONCORD REGISTRY</small><span id="sh-name"></span></h2>
+    <div id="sheet-rows" style="margin-top:14px"></div>
+  </div>
+
+  <div id="pause" class="panel cut hidden">
+    <div class="logo" style="font-size:28px">AD<b>-</b>NOSTRA</div>
+    <button class="btn" id="pz-resume">RESUME</button>
+    <button class="btn" id="pz-sheet">CHARACTER</button>
+    <button class="btn" id="pz-codex">CODEX</button>
+    <button class="btn" id="pz-settings">SETTINGS</button>
+    <button class="btn gold" id="pz-exit">SAVE &amp; RETURN TO MENU</button>
+    <p>THE WORLD DOES NOT PAUSE.</p>
+  </div>
+
+  <div id="death" class="panel cut hidden">
+    <h2>YOU HAVE FALLEN</h2>
+    <p>The Concord medics will carry you back to Concordia Plaza.</p>
+    <button class="btn" id="respawn">RESPAWN AT CONCORDIA PLAZA</button>
+  </div>
+</div>
+
+<div id="tooltip" class="panel hidden"></div>
+<div id="farewell" class="hidden"><div class="logo" style="font-size:48px">AD<b>-</b>NOSTRA</div><p>THE GOVERNOR THANKS YOU FOR YOUR SERVICE.<br>YOU MAY NOW CLOSE THIS WINDOW.</p><button class="btn ghost" style="margin-top:28px" onclick="location.reload()">RETURN</button></div>
+<div id="err" class="panel hidden"></div>
+
+<script src="game.js"></script>
+</body>
+</html>
