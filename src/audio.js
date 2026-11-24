@@ -32,12 +32,14 @@ export const Sound = {
     for (const n of this.nodes) { try { n.g.gain.setTargetAtTime(0, t, 0.8); n.o.forEach(o => o.stop(t + 4)); } catch (e) {} }
     this.nodes = [];
     const chords = {
-      menu: [73.42, 110, 146.83, 174.61, 220, 261.63],   // D minor add9 spread
+      menu: [73.42, 110, 146.83, 185, 220, 329.63],      // D major add9, dusk on the savannah
       world: [65.41, 98, 130.81, 155.56, 196, 233.08],   // C minor 7
       boss: [61.74, 92.5, 123.47, 146.83, 185, 174.61],
+      cantina: [87.31, 130.81, 174.61, 220, 261.63, 329.63], // F maj7, warm
+      savannah: [73.42, 110, 146.83, 185, 220, 277.18],     // D major add9, open and golden
     };
     const g = c.createGain(); g.gain.value = 0; g.gain.setTargetAtTime(1, t, 2.5);
-    const filt = c.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = mode === 'boss' ? 1400 : 700; filt.Q.value = 3;
+    const filt = c.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = mode === 'boss' ? 1400 : mode === 'cantina' ? 1100 : 700; filt.Q.value = 3;
     const lfo = c.createOscillator(); lfo.frequency.value = 0.07; const lg = c.createGain(); lg.gain.value = 380;
     lfo.connect(lg); lg.connect(filt.frequency); lfo.start();
     filt.connect(g); g.connect(this.music);
@@ -59,10 +61,23 @@ export const Sound = {
   // ambient bells, called each frame
   tick(dt) {
     if (!this.ctx || !this.musicOn || !this.mode) return;
+    if (this.mode === 'cantina') { // plucked sequencer + shaker, ~108 bpm
+      this.seqT = (this.seqT || 0) - dt;
+      if (this.seqT <= 0) {
+        this.seqT += 60 / 108 / 2; this.step = ((this.step || 0) + 1) % 16;
+        const bass = [87.31, 0, 0, 87.31, 0, 0, 130.81, 0, 98, 0, 0, 98, 0, 0, 116.54, 0];
+        const mel = [349.23, 0, 440, 523.25, 0, 440, 0, 392, 349.23, 0, 293.66, 0, 349.23, 392, 0, 0];
+        if (bass[this.step]) this.tone(bass[this.step], 0.35, 'triangle', 0.09, null, this.music);
+        if (mel[this.step] && Math.random() < 0.85) { this.tone(mel[this.step], 0.28, 'triangle', 0.045, null, this.music); this.tone(mel[this.step] * 2, 0.12, 'sine', 0.012, null, this.music); }
+        if (this.step % 2 === 1) this.noise(0.05, 0.03, 7000, 2);
+        if (this.step % 8 === 4) this.noise(0.12, 0.06, 1800, 1);
+      }
+      return;
+    }
     this.bellTimer -= dt;
     if (this.bellTimer <= 0) {
       this.bellTimer = 2.5 + Math.random() * 4;
-      const scale = this.mode === 'menu' ? [293.66, 349.23, 440, 523.25, 587.33, 698.46] : [261.63, 311.13, 392, 466.16, 523.25];
+      const scale = this.mode === 'menu' ? [293.66, 369.99, 440, 554.37, 587.33, 739.99] : this.mode === 'savannah' ? [293.66, 329.63, 369.99, 440, 493.88, 587.33] : [261.63, 311.13, 392, 466.16, 523.25];
       const f = scale[Math.random() * scale.length | 0];
       this.tone(f, 3.5, 'sine', 0.05, null, this.music);
       this.tone(f * 2.01, 2.5, 'sine', 0.015, null, this.music);

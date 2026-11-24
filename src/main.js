@@ -1,6 +1,6 @@
 // =====================================================================
 //  AD-NOSTRA — Anno Domini 2137
-//  An MMO RPG set one year after the defeat of the Catharsis.
+//  An MMO RPG set in 2137, ten years after the defeat of the Catharsis at Carax.
 // =====================================================================
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -324,8 +324,8 @@ const ZONES = {
   plaza: { name: 'CONCORDIA PLAZA', sub: 'SANCTUARY · SEAT OF THE GOVERNOR', safe: true },
   causeway: { name: 'CONCORD CAUSEWAY', sub: 'AD-NOSTRA' },
   ward: { name: 'SPIRE WARD', sub: 'AD-NOSTRA' },
-  ashen: { name: 'ASHEN DISTRICT', sub: 'LEVEL 1–3 · CONTESTED' },
-  echo: { name: 'ECHO FIELDS', sub: 'LEVEL 2–4 · CONTESTED' },
+  ashen: { name: 'SCORCHED VELD', sub: 'LEVEL 1–3 · CONTESTED' },
+  echo: { name: 'ECHO PLAINS', sub: 'LEVEL 2–4 · CONTESTED' },
   crater: { name: 'THE CATHARSIS CRATER', sub: 'LEVEL 4–7 · HOSTILE' },
 };
 const CRATER = new V3(0, 0, -165);
@@ -468,7 +468,7 @@ function buildWorld() {
   for (const [r, h] of [[5.5, 0.4], [4.3, 0.8], [3.2, 1.2]]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r + 0.2, h, 48), daisM); c.position.set(0, h / 2, -12); c.receiveShadow = true; c.castShadow = true; S.add(c); }
   const dr = new THREE.Mesh(new THREE.TorusGeometry(3.25, 0.03, 6, 96), glowMat(0x3ee6ff, 4)); dr.rotation.x = Math.PI / 2; dr.position.set(0, 1.21, -12); S.add(dr);
   const statuePed = bx(9, 4, 9, daisM, 0, 2, -27, S); addCollider(0, -27, 9, 9);
-  const plaque = canvasTex(512, 128, (g, w, h) => { g.fillStyle = '#c9a85a'; g.font = 'bold 40px Bahnschrift, sans-serif'; g.textAlign = 'center'; g.fillText('THE NIGHT OF UNMAKING', w / 2, 52); g.font = '28px Bahnschrift, sans-serif'; g.fillText('IX · III · MMCXXXVI', w / 2, 98); });
+  const plaque = canvasTex(512, 128, (g, w, h) => { g.fillStyle = '#c9a85a'; g.font = 'bold 40px Bahnschrift, sans-serif'; g.textAlign = 'center'; g.fillText('CARAX · SAGITTARIUS A*', w / 2, 52); g.font = '28px Bahnschrift, sans-serif'; g.fillText('MMCXXVII', w / 2, 98); });
   plaque.wrapS = plaque.wrapT = THREE.ClampToEdgeWrapping;
   const pl = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshStandardMaterial({ map: plaque, transparent: true, emissive: 0xc9a85a, emissiveMap: plaque, emissiveIntensity: 0.5 })); pl.position.set(0, 2.2, -22.48); S.add(pl);
   const statue = mascarInstance(15, new THREE.MeshStandardMaterial({ color: 0x8c939c, roughness: 0.75, metalness: 0.15 }));
@@ -585,7 +585,7 @@ function makeEnemy(type, level, x, z, temp = false) {
   const e = { kind: 'enemy', type, level, spawn: new V3(x, 0, z), pos: new V3(x, 0, z), alive: true, state: 'idle', target: null, atkT: rand(0.5, 1.5), wanderT: rand(1, 6), wanderTo: null, dots: [], tagged: false, yaw: rand(0, 6.28), anim: rand(0, 10), temp, move: 0 };
   let rig;
   if (type === 'hollowed') {
-    Object.assign(e, { name: level >= 4 ? 'Shard-Bound Hollowed' : 'Hollowed', maxHp: 70 + 30 * level, dmg: 5 + 2.6 * level, atkCd: 1.7, atkR: 2.1, speed: 3.4 + 0.25 * level, aggroR: 13, xp: 36 + 16 * level, height: 2.15, radius: 0.55, respawn: 16 });
+    Object.assign(e, { name: level >= 4 ? 'Beacon-Bound Hollowed' : 'Hollowed', maxHp: 70 + 30 * level, dmg: 5 + 2.6 * level, atkCd: 1.7, atkR: 2.1, speed: 3.4 + 0.25 * level, aggroR: 13, xp: 36 + 16 * level, height: 2.15, radius: 0.55, respawn: 16 });
     rig = makeHumanoid({ armor: 0x1b1517, accent: 0xff2b4a, visor: 0xff2b4a, weapon: 'none', hollow: true });
     rig.group.scale.setScalar(1 + level * 0.03);
   } else if (type === 'drone') {
@@ -726,7 +726,7 @@ function killEnemy(e, src) {
     const cr = e.isBoss ? 300 : randi(2 + e.level, 6 + e.level * 3); D.credits += cr; addChat('loot', null, `You loot ${cr} credits.`); Sound.sfx('coin');
     D.kills++;
     questEvent(e.isBoss ? 'boss' : e.type, e);
-    if (zoneAt(e.pos.x, e.pos.z) === 'crater' && !e.isBoss && D.q.i === 2 && D.q.st === 'active' && Math.random() < 0.4) { addChat('loot', null, 'You loot: [Monolith Shard]'); questEvent('shard'); }
+    if (zoneAt(e.pos.x, e.pos.z) === 'crater' && !e.isBoss && D.q.i === 2 && D.q.st === 'active' && Math.random() < 0.4) { addChat('loot', null, 'You loot: [Beacon Shard]'); questEvent('shard'); }
     if (Math.random() < 0.06 && !e.isBoss) { D.medkits++; addChat('loot', null, 'You loot: [Concord Medkit]'); }
     if (e.isBoss) { addChat('world', null, `${D.name} has destroyed the Remnant of the Catharsis!`, 'sys'); setTimeout(() => botSay(pick(G.bots), pick(['GG ' + D.name + '!!', 'legend', 'WOW', 'grats ' + D.name, 'o7 hero'])), 1500); }
   }
@@ -1022,7 +1022,7 @@ function updateEnemies(dt) {
   }
   G.enemies = G.enemies.filter(e => !e.removed);
 }
-function bossEngage() { Sound.playMusic('boss'); $('bossbar').classList.remove('hidden'); addChat('zone', null, 'The Remnant of the Catharsis: "YOU... ARE THE WOUND."', 'err'); }
+function bossEngage() { Sound.playMusic('boss'); $('bossbar').classList.remove('hidden'); addChat('zone', null, 'The Remnant of the Catharsis: "THE WILL OF ZARK DOES NOT DIE."', 'err'); }
 function bossLogic(e, dt) {
   e.slamT -= dt;
   if (e.slamT <= 0 && e.target) {
@@ -1035,7 +1035,7 @@ function bossLogic(e, dt) {
   }
   const pct = e.hp / e.maxHp;
   if ((e.phase === 0 && pct < 0.6) || (e.phase === 1 && pct < 0.3)) {
-    e.phase++; addChat('zone', null, 'The Remnant of the Catharsis: "RISE. CLEANSE."', 'err'); Sound.sfx('boom');
+    e.phase++; addChat('zone', null, 'The Remnant of the Catharsis: "RISE. SERVE THE CATHARSIS."', 'err'); Sound.sfx('boom');
     for (let i = 0; i < 3; i++) { const a = rand(0, 6.28); const m = makeEnemy('hollowed', 5, e.pos.x + Math.cos(a) * 6, e.pos.z + Math.sin(a) * 6, true); m.target = e.target; m.state = 'chase'; burst(m.pos.clone().setY(1), 0xff2b4a, 30, 3); }
   }
 }
@@ -1226,7 +1226,7 @@ function interact(ent = nearestInteract()) {
   else if (ent.id === 'ilse') openVendor();
   else if (ent.kind === 'shard') {
     const D = G.D;
-    if (D.q.i === 2 && D.q.st === 'active') { ent.active = false; ent.group.visible = false; ent.respawnT = 25; Sound.sfx('pickup'); addChat('loot', null, 'You recover: [Monolith Shard]'); burst(ent.pos.clone().setY(1), 0xff2b4a, 20, 2); questEvent('shard'); }
+    if (D.q.i === 2 && D.q.st === 'active') { ent.active = false; ent.group.visible = false; ent.respawnT = 25; Sound.sfx('pickup'); addChat('loot', null, 'You recover: [Beacon Shard]'); burst(ent.pos.clone().setY(1), 0xff2b4a, 20, 2); questEvent('shard'); }
     else if (D.q.i < 2) msg('The shard hums with crimson light. The Governor should know of this.');
     else msg('You have no reason to take it now.');
   }
@@ -1234,7 +1234,7 @@ function interact(ent = nearestInteract()) {
 function updateInteract() {
   const n = nearestInteract(), pr = $('prompt');
   if (n && !G.ui && !G.P.dead) {
-    const label = n.kind === 'shard' ? 'Recover Monolith Shard' : n.id === 'mascar' ? 'Speak with Governor Mascar' : 'Trade with Ilse Varn';
+    const label = n.kind === 'shard' ? 'Recover Beacon Shard' : n.id === 'mascar' ? 'Speak with Governor Mascar' : 'Trade with Ilse Varn';
     pr.innerHTML = `<b>[E]</b> ${label}`; pr.classList.remove('hidden');
   } else pr.classList.add('hidden');
 }
@@ -1602,7 +1602,7 @@ function enterWorld(isNew = false) {
       W.cam.position.copy(G.P.pos).add(new V3(0, 6, 14));
       Sound.playMusic('world');
       addChat('sys', null, `Welcome to Ad-Nostra, ${G.D.name}. Realm: ${$('realm').value.split(' · ')[0]}.`);
-      addChat('gov', null, 'Anno Domini 2137. One year since the Night of Unmaking. The Catharsis is fallen — but its Remnants endure.');
+      addChat('gov', null, 'Anno Domini 2137. Ten years since Carax. The Catharsis is fallen — but its Remnants endure.');
       if (isNew || G.D.q.i === 0 && G.D.q.st === 'available') addChat('sys', null, 'Governor Croxian Mascar awaits you on his dais. Walk up and press E.');
       setTimeout(() => botSay(pick(G.bots), `welcome ${G.D.name} o7`), 3500);
     }, 500);
