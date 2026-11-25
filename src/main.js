@@ -10,10 +10,10 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Sound } from './audio.js';
-import { loadSoldier, loadOrion, soldierReady, makeSoldier, animSoldier, MOVE_DUR } from './soldier.js';
+import { loadSoldier, loadOrion, loadMalia, soldierReady, makeSoldier, animSoldier, MOVE_DUR } from './soldier.js';
 import {
   CODEX, TIPS, CLASSES, VISORS, QUESTS, MASCAR_IDLE, BOT_NAMES, GUILDS,
-  WORLD_CHAT, ZONE_CHAT, GOV_ANNOUNCE, LORE_REPLIES, GREET_REPLIES, ZURI_LINES, CANTINA_CHAT, PLAQUE, ORION_LINES
+  WORLD_CHAT, ZONE_CHAT, GOV_ANNOUNCE, LORE_REPLIES, GREET_REPLIES, ZURI_LINES, CANTINA_CHAT, PLAQUE, ORION_LINES, MALIA_LINES
 } from './data.js';
 
 const V3 = THREE.Vector3;
@@ -1020,7 +1020,7 @@ function buildWorld() {
   S.add(W.birds);
   W.batch = mergeStatic(S, 250);
   initFarChars(S);
-  spawnNPCs(); spawnZuri(); spawnEnemies(); spawnShards(); spawnBots(); spawnOrion(); spawnAnimals();
+  spawnNPCs(); spawnZuri(); spawnEnemies(); spawnShards(); spawnBots(); spawnOrion(); spawnMalia(); spawnAnimals();
   G.world = true;
 }
 
@@ -1550,11 +1550,36 @@ function spawnOrion() {
   const rig = makeSoldier({ model: 'orion', accent: 0x8fe6ff, weapon: 'greatsword', mats: SOLDIER_MATS });
   const o = { kind: 'bot', legend: true, id: 'orion', name: 'Orion Mascar', title: 'Father of the Governor', cls: 'vanguard', level: 60, guild: '', rig, group: rig.group,
     pos: zonePoint('plaza'), alive: true, hp: 4000, maxHp: 4000, state: 'idle', path: [], idleT: rand(6, 14), actT: 0, act: 'plaza', target: null, atkT: 0, yaw: 0, move: 0, atk: 0, danceT: 0,
-    height: 2.1, radius: 0.5, vy: 0, slideT: -1, rollT: 0, bjT: 0, flipT: 0, landT: 0, landHard: false, boost: 1, canFlip: false, talkT: 0 };
+    height: 2.1, radius: 0.5, vy: 0, slideT: -1, rollT: 0, bjT: 0, flipT: 0, landT: 0, landHard: false, boost: 1, canFlip: false, talkT: 0,
+    loungeSpot: ORION_PLAQUE_SPOT, loungeLook: new V3(0.6, 0, 56) };
   o.group.position.copy(o.pos); W.scene.add(o.group);
   o.plate = makePlate('npc', `<div class="n">Orion Mascar</div><div class="g">&lt;Father of the Governor&gt;</div>`);
   addHitbox(o, 0.9, 2, 0.9, 1);
   G.bots.push(o);
+}
+// Malia Mascar, the Governor's wife. She keeps to the safe streets: she strolls Concordia Plaza and drops in at
+// the Salt Lantern, where she stands by her husband's corner table. Her left hand stays on her hip.
+function spawnMalia() {
+  if (!soldierReady('malia')) return;
+  const rig = makeSoldier({ model: 'malia', accent: 0x8fe6ff, weapon: 'sabre', mats: SOLDIER_MATS, hold: ['clavL', 'uarmL', 'farmL', 'handL'] });
+  const m = { kind: 'bot', legend: true, city: true, id: 'malia', name: 'Malia Mascar', title: 'Wife of the Governor', cls: 'vanguard', level: 40, guild: '', rig, group: rig.group,
+    pos: new V3(rand(-6, 6), 0, rand(-4, 2)), alive: true, hp: 4000, maxHp: 4000, state: 'idle', path: [], idleT: rand(10, 25), actT: 0, act: 'plaza', target: null, atkT: 0, yaw: 0, move: 0, atk: 0, danceT: 0,
+    height: 2.0, radius: 0.5, vy: 0, slideT: -1, rollT: 0, bjT: 0, flipT: 0, landT: 0, landHard: false, boost: 1, canFlip: false, talkT: 0,
+    loungeSpot: new V3(-7.0, 0, 65.6), loungeLook: new V3(-8.6, 0, 67.4) };
+  m.group.position.copy(m.pos); W.scene.add(m.group);
+  m.plate = makePlate('npc', `<div class="n">Malia Mascar</div><div class="g">&lt;Wife of the Governor&gt;</div>`);
+  addHitbox(m, 0.9, 2, 0.9, 1);
+  G.bots.push(m);
+}
+function talkMalia(m, text = pick(MALIA_LINES.greet)) {
+  m.talkT = 12;
+  dialog('WIFE OF THE GOVERNOR', 'MALIA MASCAR', '', text, '', [
+    { label: 'THE CITY', fn: () => talkMalia(m, MALIA_LINES.city) },
+    { label: 'CROXIAN', fn: () => talkMalia(m, MALIA_LINES.croxian) },
+    { label: 'ORION', fn: () => talkMalia(m, MALIA_LINES.orion) },
+    { label: 'THE BLADE', fn: () => talkMalia(m, MALIA_LINES.blade) },
+    { label: 'FAREWELL', fn: () => { m.talkT = 1.5; closeAllUI(); } },
+  ]);
 }
 const chatBots = () => G.bots.filter(b => !b.legend);   // the simulated players (Orion doesn't chat like one)
 function talkOrion(o, text = pick(ORION_LINES.greet)) {
@@ -2090,7 +2115,8 @@ function updateBots(dt) {
       if (Math.random() < 0.0008 && !b.legend) b.danceT = 4;
       b.hp = Math.min(b.maxHp, b.hp + 20 * dt);
       if (b.legend && G.P && d2(b.pos, G.P.pos) < 7 && (!b.wp || d2(b.pos, b.wp) < 0.5)) faceTo(b, G.P.pos);
-      if (b.idleT <= 0) { b.act = Math.random() < 0.25 ? 'cantina' : pick(['ashen', 'ashen', 'echo', 'echo', 'crater', 'crater']); b.path = [...GATES[b.act], b.legend && b.act === 'cantina' ? ORION_PLAQUE_SPOT.clone() : zonePoint(b.act)]; b.state = 'travel'; b.actT = b.act === 'cantina' ? rand(40, 110) : rand(60, 180); b.wp = null; }
+      if (b.idleT <= 0 && b.city && Math.random() < 0.55) { b.idleT = rand(20, 45); b.wp = zonePoint('plaza'); }   // another turn about the plaza
+      else if (b.idleT <= 0) { b.act = b.city || Math.random() < 0.25 ? 'cantina' : pick(['ashen', 'ashen', 'echo', 'echo', 'crater', 'crater']); b.path = [...GATES[b.act], b.loungeSpot && b.act === 'cantina' ? b.loungeSpot.clone() : zonePoint(b.act)]; b.state = 'travel'; b.actT = b.act === 'cantina' ? rand(40, 110) : rand(60, 180); b.wp = null; }
     } else if (b.state === 'travel') {
       if (!b.path.length) { b.state = b.act === 'plaza' ? 'idle' : b.act === 'cantina' ? 'lounge' : 'hunt'; b.idleT = rand(15, 50); continue; }
       if (b.rig.isSoldier && !b.legend && b.pos.y === 0 && b.slideT < 0 && b.act !== 'cantina' && d2(b.pos, b.path[0]) > 24) {
@@ -2102,7 +2128,7 @@ function updateBots(dt) {
       if (moveToward(b, b.path[0], tsp, dt, 1)) b.path.shift();
     } else if (b.state === 'lounge') {   // a regular at the Lantern: stand about, raise a glass, then wander back out
       b.actT -= dt; b.move = Math.max(0, b.move - dt * 5);
-      if (b.legend) { if (G.P && d2(b.pos, G.P.pos) < 7) faceTo(b, G.P.pos); else faceTo(b, new V3(0.6, 0, 56)); }   // the plaque, unless you come over
+      if (b.legend) { if (G.P && d2(b.pos, G.P.pos) < 7) faceTo(b, G.P.pos); else if (b.loungeLook) faceTo(b, b.loungeLook); }   // Orion's plaque, Croxian's table, unless you come over
       else if (Math.random() < 0.0015) b.danceT = 2.5;
       if (b.actT <= 0) { b.act = 'plaza'; b.path = [...GATES.cantina].reverse().concat([zonePoint('plaza')]); b.state = 'travel'; }
     } else if (b.state === 'hunt') {
@@ -2292,6 +2318,7 @@ function interact(ent = nearestInteract()) {
   else if (ent.id === 'zuri') talkZuri();
   else if (ent.id === 'plaque') readPlaque();
   else if (ent.id === 'orion') talkOrion(ent);
+  else if (ent.id === 'malia') talkMalia(ent);
   else if (ent.kind === 'shard') {
     const D = G.D;
     if (D.q.i === 2 && D.q.st === 'active') { ent.active = false; ent.group.visible = false; ent.respawnT = 25; Sound.sfx('pickup'); addChat('loot', null, 'You recover: [Beacon Shard]'); burst(ent.pos.clone().setY(1), 0xff2b4a, 20, 2); questEvent('shard'); }
@@ -2302,7 +2329,7 @@ function interact(ent = nearestInteract()) {
 function updateInteract() {
   const n = nearestInteract(), pr = $('prompt');
   if (n && !G.ui && !G.P.dead) {
-    const label = n.kind === 'shard' ? 'Recover Beacon Shard' : n.id === 'mascar' ? 'Speak with Governor Mascar' : n.id === 'zuri' ? 'Talk to Zuri Adeyemi' : n.id === 'plaque' ? 'Read the memorial plaque' : n.id === 'orion' ? 'Speak with Orion Mascar' : 'Trade with Ilse Varn';
+    const label = n.kind === 'shard' ? 'Recover Beacon Shard' : n.id === 'mascar' ? 'Speak with Governor Mascar' : n.id === 'zuri' ? 'Talk to Zuri Adeyemi' : n.id === 'plaque' ? 'Read the memorial plaque' : n.id === 'orion' ? 'Speak with Orion Mascar' : n.id === 'malia' ? 'Speak with Malia Mascar' : 'Trade with Ilse Varn';
     pr.innerHTML = `<b>${TOUCH ? '▶' : '[E]'}</b> ${label}`; pr.classList.remove('hidden');
   } else pr.classList.add('hidden');
 }
@@ -2824,6 +2851,8 @@ function loop() {
   catch (err) { console.error(err); showError('Ascendant model unavailable, using the fallback: ' + err.message); }
   try { await loadOrion(); }
   catch (err) { console.error(err); }   // without his model, Orion simply isn't in the world
+  try { await loadMalia(); }
+  catch (err) { console.error(err); }   // likewise Malia
   buildMenu();
   setScene(menu.scene, menu.cam);
   loop();

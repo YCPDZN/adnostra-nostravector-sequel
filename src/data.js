@@ -188,6 +188,19 @@ export const ORION_LINES = {
   son: 'Croxian was born in the winter of Kaliningrad, with the war still on. Talina and I named him in a city under siege.\n\nHe wore Terra Imperia\'s colours once, and he walked away from them. Then he went to Carax and came back. Now he governs.\n\nI fought. He builds. I know which of us the city needs more.',
 };
 
+// Malia Mascar, the Governor's wife, who keeps to the plaza and the Salt Lantern.
+export const MALIA_LINES = {
+  greet: [
+    'Good evening, Ascendant. If you are looking for my husband, he is on his dais. If you are looking for his father, good luck.',
+    'Ten years since Carax. The city is quieter than it was. I intend to keep it that way.',
+    'Walk with me a while, if you like. I prefer to see the streets for myself rather than read about them.',
+  ],
+  city: 'Ad-Nostra was ash and old roads when Croxian came home. Now there is a plaza, a statue, and a cantina that never closes.\n\nPeople think a city is built from stone. It is built from people deciding to stay.',
+  croxian: 'He stands on that dais all day and lets the whole city look at him. Then he sits in the corner of the Lantern and lets no one look at him at all.\n\nI know which of those is the Governor and which is my husband. I am fond of them both.',
+  orion: 'My father-in-law walks. The plaza, the Veld, the Plains, the Crater, and back to the Lantern to stand over that plaque.\n\nHe says he is making sure the city is still here. I think he simply cannot sit still. It runs in the family.',
+  blade: 'This? It is not for show.\n\nThe Governor has guards. The Governor\'s wife has this.',
+};
+
 export const BOT_NAMES = ['Kaelith','Vex_2137','NovaRook','Seraphyn','Draxx','Ilmatar','LastLegion','Quorra','Ashwalker','Brennic','Zyra_Nyx','Holloway','Corvane','Mirelle','OrbitalOtter','Tavik','Severine','Juno_Arc','Kwame_X','Amara','Tendai'];
 export const GUILDS = ['Concord Legion','Savannah Watch','Lantern Regulars','Pale Hunters','Dawnbreakers','',''];
 

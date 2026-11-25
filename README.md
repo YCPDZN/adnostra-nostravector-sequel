@@ -75,6 +75,7 @@ The game runs at full quality on modest hardware, integrated graphics included:
 - **The Catharsis Crater** (north, lv 4–7) holds a crashed Catharsis beacon-ship, its shards, and the **Remnant of the Catharsis**. Vultures circle overhead.
 - **The Salt Lantern** (just south of the plaza) is a sanctuary cantina. Zuri Adeyemi keeps the bar and sells **Lantern Ale** (25 credits: +20% experience for 10 minutes). A bronze plaque in the floor marks where Orion Mascar fought Daniel Brown. Regulars drift in and out.
 - **Orion Mascar**, the Governor's father, walks the whole map with his greatsword. He strolls the plaza, heads out to the Scorched Veld, the Echo Plains and the Crater to cut down Remnants, and stops in at the Salt Lantern to stand over his plaque. Walk up and press E to talk to him; he stops to face you.
+- **Malia Mascar**, the Governor's wife, keeps to the safe streets with a short energy blade at her side. She strolls Concordia Plaza and stops in at the Salt Lantern to stand by her husband's corner table. Press E to talk to her.
 - **Wildlife** roams the Scorched Veld and the Echo Plains: giraffes, elephants, zebras and gazelles move as herds, grazing and drifting across the plains. Zebras and gazelles bolt if you get close, and spook the rest of the herd.
 
 ## Classes
@@ -95,12 +96,13 @@ The other Ascendants in the world are simulated. They have names, guilds and cla
 ## Project files
 - `index.html` is the game page and UI.
 - `game.js` is the compiled game, built from `src/`.
-- `src/main.js` holds the engine, world, combat, AI, movement and UI. `src/soldier.js` is the Ascendant soldier: its rig, weapons and every animation, all procedural. Orion Mascar uses the same skeleton, so the same animations drive him. `src/data.js` holds lore, quests and classes. `src/audio.js` makes the sound effects and in-game music in code, and plays the main menu theme.
+- `src/main.js` holds the engine, world, combat, AI, movement and UI. `src/soldier.js` is the Ascendant soldier: its rig, weapons and every animation, all procedural. Orion and Malia Mascar use the same skeleton, so the same animations drive them. `src/data.js` holds lore, quests and classes. `src/audio.js` makes the sound effects and in-game music in code, and plays the main menu theme.
 - `assets/croxian_mascar.glb` is the Governor's model, optimised to 165k triangles. His scythe isn't part of the file: `makeScythe()` in `src/main.js` builds it in code and fixes it in his right hand, so it appears on the menu, on his dais and on the statue. `assets/model.js` is the same model embedded so the game runs from a double-click.
 - `assets/ascendant_soldier.glb` is the player and Ascendant model: cut from 1.9M to 16k triangles, with textures baked onto new UVs, a 19-bone skeleton, and a 2.4k-triangle copy for distant characters. `assets/soldier.js` is the same model embedded.
 - `assets/main_menu_theme.mp3` is the main menu theme. It loops on the title and character-creation screens and fades out when you enter the world.
 - `tools/soldier/` is the pipeline that turned the raw model export into that asset.
 - `assets/orion_mascar.glb` is Orion Mascar: cut from 2M to 110k triangles with his original textures kept, rigged with the soldier's 19-bone skeleton, with a 2.6k-triangle copy for distant rendering. `assets/orion.js` is the same model embedded. `tools/orion/` is the pipeline.
+- `assets/malia_mascar.glb` is Malia Mascar: cut from 4.9M to 110k triangles with her original textures kept, rigged the same way, with her left hand held on her hip. `assets/malia.js` is the same model embedded. `tools/malia/` has her rig script.
 
 To rebuild after editing `src/`, run:
 ```
@@ -121,3 +123,4 @@ npm run build
 - [x] Sound: removed the background hum and the drone shot beep; added the recorded main menu theme
 - [x] Croxian's scythe: four curved blades with cyan edges on a tall pole, held in his right hand
 - [x] Orion Mascar: rigged, wandering the whole map with his greatsword, and talkable
+- [x] Malia Mascar: rigged, strolling the plaza and the Salt Lantern with her energy blade, and talkable

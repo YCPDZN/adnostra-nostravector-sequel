@@ -106,6 +106,7 @@ LP = Pw[used]; LC = Cw[used]
 LN = np.zeros_like(LP); fn = np.cross(LP[LF[:, 1]] - LP[LF[:, 0]], LP[LF[:, 2]] - LP[LF[:, 0]])
 for k in range(3): np.add.at(LN, LF[:, k], fn)
 LN /= np.maximum(np.linalg.norm(LN, axis=1, keepdims=True), 1e-12)
+LN[np.linalg.norm(LN, axis=1) < 0.5] = (0, 1, 0)   # a vertex whose faces cancel out: give it a valid normal (zero normals make NaN pixels)
 print('lod tris', len(LF))
 
 # ---------------------------------------------------------------- GLB

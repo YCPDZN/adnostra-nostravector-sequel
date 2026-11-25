@@ -118,8 +118,13 @@ int main(int argc, char **argv) {
   for (int pass = 0; pass < 6 && alive > target; pass++) {
     hn = 0;
     for (int p = 0; p < npos; p++) if (!dead[p] && adj[p].n) { compact(p); for (int i = 0; i < adj[p].n; i++) { int t = adj[p].a[i]; for (int k = 0; k < 3; k++) { int x = TP(t, k); if (x != p && !locked[p]) hpush((HE){cost(p, x), p, x, ver[p], ver[x]}); } } }
-    long done = 0;
+    long done = 0, lim = hn * 2 + (1L << 20);
     while (hn && alive > target) {
+      if (hn > lim) {   // drop stale entries and re-heapify
+        long k = 0; for (long i = 0; i < hn; i++) { HE x = heap[i]; if (!dead[x.u] && !dead[x.v] && ver[x.u] == x.vu && ver[x.v] == x.vv) heap[k++] = x; }
+        HE *old = heap; long n = k; heap = NULL; hn = 0; hcap = 0; for (long i = 0; i < n; i++) hpush(old[i]); free(old);
+        lim = hn * 2 + (1L << 20);
+      }
       HE e = hpop();
       if (dead[e.u] || dead[e.v] || ver[e.u] != e.vu || ver[e.v] != e.vv) continue;
       if (!valid(e.u, e.v)) continue;
@@ -133,12 +138,9 @@ int main(int argc, char **argv) {
       }
       adj[u].n = 0; dead[u] = 1;
       for (int i = 0; i < 10; i++) Q[10*v+i] += Q[10*u+i];
+      // only v's quadric changed, so only edges touching v need new costs (both directions)
       ver[v]++;
-      // neighbours' edges toward v changed cost
-      compact(v);
-      for (int i = 0; i < adj[v].n; i++) { int t = adj[v].a[i]; for (int k = 0; k < 3; k++) { int x = TP(t, k); if (x != v) ver[x]++; } }
       push_edges(v);
-      for (int i = 0; i < adj[v].n; i++) { int t = adj[v].a[i]; for (int k = 0; k < 3; k++) { int x = TP(t, k); if (x != v) push_edges(x); } }
       done++;
     }
     fprintf(stderr, "pass %d: collapses %ld, tris %d\n", pass, done, alive);

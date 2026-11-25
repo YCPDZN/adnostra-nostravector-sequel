@@ -14,9 +14,11 @@ export const MOVE_DUR = { flip: 0.5, bj: 0.62, roll: 0.5, landHard: 0.55, landSo
 // Rigged models that share the soldier's 19-bone skeleton, so every animation below drives any of them.
 // soldier: the Ascendant armour (player + other Ascendants); its emissive mask lights up in each visor colour.
 // orion:   Orion Mascar, the Governor's father, who wanders the map (see main.js).
+// malia:   Malia Mascar, the Governor's wife, who strolls the plaza and the Salt Lantern. Her left hand rests on her hip.
 const MODELS = {
   soldier: { script: 'assets/soldier.js', global: 'SOLDIER_GLB_B64', mesh: 'soldier', lod: 'soldier_lod', energyGlow: true, proto: null, lodGeo: null },
   orion: { script: 'assets/orion.js', global: 'ORION_GLB_B64', mesh: 'orion', lod: 'orion_lod', energyGlow: false, proto: null, lodGeo: null },
+  malia: { script: 'assets/malia.js', global: 'MALIA_GLB_B64', mesh: 'malia', lod: 'malia_lod', energyGlow: false, proto: null, lodGeo: null },
 };
 export const soldierReady = (model = 'soldier') => !!MODELS[model].proto;
 
@@ -48,6 +50,7 @@ async function loadRigged(model) {
 }
 export const loadSoldier = () => loadRigged('soldier');
 export const loadOrion = () => loadRigged('orion');
+export const loadMalia = () => loadRigged('malia');
 
 // ---------------------------------------------------------------- channels
 const BONES = ['hips', 'spine', 'chest', 'neck', 'head', 'clavL', 'uarmL', 'farmL', 'handL', 'thighL', 'shinL', 'footL', 'clavR', 'uarmR', 'farmR', 'handR', 'thighR', 'shinR', 'footR'];
@@ -193,6 +196,17 @@ function makeWeapon(kind, accent, mats) {
     slab([[-0.056, 0.18], [0.056, 0.18], [0.056, 1.36], [-0.056, 1.5]], 0.026, FRAME);
     slab([[-0.03, 0.24], [0.03, 0.24], [0.03, 1.33], [-0.03, 1.41]], 0.034, GLOW);
     slab([[-0.005, 0.3], [0.005, 0.3], [0.005, 1.3], [-0.005, 1.34]], 0.038, STEEL);
+  } else if (kind === 'sabre') {
+    // Malia's short energy blade: slim, straight, with a glowing edge and an angled tip, carried point-down
+    g.rotation.x = 1.4;
+    const DARK = mats.dark(), STEEL = mats.armor(0x7d8794), GLOW = mats.glow(accent, 2.8);
+    box(0.034, 0.034, 0.16, DARK, 0, 0, 0);
+    box(0.04, 0.04, 0.03, STEEL, 0, 0, -0.095);
+    box(0.045, 0.11, 0.03, DARK, 0, 0, 0.095);
+    box(0.048, 0.06, 0.008, GLOW, 0, 0, 0.113);
+    box(0.012, 0.042, 0.56, STEEL, 0, 0.004, 0.39);
+    box(0.016, 0.01, 0.56, GLOW, 0, -0.021, 0.39);
+    const tip = box(0.012, 0.042, 0.09, STEEL, 0, 0.0, 0.69); tip.rotation.x = -0.45;
   } else if (kind === 'staff') {
     const st = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 1.9, 8), mats.dark()); st.position.y = 0.25; st.castShadow = true; g.add(st);
     for (const y of [0.85, -0.55]) box(0.06, 0.08, 0.06, mats.armor(0x59626e), 0, y, 0);
@@ -203,8 +217,9 @@ function makeWeapon(kind, accent, mats) {
 
 // ---------------------------------------------------------------- build
 // opts: { model: 'soldier'|'orion', energy: hex (armour lights + visor), accent: hex (weapon glow),
-//         weapon: 'blade'|'staff'|'daggers'|'greatsword'|'none', tint: hex|null, mats }
-export function makeSoldier({ model = 'soldier', energy = 0x3ee6ff, accent = 0x3ee6ff, weapon = 'none', tint = null, mats }) {
+//         weapon: 'blade'|'staff'|'daggers'|'greatsword'|'sabre'|'none', tint: hex|null, mats,
+//         hold: bone names kept in their bind pose whatever the animation (e.g. a hand resting on a hip) }
+export function makeSoldier({ model = 'soldier', energy = 0x3ee6ff, accent = 0x3ee6ff, weapon = 'none', tint = null, mats, hold = null }) {
   const MD = MODELS[model];
   const root = cloneSkinned(MD.proto);
   const mesh = root.getObjectByName(MD.mesh);
@@ -220,7 +235,7 @@ export function makeSoldier({ model = 'soldier', energy = 0x3ee6ff, accent = 0x3
   else if (weapon !== 'none') B.handR.add(w);
   if (w.userData.orb) group.userData.orb = w.userData.orb;
   const rig = {
-    isSoldier: true, group, pivot, bones: BONES.map(n => B[n]), hipsRest: B.hips.position.y, weapon, mesh,
+    isSoldier: true, group, pivot, bones: BONES.map(n => B[n]), hipsRest: B.hips.position.y, weapon, mesh, hold: hold ? hold.map(n => BONES.indexOf(n)) : null,
     st: { lx: null, lz: 0, lyaw: 0, yawRate: 0, spd: 0, vy: 0, ly: 0, phase: Math.random() * TAU, seed: Math.random() * 100, air: 0, slide: 0, glide: 0, combat: 0,
       act: null, actT: 0, combo: 0, lastAtk: 0, C: new Float32Array(NCH), T: new Float32Array(NCH), Q: new Float32Array(NCH), flipWas: 0, bjWas: 0, rollWas: 0 },
     farBake: () => ({ key: model, body: MD.lodGeo, glow: null }),
@@ -422,6 +437,7 @@ export function animSoldier(r, e, dt, t, visible = true) {
   }
   // ---- apply
   const bones = r.bones;
+  if (r.hold) for (const i of r.hold) C[i * 3] = C[i * 3 + 1] = C[i * 3 + 2] = 0;
   for (let i = 0; i < bones.length; i++) bones[i].rotation.set(C[i * 3], C[i * 3 + 1], C[i * 3 + 2]);
   bones[0].position.y = r.hipsRest + C[CH.hipsY];
   r.pivot.position.y = 1.0 + C[CH.pivDY];
