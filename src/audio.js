@@ -127,6 +127,12 @@ export const Sound = {
       case 'pickup': this.tone(1047, 0.3, 'sine', 0.07); this.tone(1568, 0.4, 'sine', 0.05, null, null, 0.07); break;
       case 'coin': this.tone(1318, 0.12, 'square', 0.03); this.tone(1760, 0.2, 'square', 0.03, null, null, 0.06); break;
       case 'error': this.tone(180, 0.15, 'square', 0.05); break;
+      case 'jump': this.noise(0.12, 0.08, 1800, 1.5); break;
+      case 'flip': this.noise(0.25, 0.12, 2400, 2); this.tone(500, 0.2, 'sine', 0.03, 900); break;
+      case 'bulletjump': this.noise(0.45, 0.22, 1400, 1.2); this.tone(160, 0.35, 'sawtooth', 0.08, 520); this.tone(900, 0.3, 'sine', 0.04, 2200); break;
+      case 'slide': this.noise(0.45, 0.14, 700, 0.7); break;
+      case 'roll': this.noise(0.3, 0.1, 900, 1); break;
+      case 'land': this.noise(0.35, 0.3, 300, 0.6); this.tone(90, 0.3, 'sine', 0.2, 40); break;
       case 'chat': this.tone(1400, 0.05, 'sine', 0.02); break;
       case 'death': [330, 262, 196, 131].forEach((f, i) => this.tone(f, 1.2, 'triangle', 0.08, null, null, i * 0.25)); break;
     }

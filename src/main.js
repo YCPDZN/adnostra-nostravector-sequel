@@ -10,6 +10,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Sound } from './audio.js';
+import { loadSoldier, soldierReady, makeSoldier, animSoldier, MOVE_DUR } from './soldier.js';
 import {
   CODEX, TIPS, CLASSES, VISORS, QUESTS, MASCAR_IDLE, BOT_NAMES, GUILDS,
   WORLD_CHAT, ZONE_CHAT, GOV_ANNOUNCE, LORE_REPLIES, GREET_REPLIES, ZURI_LINES, CANTINA_CHAT, PLAQUE
@@ -169,6 +170,8 @@ const GEO = {
   rock: new THREE.DodecahedronGeometry(1, 0),
   ico1: new THREE.IcosahedronGeometry(1, 1),
 };
+const SOLDIER_MATS = { glow: glowMat, armor: armorMat, dark: darkMat };
+const BOT_TINTS = [null, null, 0xd8dde6, 0xd6c3b0, 0xbfd2bb, 0xd3bccd, 0xb7c4dc, 0xe0d2b4];
 function bx(w, h, d, m, x = 0, y = 0, z = 0, parent) {
   const me = new THREE.Mesh(GEO.box, m); me.scale.set(w, h, d); me.position.set(x, y, z);
   me.castShadow = true; me.receiveShadow = true; if (parent) parent.add(me); return me;
@@ -355,6 +358,7 @@ function initFarChars(scene) {
 }
 // Bake one character's rig (at rest pose, in its own local space) into body + glow geometry.
 function bakeFarGeometry(ent) {
+  if (ent.rig && ent.rig.farBake) { const fb = ent.rig.farBake(); if (fb.body) return fb; }
   const root = ent.group; root.updateMatrixWorld(true);
   const inv = root.matrixWorld.clone().invert(), body = [], glow = [], sig = [];
   for (const part of root.children) if (part !== ent.hitbox) part.traverse(o => {
@@ -1466,8 +1470,11 @@ function spawnBots() {
   const names = BOT_NAMES.slice().sort(() => Math.random() - 0.5).slice(0, 14);
   for (const name of names) {
     const ck = pick(Object.keys(CLASSES)); const c = CLASSES[ck];
-    const rig = makeHumanoid({ armor: pick([0x2b323c, 0x3a3f4a, 0x2a2f2a, 0x3b2f36, 0x262c38]), accent: c.hex, visor: new THREE.Color(pick(VISORS)).getHex(), weapon: c.weapon });
-    const b = { kind: 'bot', name, cls: ck, level: randi(3, 18), guild: pick(GUILDS), rig, group: rig.group, pos: zonePoint('plaza'), alive: true, hp: 260, maxHp: 260, state: 'idle', path: [], idleT: rand(2, 20), actT: 0, act: 'plaza', target: null, atkT: 0, yaw: 0, move: 0, atk: 0, danceT: 0, height: 2.1, radius: 0.5 };
+    const visor = new THREE.Color(pick(VISORS)).getHex();
+    const rig = soldierReady() ? makeSoldier({ energy: visor, accent: c.hex, weapon: c.weapon, tint: pick(BOT_TINTS), mats: SOLDIER_MATS })
+      : makeHumanoid({ armor: pick([0x2b323c, 0x3a3f4a, 0x2a2f2a, 0x3b2f36, 0x262c38]), accent: c.hex, visor, weapon: c.weapon });
+    const b = { kind: 'bot', name, cls: ck, level: randi(3, 18), guild: pick(GUILDS), rig, group: rig.group, pos: zonePoint('plaza'), alive: true, hp: 260, maxHp: 260, state: 'idle', path: [], idleT: rand(2, 20), actT: 0, act: 'plaza', target: null, atkT: 0, yaw: 0, move: 0, atk: 0, danceT: 0, height: 2.1, radius: 0.5,
+      vy: 0, slideT: -1, rollT: 0, bjT: 0, flipT: 0, landT: 0, landHard: false, boost: 1, canFlip: false };
     b.group.position.copy(b.pos); W.scene.add(b.group);
     b.plate = makePlate('bot', `<div class="n">${esc(name)}</div>${b.guild ? `<div class="g">&lt;${esc(b.guild)}&gt;</div>` : ''}`);
     addHitbox(b, 0.9, 2, 0.9, 1);
@@ -1492,9 +1499,13 @@ const dmgScale = () => (1 + 0.12 * (G.D.level - 1)) * (1 + 0.1 * G.D.wpn);
 function setupPlayer() {
   const D = G.D, c = CL();
   if (G.P && G.P.group) { W.scene.remove(G.P.group); G.P.plate?.remove(); }
-  const rig = makeHumanoid({ armor: 0x2f3742, accent: c.hex, visor: new THREE.Color(D.visor).getHex(), weapon: c.weapon });
+  const visor = new THREE.Color(D.visor).getHex();
+  const rig = soldierReady() ? makeSoldier({ energy: visor, accent: c.hex, weapon: c.weapon, mats: SOLDIER_MATS })
+    : makeHumanoid({ armor: 0x2f3742, accent: c.hex, visor, weapon: c.weapon });
   const P = {
     kind: 'player', rig, group: rig.group, pos: SPAWN.clone(), vy: 0, yaw: Math.PI, alive: true, dead: false,
+    vel: new V3(), airJumps: 1, airCap: 0, slideT: -1, rollT: 0, rollDir: new V3(0, 0, 1), bjT: 0, bjUsed: false, flipT: 0, glide: false, glideT: 0,
+    landT: 0, landHard: false, qHeld: false, jumpHeld: false, dustT: 0, combat: false,
     hp: maxHp(), en: maxEn(), shield: 0, shieldT: 0, target: null, gcd: 0, cds: {}, autoOn: false, autoT: 0, combatT: 0,
     critNext: false, atk: 0, move: 0, danceT: 0, medT: 0, height: 2.1, radius: 0.45,
   };
@@ -1527,6 +1538,7 @@ function damage(tgt, amt, src, opt = {}) {
   const P = G.P;
   if (tgt === P) {
     if (P.dead) return;
+    if (P.rollT > 0) { floater(P.pos, 'DODGE', '#9fdcff', 2.3); return; }
     if (P.shield > 0) { const a = Math.min(P.shield, amt); P.shield -= a; amt -= a; floater(P.pos, 'ABSORB ' + a, '#9fdcff', 2.3); }
     P.combatT = 6;
     if (amt <= 0) return;
@@ -1577,13 +1589,13 @@ function gainXp(n) {
   }
 }
 function playerDie() {
-  const P = G.P; P.hp = 0; P.dead = true; P.alive = false; P.autoOn = false; G.D.deaths++;
+  const P = G.P; resetMotion(P); P.hp = 0; P.dead = true; P.alive = false; P.autoOn = false; G.D.deaths++;
   Sound.sfx('death'); P.group.rotation.x = -Math.PI / 2; P.group.position.y = 0.3;
   for (const e of G.enemies) if (e.target === P) { e.target = null; e.state = 'return'; }
   closeAllUI(); $('death').classList.remove('hidden');
 }
 function respawn() {
-  const P = G.P; P.dead = false; P.alive = true; P.hp = maxHp(); P.en = maxEn(); P.pos.copy(SPAWN); P.group.rotation.x = 0; P.shield = 0;
+  const P = G.P; resetMotion(P); P.dead = false; P.alive = true; P.hp = maxHp(); P.en = maxEn(); P.pos.copy(SPAWN); P.group.rotation.x = 0; P.shield = 0;
   setTarget(null); $('death').classList.add('hidden'); burst(P.pos.clone().setY(1), 0x3ee6ff, 40, 3); Sound.sfx('heal');
   G.cam.yaw = 0;
 }
@@ -1629,7 +1641,7 @@ function useAbility(i) {
     if (d > (ab.range || c.range)) { msg('Out of range'); return; }
     faceTo(P, t.pos);
   }
-  P.en -= ab.cost; P.cds[ab.id] = ab.cd; P.gcd = c.gcd; P.combatT = 6; if (t) P.autoOn = true; P.atk = 0.3;
+  P.en -= ab.cost; P.cds[ab.id] = ab.cd; P.gcd = c.gcd; P.combatT = 6; if (t) P.autoOn = true; P.actHint = ab.id; P.atk = 0.3;
   const slot = $('hotbar').children[i]; slot.classList.remove('flash'); void slot.offsetWidth; slot.classList.add('flash');
   const hand = P.pos.clone().setY(1.4);
   switch (ab.id) {
@@ -1737,6 +1749,113 @@ function turnTo(group, yaw, dt, k = 10) {
 //  UPDATE — world
 // =====================================================================
 const keys = {};
+// ---------------------------------------------------------------- Warframe-style movement
+const MV = { run: 9, sprint: 14.5, accel: 55, brake: 70, airAccel: 16, g: 26, jump: 9.2, airJump: 9.2, bjH: 21, bjV: 10.5,
+  slideBoost: 3.5, slideFric: 5.5, slideMin: 4.5, rollSpeed: 13, glideFall: 2.0, glideMax: 1.6, hardLand: -12.5 };
+function inputDir() {
+  if (document.activeElement === $('chat-input') || G.ui) return null;
+  let fx = 0, fz = 0;
+  if (keys.KeyW || keys.ArrowUp) fz += 1; if (keys.KeyS || keys.ArrowDown) fz -= 1;
+  if (keys.KeyA || keys.ArrowLeft) fx -= 1; if (keys.KeyD || keys.ArrowRight) fx += 1;
+  if (mouse.both) fz = 1;
+  if (joy.id !== null) { fx += joy.x; fz -= joy.y; }
+  const yaw = G.cam.yaw;
+  const d = new V3(-Math.sin(yaw) * fz + Math.cos(yaw) * fx, 0, -Math.cos(yaw) * fz - Math.sin(yaw) * fx);
+  return d.lengthSq() > 0.0004 ? d.normalize() : null;
+}
+const camForward = () => new V3(-Math.sin(G.cam.yaw), 0, -Math.cos(G.cam.yaw));
+function resetMotion(P) {
+  P.vel.set(0, 0, 0); P.vy = 0; P.slideT = -1; P.rollT = 0; P.bjT = 0; P.flipT = 0; P.landT = 0; P.glide = false; P.glideT = 0; P.airJumps = 1; P.bjUsed = false;
+}
+function energyHex() { return new THREE.Color(G.D.visor).getHex(); }
+function playerJump() {
+  const P = G.P; if (!P || P.dead || G.ui || G.mode !== 'world') return;
+  P.jumpHeld = true;
+  const grounded = P.pos.y <= 0.001 && P.vy <= 0.001;
+  if (grounded) {
+    if (P.slideT >= 0 || P.qHeld) return bulletJump(P);
+    if (P.rollT > 0) return;
+    P.vy = MV.jump; P.airCap = P.vel.length(); P.landT = 0; Sound.sfx('jump');
+  } else if (P.airJumps > 0) {
+    P.airJumps--; P.vy = MV.airJump; P.flipT = 1e-4; P.glideT = 0;
+    const d = inputDir(); if (d) { const sp = Math.max(P.vel.length(), MV.run); P.vel.copy(d).multiplyScalar(sp); P.airCap = Math.max(P.airCap, sp); }
+    Sound.sfx('flip');
+  }
+}
+function bulletJump(P) {
+  const d = inputDir() || camForward();
+  P.vel.copy(d).multiplyScalar(MV.bjH); P.vy = MV.bjV; P.airCap = MV.bjH; P.bjT = 1e-4; P.bjUsed = true; P.slideT = -1; P.landT = 0; P.airJumps = 1; P.glideT = 0;
+  P.yaw = Math.atan2(d.x, d.z); P.group.rotation.y = P.yaw;
+  const col = energyHex();
+  ringFx(P.pos, col, 2.6, 0.35); burst(P.pos.clone().setY(0.4), col, 18, 4); burst(P.pos.clone().setY(0.1), 0xc9a160, 10, 2.5);
+  Sound.sfx('bulletjump');
+}
+function playerCrouch(down) {
+  const P = G.P; if (!P) return;
+  P.qHeld = down; if (!down || P.dead || G.ui || G.mode !== 'world') return;
+  if (P.pos.y > 0.001 || P.rollT > 0 || P.slideT >= 0) return;
+  const sp = P.vel.length();
+  if (sp > 6) { P.slideT = 0; P.landT = 0; P.vel.multiplyScalar((Math.max(sp, MV.sprint) + MV.slideBoost) / sp); Sound.sfx('slide'); }
+  else {
+    const d = inputDir() || new V3(Math.sin(P.yaw), 0, Math.cos(P.yaw));
+    P.rollT = 1e-4; P.rollDir.copy(d); P.yaw = Math.atan2(d.x, d.z); P.landT = 0; Sound.sfx('roll');
+  }
+}
+function landPlayer(P) {
+  const impact = P.vy;
+  P.airJumps = 1; P.glideT = 0; P.glide = false; P.bjT = 0; P.flipT = 0; P.bjUsed = false;
+  if (impact < MV.hardLand) {
+    P.landT = 1e-4; P.landHard = true; P.vel.multiplyScalar(0.2);
+    ringFx(P.pos, 0xc9a160, 3.2, 0.5); burst(P.pos.clone().setY(0.15), 0xc9a160, 22, 3.5); burst(P.pos.clone().setY(0.3), energyHex(), 10, 2); Sound.sfx('land');
+  } else { P.landT = 1e-4; P.landHard = false; if (impact < -6) burst(P.pos.clone().setY(0.1), 0xc9a160, 6, 1.5); }
+  if (P.qHeld && P.vel.length() > 6) { P.slideT = 0; P.landT = 0; P.landHard = false; Sound.sfx('slide'); } // land straight into a slide
+}
+function updateMotion(P, dt) {
+  const d = inputDir(), hv = P.vel;
+  const sprint = keys.ShiftLeft || keys.ShiftRight || joy.mag > 0.92;
+  const grounded = P.pos.y <= 0.001 && P.vy <= 0;
+  if (P.flipT > 0 && (P.flipT += dt) >= MOVE_DUR.flip) P.flipT = 0;
+  if (P.bjT > 0 && (P.bjT += dt) >= MOVE_DUR.bj) P.bjT = 0;
+  if (P.landT > 0 && (P.landT += dt) >= (P.landHard ? MOVE_DUR.landHard : MOVE_DUR.landSoft)) P.landT = 0;
+  if (P.rollT > 0) {
+    P.rollT += dt; const u = Math.min(1, P.rollT / MOVE_DUR.roll);
+    hv.copy(P.rollDir).multiplyScalar(MV.rollSpeed * (1 - 0.55 * u));
+    if (P.rollT >= MOVE_DUR.roll) { P.rollT = 0; hv.multiplyScalar(0.6); }
+  } else if (P.slideT >= 0) {
+    P.slideT += dt;
+    let sp = hv.length(); sp = Math.max(0, sp - MV.slideFric * dt * (sp > MV.sprint ? 1.6 : 1));
+    if (sp > 0.01) {
+      let yaw = Math.atan2(hv.x, hv.z);
+      if (d) { let dd = Math.atan2(d.x, d.z) - yaw; while (dd > Math.PI) dd -= Math.PI * 2; while (dd < -Math.PI) dd += Math.PI * 2; yaw += clamp(dd, -2.2 * dt, 2.2 * dt); }
+      hv.set(Math.sin(yaw) * sp, 0, Math.cos(yaw) * sp);
+    }
+    if (!P.qHeld || sp < MV.slideMin || !grounded) P.slideT = -1;
+    if ((P.dustT -= dt) <= 0) { P.dustT = 0.07; burst(P.pos.clone().setY(0.08), 0xc9a160, 3, 1.4); }
+  } else if (grounded) {
+    const locked = P.landT > 0 && P.landHard && P.landT < MOVE_DUR.landHard * 0.55; // hero landings plant you for a beat
+    const want = d && !locked ? d.clone().multiplyScalar(sprint ? MV.sprint : MV.run) : new V3();
+    const diff = want.sub(hv), step = (d && !locked ? MV.accel : MV.brake) * dt, dl = diff.length();
+    if (dl <= step) hv.add(diff); else hv.addScaledVector(diff, step / dl);
+  } else if (d) { // in the air: keep the momentum, steer a little
+    hv.addScaledVector(d, MV.airAccel * dt);
+    const cap = Math.max(P.airCap, MV.run), l = hv.length(); if (l > cap) hv.multiplyScalar(cap / l);
+  }
+  P.pos.addScaledVector(hv, dt);
+  // vertical: gravity, or a slow aim glide while jump is held on the way down
+  const airborne = P.pos.y > 0.001 || P.vy > 0;
+  P.glide = airborne && P.jumpHeld && P.vy < 0 && P.glideT < MV.glideMax && (P.airJumps === 0 || P.bjUsed) && P.rollT === 0;
+  if (P.glide) { P.glideT += dt; P.vy = Math.max(P.vy - MV.g * 0.3 * dt, -MV.glideFall); hv.multiplyScalar(1 - dt * 0.2); }
+  else P.vy -= MV.g * dt;
+  P.pos.y += P.vy * dt;
+  if (P.pos.y <= 0) { if (airborne && P.vy < 0) landPlayer(P); P.pos.y = 0; P.vy = 0; }
+  resolveCollision(P.pos, P.radius);
+  // facing: along the motion for moves, toward the input otherwise
+  const hsp = hv.length();
+  if (P.rollT > 0 || P.slideT >= 0 || P.bjT > 0 || (airborne && hsp > 2)) { if (hsp > 0.5) P.yaw = Math.atan2(hv.x, hv.z); }
+  else if (d && hsp > 0.3) P.yaw = Math.atan2(d.x, d.z);
+  else if (P.target && P.target.alive && P.autoOn) faceTo(P, P.target.pos);
+  P.move = clamp(hsp / MV.run, 0, 1); if (d) P.danceT = 0;
+}
 function updatePlayer(dt) {
   const P = G.P, D = G.D, c = CL();
   D.played += dt;
@@ -1744,30 +1863,13 @@ function updatePlayer(dt) {
   for (const k in P.cds) P.cds[k] = Math.max(0, P.cds[k] - dt);
   P.combatT = Math.max(0, P.combatT - dt);
   if (P.shieldT > 0) { P.shieldT -= dt; if (P.shieldT <= 0) P.shield = 0; }
-  if (P.dead) { P.group.position.copy(P.pos).setY(0.3); return; }
+  if (P.dead) { P.group.position.copy(P.pos).setY(0.3); if (P.rig.isSoldier) animSoldier(P.rig, P, dt, G.time); return; }
   P.en = Math.min(maxEn(), P.en + 9 * dt);
   if (D.aleT > 0) D.aleT = Math.max(0, D.aleT - dt);
   if (P.combatT <= 0) P.hp = Math.min(maxHp(), P.hp + maxHp() * 0.035 * dt);
 
-  // movement
-  const typing = document.activeElement === $('chat-input');
-  let fx = 0, fz = 0;
-  if (!typing && !G.ui) {
-    if (keys.KeyW || keys.ArrowUp) fz += 1; if (keys.KeyS || keys.ArrowDown) fz -= 1;
-    if (keys.KeyA || keys.ArrowLeft) fx -= 1; if (keys.KeyD || keys.ArrowRight) fx += 1;
-    if (mouse.both) fz = 1;
-    if (joy.id !== null) { fx += joy.x; fz -= joy.y; }
-  }
-  const yaw = G.cam.yaw;
-  const fwd = new V3(-Math.sin(yaw), 0, -Math.cos(yaw)), right = new V3(Math.cos(yaw), 0, -Math.sin(yaw));
-  const dir = fwd.multiplyScalar(fz).add(right.multiplyScalar(fx));
-  const moving = dir.lengthSq() > 0;
-  if (moving) {
-    dir.normalize(); const sp = (keys.ShiftLeft || keys.ShiftRight || joy.mag > 0.92) ? 10.5 : 7;
-    P.pos.addScaledVector(dir, sp * dt); P.yaw = Math.atan2(dir.x, dir.z); P.move = Math.min(1, P.move + dt * 6); P.danceT = 0;
-  } else { P.move = Math.max(0, P.move - dt * 6); if (P.target && P.target.alive && P.autoOn) faceTo(P, P.target.pos); }
-  // jump
-  P.vy -= 22 * dt; P.pos.y += P.vy * dt; if (P.pos.y <= 0) { P.pos.y = 0; P.vy = 0; }
+  // movement: momentum, sprint, slide, bullet jump, double jump, aim glide, dodge roll
+  updateMotion(P, dt);
   resolveCollision(P.pos, P.radius);
 
   // auto-attack
@@ -1776,13 +1878,14 @@ function updatePlayer(dt) {
     P.autoT -= dt;
     if (P.autoT <= 0 && d2(P.pos, t.pos) - t.radius <= c.range) {
       P.autoT = 2.0; P.combatT = 6;
-      if (c.range > 5) { projectile(P.pos.clone().setY(1.4), t, c.hex, 0.1, 30, () => hitTarget(t, 7)); Sound.sfx('drone'); }
+      if (c.range > 5) { projectile(P.pos.clone().setY(P.pos.y + 1.4), t, c.hex, 0.1, 30, () => hitTarget(t, 7)); Sound.sfx('drone'); P.actHint = 'cast'; P.atk = 0.3; }
       else { hitTarget(t, 7); P.atk = 0.3; Sound.sfx('slash'); }
     }
   }
   P.atk = Math.max(0, P.atk - dt); P.danceT = Math.max(0, P.danceT - dt);
-  P.group.position.copy(P.pos); turnTo(P.group, P.yaw + (P.danceT > 0 ? G.time * 6 : 0), dt, P.danceT > 0 ? 50 : 12);
-  animHumanoid(P.rig, P.move, G.time, P.atk, P.danceT);
+  P.group.position.copy(P.pos); turnTo(P.group, P.yaw + (P.danceT > 0 ? G.time * 6 : 0), dt, P.danceT > 0 ? 50 : 14);
+  P.combat = P.combatT > 0;
+  if (P.rig.isSoldier) animSoldier(P.rig, P, dt, G.time); else animHumanoid(P.rig, P.move, G.time, P.atk, P.danceT);
   if (P.rig.group.userData.orb) P.rig.group.userData.orb.rotation.y += dt * 3;
   W.shieldMesh.visible = P.shield > 0; W.shieldMesh.position.copy(P.pos).setY(1); W.shieldMesh.material.opacity = 0.12 + Math.sin(G.time * 6) * 0.05;
 
@@ -1874,22 +1977,40 @@ function bossLogic(e, dt) {
   }
 }
 
+// bots: the same moves as the player, driven by chance — bullet jumps, flips at the apex, slides, hero landings
+function botMotion(b, dt) {
+  if (b.flipT > 0 && (b.flipT += dt) >= MOVE_DUR.flip) b.flipT = 0;
+  if (b.bjT > 0 && (b.bjT += dt) >= MOVE_DUR.bj) b.bjT = 0;
+  if (b.landT > 0 && (b.landT += dt) >= (b.landHard ? MOVE_DUR.landHard : MOVE_DUR.landSoft)) b.landT = 0;
+  if (b.slideT >= 0 && (b.slideT += dt) > 0.6) b.slideT = -1;
+  if (b.pos.y > 0 || b.vy > 0) {
+    if (b.canFlip && b.vy < 0.5 && b.pos.y > 1.2) { b.canFlip = false; b.vy = 9; b.flipT = 1e-4; }
+    b.vy -= MV.g * dt; b.pos.y += b.vy * dt;
+    if (b.pos.y <= 0) { b.landHard = b.vy < MV.hardLand; b.landT = 1e-4; b.pos.y = 0; b.vy = 0; b.boost = 1; b.bjT = 0; b.flipT = 0;
+      if (b.landHard && d2(b.pos, G.P.pos) < 30) ringFx(b.pos, 0xc9a160, 2.6, 0.45); }
+  }
+}
 function updateBots(dt) {
   for (const b of G.bots) {
     if (!b.alive) {
-      b.deadT += dt; if (b.deadT > 12) { b.alive = true; b.hp = b.maxHp; b.pos.copy(zonePoint('plaza')); b.group.rotation.x = 0; b.state = 'idle'; b.act = 'plaza'; b.idleT = rand(5, 20); b.path = []; }
-      b.group.position.copy(b.pos).setY(0.3); continue;
+      b.deadT += dt; if (b.deadT > 12) { b.alive = true; b.hp = b.maxHp; b.pos.copy(zonePoint('plaza')); b.group.rotation.x = 0; b.state = 'idle'; b.act = 'plaza'; b.idleT = rand(5, 20); b.path = []; b.vy = 0; b.slideT = -1; b.bjT = b.flipT = b.landT = 0; }
+      b.group.position.copy(b.pos).setY(0.3); if (b.rig.isSoldier) animSoldier(b.rig, b, dt, G.time, b.lodNear !== false); continue;
     }
     b.atk = Math.max(0, b.atk - dt); b.danceT = Math.max(0, b.danceT - dt);
     if (b.state === 'idle') {
       b.idleT -= dt;
-      if (!b.wp || moveToward(b, b.wp, 2.5, dt)) { if (Math.random() < 0.01) b.wp = zonePoint('plaza'); }
+      if (!b.wp || moveToward(b, b.wp, 2.2, dt)) { if (Math.random() < 0.01) b.wp = zonePoint('plaza'); }
       if (Math.random() < 0.0008) b.danceT = 4;
       b.hp = Math.min(b.maxHp, b.hp + 20 * dt);
       if (b.idleT <= 0) { b.act = Math.random() < 0.25 ? 'cantina' : pick(['ashen', 'ashen', 'echo', 'echo', 'crater', 'crater']); b.path = [...GATES[b.act], zonePoint(b.act)]; b.state = 'travel'; b.actT = b.act === 'cantina' ? rand(40, 110) : rand(60, 180); b.wp = null; }
     } else if (b.state === 'travel') {
       if (!b.path.length) { b.state = b.act === 'plaza' ? 'idle' : b.act === 'cantina' ? 'lounge' : 'hunt'; b.idleT = rand(15, 50); continue; }
-      if (moveToward(b, b.path[0], 7, dt, 1)) b.path.shift();
+      if (b.rig.isSoldier && b.pos.y === 0 && b.slideT < 0 && b.act !== 'cantina' && d2(b.pos, b.path[0]) > 24) {
+        if (Math.random() < dt * 0.3) { b.vy = 10.5; b.bjT = 1e-4; b.boost = 1.6; b.canFlip = Math.random() < 0.6; }   // bullet jump
+        else if (Math.random() < dt * 0.12) b.slideT = 0;                                                         // slide
+      }
+      const tsp = (b.act === 'cantina' && zoneAt(b.pos.x, b.pos.z) === 'cantina' ? 3 : 13) * (b.pos.y > 0 ? b.boost : 1) * (b.slideT >= 0 ? 1.15 : 1);
+      if (moveToward(b, b.path[0], tsp, dt, 1)) b.path.shift();
     } else if (b.state === 'lounge') {   // a regular at the Lantern: stand about, raise a glass, then wander back out
       b.actT -= dt; b.move = Math.max(0, b.move - dt * 5);
       if (Math.random() < 0.0015) b.danceT = 2.5;
@@ -1900,15 +2021,15 @@ function updateBots(dt) {
       if (!b.target || !b.target.alive) {
         b.target = null; let bd = 30;
         for (const e of G.enemies) { if (!e.alive || (e.isBoss && Math.random() < 0.995)) continue; const d = d2(b.pos, e.pos); if (d < bd && zoneAt(e.pos.x, e.pos.z) === zoneAt(b.pos.x, b.pos.z)) { bd = d; b.target = e; } }
-        if (!b.target) { if (!b.wp || moveToward(b, b.wp, 5, dt)) b.wp = zonePoint(b.act); }
+        if (!b.target) { if (!b.wp || moveToward(b, b.wp, 9, dt)) b.wp = zonePoint(b.act); }
       } else {
         const t = b.target, c = CLASSES[b.cls], reach = (c.range > 5 ? 14 : 2.2) + t.radius;
-        if (d2(b.pos, t.pos) > reach) moveToward(b, t.pos, 6.5, dt, reach * 0.9);
+        if (d2(b.pos, t.pos) > reach) moveToward(b, t.pos, 10, dt, reach * 0.9);
         else {
           b.move = Math.max(0, b.move - dt * 5); faceTo(b, t.pos); b.atkT -= dt;
           if (b.atkT <= 0) {
-            b.atkT = rand(1.4, 1.9); b.atk = 0.3; const dmg = 6 + b.level * 0.7;
-            if (c.range > 5) projectile(b.pos.clone().setY(1.4), t, c.hex, 0.12, 30, () => damage(t, dmg, b), b);
+            b.atkT = rand(1.4, 1.9); b.atk = 0.3; if (c.range > 5) b.actHint = 'cast'; const dmg = 6 + b.level * 0.7;
+            if (c.range > 5) projectile(b.pos.clone().setY(b.pos.y + 1.4), t, c.hex, 0.12, 30, () => damage(t, dmg, b), b);
             else { damage(t, dmg, b); if (d2(b.pos, G.P.pos) < 30 && Math.random() < 0.5) slashFx(t, c.hex, 0.9); }
           }
         }
@@ -1916,8 +2037,10 @@ function updateBots(dt) {
       }
     }
     resolveCollision(b.pos, 0.4);
-    b.group.position.copy(b.pos); turnTo(b.group, b.yaw + (b.danceT > 0 ? G.time * 6 : 0), dt, b.danceT > 0 ? 50 : 10);
-    animHumanoid(b.rig, b.move, G.time + b.name.length, b.atk, b.danceT);
+    if (b.rig.isSoldier) botMotion(b, dt);
+    b.group.position.copy(b.pos); turnTo(b.group, b.yaw + (b.danceT > 0 ? G.time * 6 : 0), dt, b.danceT > 0 ? 50 : 12);
+    if (b.rig.isSoldier) { b.combat = b.state === 'hunt' && !!b.target && b.target.alive && d2(b.pos, b.target.pos) < 18; animSoldier(b.rig, b, dt, G.time, b.lodNear !== false); }
+    else animHumanoid(b.rig, b.move, G.time + b.name.length, b.atk, b.danceT);
   }
 }
 
@@ -1990,6 +2113,8 @@ function updateCamera(dt) {
     }
   }
   W.cam.position.lerp(cp, Math.min(1, dt * 14)); W.cam.lookAt(tgt);
+  const sp = P.vel ? P.vel.length() : 0, fov = 60 + clamp((sp - MV.run) / 12, 0, 1) * 14;
+  if (Math.abs(W.cam.fov - fov) > 0.05) { W.cam.fov += (fov - W.cam.fov) * Math.min(1, dt * 4); W.cam.updateProjectionMatrix(); }
 }
 
 function updateWorld(dt) {
@@ -2246,9 +2371,9 @@ function sendChat(text) {
       case 'played': { const s = D.played | 0; addChat('sys', null, `Time played: ${Math.floor(s / 3600)}h ${Math.floor(s / 60) % 60}m ${s % 60}s`); break; }
       case 'loc': addChat('sys', null, `${ZONES[G.zone].name}: ${P.pos.x.toFixed(0)}, ${(-P.pos.z).toFixed(0)}`); break;
       case 'dance': P.danceT = 5; addChat('say', null, `${D.name} bursts into dance.`, 'sys'); break;
-      case 'wave': P.atk = 0.3; addChat('say', null, `${D.name} waves.`, 'sys'); setTimeout(() => { const b = G.bots.find(b => d2(b.pos, P.pos) < 20); if (b) addChat('say', b.name, 'o/'); }, 900); break;
+      case 'wave': P.actHint = 'wave'; P.atk = 0.3; addChat('say', null, `${D.name} waves.`, 'sys'); setTimeout(() => { const b = G.bots.find(b => d2(b.pos, P.pos) < 20); if (b) addChat('say', b.name, 'o/'); }, 900); break;
       case 'salute': {
-        P.atk = 0.3; const near = d2(P.pos, G.npcs[0].pos) < 15;
+        P.actHint = 'salute'; P.atk = 0.3; const near = d2(P.pos, G.npcs[0].pos) < 15;
         addChat('say', null, near ? `${D.name} salutes Governor Mascar.` : `${D.name} salutes.`, 'sys');
         if (near) setTimeout(() => addChat('say', 'Croxian Mascar', pick(['At ease, Ascendant.', 'The city sees you.', 'Stand tall. You have earned it.'])), 900);
         break;
@@ -2356,11 +2481,16 @@ window.addEventListener('keydown', e => {
     case 'Digit1': useAbility(0); break; case 'Digit2': useAbility(1); break; case 'Digit3': useAbility(2); break; case 'Digit4': useAbility(3); break; case 'Digit5': useAbility(4); break;
     case 'KeyE': case 'KeyF': if (G.ui === 'dialog') break; interact(); break;
     case 'KeyC': if (G.ui === 'sheet') closeAllUI(); else openSheet(); break;
-    case 'Space': e.preventDefault(); if (G.P.pos.y === 0 && !G.P.dead) G.P.vy = 8; break;
+    case 'Space': e.preventDefault(); if (!e.repeat) playerJump(); break;
+    case 'KeyQ': if (!e.repeat) playerCrouch(true); break;
   }
 });
-window.addEventListener('keyup', e => { keys[e.code] = false; });
-window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+window.addEventListener('keyup', e => {
+  keys[e.code] = false;
+  if (G.P && e.code === 'Space') G.P.jumpHeld = false;
+  if (G.P && e.code === 'KeyQ') playerCrouch(false);
+});
+window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (G.P) { G.P.jumpHeld = false; G.P.qHeld = false; } });
 
 // ---------------------------------------------------------------- touch
 // Left thumb: virtual joystick. Anywhere else on the scene: drag to turn the
@@ -2417,7 +2547,12 @@ function touchEnd(e) {
 window.addEventListener('touchend', touchEnd); window.addEventListener('touchcancel', touchEnd);
 // action buttons (pointerdown so they respond instantly, without the click delay)
 const tap = (id, fn) => $(id).addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); Sound.init(); fn(); });
-tap('tb-jump', () => { if (G.P && G.P.pos.y === 0 && !G.P.dead) G.P.vy = 8; });
+tap('tb-jump', () => playerJump());
+tap('tb-slide', () => playerCrouch(true));
+for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
+  $('tb-jump').addEventListener(ev, () => { if (G.P) G.P.jumpHeld = false; });
+  $('tb-slide').addEventListener(ev, () => playerCrouch(false));
+}
 tap('tb-target', () => cycleTarget());
 tap('tb-menu', () => { if (G.ui && G.ui !== 'pause') closeAllUI(); else togglePause(); });
 tap('tb-sheet', () => { if (G.ui === 'sheet') closeAllUI(); else openSheet(); });
@@ -2593,6 +2728,8 @@ function loop() {
   prog(0.1);
   try { await loadMascar(prog); status.textContent = 'UPLINK ESTABLISHED'; }
   catch (err) { console.error(err); status.textContent = 'GOVERNOR MODEL UNAVAILABLE — USING FALLBACK'; showError(err.message); }
+  try { await loadSoldier(); }
+  catch (err) { console.error(err); showError('Ascendant model unavailable, using the fallback: ' + err.message); }
   buildMenu();
   setScene(menu.scene, menu.cam);
   loop();
