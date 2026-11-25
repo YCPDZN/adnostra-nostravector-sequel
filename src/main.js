@@ -120,6 +120,64 @@ function cracks(g, w, h, n, color, width = 1.5) {
   }
 }
 
+// Croxian Mascar's scythe: a tall pole gripped in his right fist, with four curved blades
+// stacked near the top, each with a glowing cyan line. Built in the Mascar model's own units
+// (feet at y = 0, about 0.98 tall, facing +Z), so it scales with every copy of him.
+// T is the three.js namespace (only the classes used below are needed).
+function makeScythe(T) {
+  const X = -0.19, Z = 0.07;                         // pole axis: through the right fist, clear of the arm and cape
+  const metal = new T.MeshStandardMaterial({ color: 0x5b6169, metalness: 0.75, roughness: 0.42 });
+  const blade = new T.MeshStandardMaterial({ color: 0x2b3038, metalness: 0.8, roughness: 0.32 });
+  const dark = new T.MeshStandardMaterial({ color: 0x171b21, metalness: 0.5, roughness: 0.6 });
+  const glow = new T.MeshStandardMaterial({ color: 0x3ee6ff, emissive: 0x3ee6ff, emissiveIntensity: 2.4, roughness: 0.4, side: T.DoubleSide });
+  const g = new T.Group(); g.name = 'scythe';
+  const add = (geo, m, x, y, z) => { const me = new T.Mesh(geo, m); me.position.set(x, y, z); me.castShadow = true; me.receiveShadow = true; g.add(me); return me; };
+  const TOP = 1.3;
+  // pole, pointed foot and the cyan line along its lower end
+  add(new T.CylinderGeometry(0.0085, 0.0085, TOP - 0.05, 10), metal, X, 0.05 + (TOP - 0.05) / 2, Z);
+  add(new T.CylinderGeometry(0.0085, 0.001, 0.05, 10), metal, X, 0.025, Z);
+  add(new T.BoxGeometry(0.004, 0.32, 0.005), glow, X - 0.0085, 0.22, Z);
+  // ridged grip just above the fist
+  const ring = new T.CylinderGeometry(0.0115, 0.0115, 0.007, 10);
+  for (let i = 0; i < 9; i++) add(ring, dark, X, 0.545 + i * 0.016, Z);
+  // four blades, each fixed to the pole by a dark knuckle block
+  const knuckle = new T.BoxGeometry(0.03, 0.03, 0.03);
+  const bez = (a, b, c, d, t) => { const u = 1 - t; return [u * u * u * a[0] + 3 * u * u * t * b[0] + 3 * u * t * t * c[0] + t * t * t * d[0], u * u * u * a[1] + 3 * u * u * t * b[1] + 3 * u * t * t * c[1] + t * t * t * d[1]]; };
+  // blade outline in (out, up) from its root: a sharp lower edge and a thicker spine on top, meeting at a drooping tip
+  const N = 28, TH = 0.006, lo = [], up = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    lo.push(bez([0, -0.016], [0.1, -0.004], [0.27, -0.02], [0.4, -0.135], t));
+    up.push(bez([0, 0.018], [0.13, 0.055], [0.3, 0.045], [0.4, -0.135], t));
+  }
+  const bladeGeo = (() => {
+    const p = [];
+    const tri = (a, b, c) => p.push(...a, ...b, ...c);
+    const L = (i) => [-lo[i][0], lo[i][1], 0];             // cutting edge: sharp (zero thickness)
+    const U = (i, s) => [-up[i][0], up[i][1], s * TH];     // spine: thick on both faces
+    for (let i = 0; i < N; i++) {
+      tri(L(i), U(i, 1), L(i + 1)); tri(L(i + 1), U(i, 1), U(i + 1, 1));                 // front face
+      tri(L(i), L(i + 1), U(i, -1)); tri(L(i + 1), U(i + 1, -1), U(i, -1));              // back face
+      tri(U(i, 1), U(i, -1), U(i + 1, 1)); tri(U(i + 1, 1), U(i, -1), U(i + 1, -1));     // spine
+    }
+    tri(L(0), U(0, -1), U(0, 1));                                                        // root
+    const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.Float32BufferAttribute(p, 3)); geo.computeVertexNormals(); return geo;
+  })();
+  const lineGeo = (() => {   // glowing line on both faces, running along the blade just above the edge
+    const p = [], A = 0.17, B = 0.38, I0 = 2, I1 = N - 2;
+    const at = (i, f, s) => { const x = lo[i][0] + (up[i][0] - lo[i][0]) * f, y = lo[i][1] + (up[i][1] - lo[i][1]) * f; return [-x, y, s * (f * TH + 0.0012)]; };
+    for (const s of [1, -1]) for (let i = I0; i < I1; i++) p.push(...at(i, A, s), ...at(i, B, s), ...at(i + 1, A, s), ...at(i + 1, A, s), ...at(i, B, s), ...at(i + 1, B, s));
+    const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.Float32BufferAttribute(p, 3)); geo.computeVertexNormals(); return geo;
+  })();
+  for (const y of [1.28, 1.185, 1.09, 0.995]) {
+    add(knuckle, dark, X, y, Z);
+    add(bladeGeo, blade, X - 0.012, y, Z);
+    add(lineGeo, glow, X - 0.012, y, Z);
+  }
+  add(new T.BoxGeometry(0.022, 0.014, 0.022), dark, X, TOP + 0.007, Z);   // cap
+  return g;
+}
+
 // ---------------------------------------------------------------- Mascar model
 let mascarProto = null;
 async function loadMascar(progress) {
@@ -139,6 +197,7 @@ async function loadMascar(progress) {
   const box = new THREE.Box3().setFromObject(root);
   root.userData.height = box.max.y - box.min.y;
   root.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (o.material) { o.material.envMapIntensity = 1.0; } } });
+  root.add(makeScythe(THREE));
   mascarProto = root;
   progress(1);
 }
@@ -667,7 +726,7 @@ function buildMenu() {
   }
   menu.birds = makeBirdFlock(birdRing(4, onView(-6, 120).x, onView(-6, 120).z, 14, 26, 26, 34, 6, 1.6)); S.add(menu.birds);
   mergeStatic(S, 400);
-  menu.cam.position.set(1.9, 1.75, 6.4);
+  menu.cam.position.set(1.9, 1.95, 7.3);   // pulled back so the Governor's scythe fits in frame
 }
 function updateMenu(dt) {
   const t = G.time;
@@ -690,9 +749,9 @@ function updateMenu(dt) {
   p.needsUpdate = true;
   // portrait screens: pull back and centre him in the upper half, above the menu buttons
   const portrait = menu.cam.aspect < 1;
-  const tx = (portrait ? 0.5 : 1.9) + menu.mx * 0.35, ty = (portrait ? 1.6 : 1.75) - menu.my * 0.2, tz = portrait ? 6.4 + 4.5 / menu.cam.aspect : 6.4;
+  const tx = (portrait ? 0.5 : 1.9) + menu.mx * 0.35, ty = (portrait ? 1.6 : 1.95) - menu.my * 0.2, tz = portrait ? 6.4 + 4.5 / menu.cam.aspect : 7.3;
   menu.cam.position.x += (tx - menu.cam.position.x) * 0.04; menu.cam.position.y += (ty - menu.cam.position.y) * 0.04; menu.cam.position.z += (tz - menu.cam.position.z) * 0.08;
-  menu.cam.lookAt(portrait ? 0 : -0.85, portrait ? 0.35 : 1.22, 0);
+  menu.cam.lookAt(portrait ? 0 : -0.85, portrait ? 0.35 : 1.45, 0);
 }
 
 
