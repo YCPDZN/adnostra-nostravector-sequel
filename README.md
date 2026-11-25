@@ -23,7 +23,10 @@ It also plays on phones and tablets: host the folder anywhere static (or open it
 ## Controls
 | Key | Action |
 |---|---|
-| W A S D | Move (Shift to sprint, Space to jump) |
+| W A S D | Move (Shift to sprint) |
+| Space | Jump; again in the air for a flip; hold on the way down to aim-glide |
+| Q | Slide when moving fast (hold), dodge roll when slow |
+| Q + Space | Bullet jump (slide, then jump) |
 | Mouse drag / wheel | Turn the camera / zoom (right-drag also turns your character) |
 | Click, Tab | Pick a target / cycle targets |
 | 1–4 | Class abilities |
@@ -41,8 +44,21 @@ It also plays on phones and tablets: host the folder anywhere static (or open it
 | Tap a character | Target (tap an NPC up close to talk) |
 | Hotbar | Abilities and medkit |
 | Gold prompt | Talk / interact / pick up shards |
-| ◎ / ▲ | Cycle target / jump |
+| ◎ / ⤵ / ▲ | Cycle target / slide or roll / jump (hold to glide) |
 | ✉ ☰ ❚❚ | Chat / character sheet / menu |
+
+## Movement
+Every Ascendant, you and the simulated players alike, wears the same rigged soldier armour and moves like a Warframe:
+- **Run** at 9 m/s, **sprint** at 14.5 m/s. Blade and dagger users sprint in the swept-back "ninja run"; Arcwrights carry the staff behind them.
+- **Slide** (hold Q while moving fast) carries your momentum low along the ground. Jump out of it for a **bullet jump**: a corkscrewing, head-first launch at 21 m/s.
+- **Double jump** with a front flip, then hold Space to **aim-glide** and drift down slowly.
+- **Dodge roll** (Q when slow) passes through attacks untouched.
+- Big drops end in a **hero landing**: one knee and one fist on the ground, with a dust ring.
+- Attacks are weapon combos (forehand, backhand, overhead cleave for blades; reverse-grip stabs and a spin for daggers; staff casts), and abilities have their own moves: ground slam, guard, heal, lance.
+- Your armour lights and visor glow in your chosen visor colour; each class's weapon glows in its own colour.
+- The camera widens its field of view as you pick up speed.
+
+The other Ascendants bullet-jump, flip and slide on their way out to the zones.
 
 ## Graphics and performance
 The game runs at full quality on modest hardware, integrated graphics included:
@@ -78,8 +94,10 @@ The other Ascendants in the world are simulated. They have names, guilds and cla
 ## Project files
 - `index.html` is the game page and UI.
 - `game.js` is the compiled game, built from `src/`.
-- `src/main.js` holds the engine, world, combat, AI and UI. `src/data.js` holds lore, quests and classes. `src/audio.js` makes all the music and sound in code.
+- `src/main.js` holds the engine, world, combat, AI, movement and UI. `src/soldier.js` is the Ascendant soldier: its rig, weapons and every animation, all procedural. `src/data.js` holds lore, quests and classes. `src/audio.js` makes all the music and sound in code.
 - `assets/croxian_mascar.glb` is the Governor's model, optimised to 165k triangles. `assets/model.js` is the same model embedded so the game runs from a double-click.
+- `assets/ascendant_soldier.glb` is the player and Ascendant model: cut from 1.9M to 16k triangles, with textures baked onto new UVs, a 19-bone skeleton, and a 2.4k-triangle copy for distant characters. `assets/soldier.js` is the same model embedded.
+- `tools/soldier/` is the pipeline that turned the raw model export into that asset.
 
 To rebuild after editing `src/`, run:
 ```
@@ -96,3 +114,4 @@ npm run build
 - [x] Performance for low-end PCs: merged static scenery, batched distant characters, chunked grass, no extra lights, dynamic resolution
 - [x] Savannah wildlife: giraffes, elephants, zebras and gazelles in herds, vultures and small birds, and a procession on the menu horizon
 - [x] The Salt Lantern: a walk-in cantina with keeper Zuri Adeyemi, Lantern Ale (bonus XP), and the memorial plaque marking where Orion Mascar fought Daniel Brown
+- [x] Ascendant soldier model for the player and bots: rigged, with Warframe-style movement (sprint, slide, bullet jump, flip, glide, roll, hero landing) and animated combos

@@ -514,7 +514,7 @@ canvas#scene{touch-action:none}
   <div id="hotbar" class="panel cut pe"></div>
   <div id="wallet">⬡ 0 CR</div>
   <div id="xpbar"><i id="xp-fill"></i><span id="xp-text"></span></div>
-  <div id="keys">WASD MOVE · SHIFT SPRINT · SPACE JUMP · DRAG CAMERA · WHEEL ZOOM<br>CLICK / TAB TARGET · 1–4 ABILITIES · 5 MEDKIT · E INTERACT<br>ENTER CHAT · C CHARACTER · ESC MENU</div>
+  <div id="keys">WASD MOVE · SHIFT SPRINT · SPACE JUMP (AGAIN IN AIR: FLIP, HOLD: GLIDE) · Q SLIDE / ROLL · Q+SPACE BULLET JUMP<br>DRAG CAMERA · WHEEL ZOOM · CLICK / TAB TARGET · 1–4 ABILITIES · 5 MEDKIT · E INTERACT<br>ENTER CHAT · C CHARACTER · ESC MENU</div>
 
   <div id="prompt" class="panel pe hidden"></div>
 
@@ -523,6 +523,7 @@ canvas#scene{touch-action:none}
     <div id="joy" class="pe"><div id="joy-knob"></div></div>
     <div id="tbtns" class="pe">
       <button id="tb-target" class="tb" aria-label="Next target">◎<small>TARGET</small></button>
+      <button id="tb-slide" class="tb" aria-label="Slide or roll">⤵<small>SLIDE</small></button>
       <button id="tb-jump" class="tb" aria-label="Jump">▲<small>JUMP</small></button>
     </div>
     <div id="tmenu" class="pe">
