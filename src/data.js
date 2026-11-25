@@ -175,6 +175,19 @@ export const PLAQUE = {
   text: 'HERE, IN THIS ROOM,\nORION MASCAR FOUGHT DANIEL BROWN.\n\nThe Lantern still stands.\n\nRaised by the regulars of the Salt Lantern.',
 };
 
+// Orion Mascar, the Governor's father, who walks the whole map.
+export const ORION_LINES = {
+  greet: [
+    'Walk with me or step aside, Ascendant. I have a lot of ground to cover, and I like to see all of it.',
+    'I spent fifteen years in a war so that people could cross open country without looking over their shoulder. So I cross it.',
+    'My son built this city. I just like to make sure it is all still here.',
+    'Born in 2069. Still walking. Do not ask me how; I stopped counting the reasons a long time ago.',
+  ],
+  war: 'The Third World War. 2080 to 2095. I came of age in it and I came out the other side, which is more than most can say.\n\nThomas Hawthorne was my apprentice for much of it. We fought side by side until the Siege of Harbin. After Harbin, he made his own path. I have had a long time to think about where that path led.',
+  lantern: 'You have seen the plaque, then. I fought Daniel Brown in that room.\n\nAsk Zuri how it went. She tells it better than I do, and she sells ale while she tells it. The Lantern still stands. That is the part that matters.',
+  son: 'Croxian was born in the winter of Kaliningrad, with the war still on. Talina and I named him in a city under siege.\n\nHe wore Terra Imperia\'s colours once, and he walked away from them. Then he went to Carax and came back. Now he governs.\n\nI fought. He builds. I know which of us the city needs more.',
+};
+
 export const BOT_NAMES = ['Kaelith','Vex_2137','NovaRook','Seraphyn','Draxx','Ilmatar','LastLegion','Quorra','Ashwalker','Brennic','Zyra_Nyx','Holloway','Corvane','Mirelle','OrbitalOtter','Tavik','Severine','Juno_Arc','Kwame_X','Amara','Tendai'];
 export const GUILDS = ['Concord Legion','Savannah Watch','Lantern Regulars','Pale Hunters','Dawnbreakers','',''];
 

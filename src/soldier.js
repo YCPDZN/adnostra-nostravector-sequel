@@ -11,34 +11,43 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 // how long each move lasts (seconds); main.js advances the timers, this file draws them
 export const MOVE_DUR = { flip: 0.5, bj: 0.62, roll: 0.5, landHard: 0.55, landSoft: 0.2 };
 
-let proto = null, lodGeo = null;
-export const soldierReady = () => !!proto;
+// Rigged models that share the soldier's 19-bone skeleton, so every animation below drives any of them.
+// soldier: the Ascendant armour (player + other Ascendants); its emissive mask lights up in each visor colour.
+// orion:   Orion Mascar, the Governor's father, who wanders the map (see main.js).
+const MODELS = {
+  soldier: { script: 'assets/soldier.js', global: 'SOLDIER_GLB_B64', mesh: 'soldier', lod: 'soldier_lod', energyGlow: true, proto: null, lodGeo: null },
+  orion: { script: 'assets/orion.js', global: 'ORION_GLB_B64', mesh: 'orion', lod: 'orion_lod', energyGlow: false, proto: null, lodGeo: null },
+};
+export const soldierReady = (model = 'soldier') => !!MODELS[model].proto;
 
-export async function loadSoldier() {
+async function loadRigged(model) {
+  const M = MODELS[model];
   await new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = 'assets/soldier.js';
-    s.onload = res; s.onerror = () => rej(new Error('Could not load assets/soldier.js'));
+    const s = document.createElement('script'); s.src = M.script;
+    s.onload = res; s.onerror = () => rej(new Error('Could not load ' + M.script));
     document.head.appendChild(s);
   });
-  const b64 = window.SOLDIER_GLB_B64; window.SOLDIER_GLB_B64 = null;
+  const b64 = window[M.global]; window[M.global] = null;
   let buf;
   try { buf = await (await fetch('data:application/octet-stream;base64,' + b64)).arrayBuffer(); }
   catch (e) { const bin = atob(b64); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); buf = u.buffer; }
   const gltf = await new Promise((res, rej) => new GLTFLoader().parse(buf, '', res, rej));
   const root = gltf.scene;
   // the low-poly, vertex-coloured copy is for distant characters (shared BatchedMesh)
-  const lod = root.getObjectByName('soldier_lod');
+  const lod = root.getObjectByName(M.lod);
   if (lod) {
     lod.parent.remove(lod);
     const g = lod.geometry.index ? lod.geometry.toNonIndexed() : lod.geometry.clone();
     for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(k)) g.deleteAttribute(k);
-    lodGeo = g;
+    M.lodGeo = g;
   }
-  const mesh = root.getObjectByName('soldier');
+  const mesh = root.getObjectByName(M.mesh);
   mesh.material.envMapIntensity = 1.0;
   mesh.material.normalScale.set(1, -1); // glTF normal map, no tangents (GLTFLoader convention)
-  proto = root;
+  M.proto = root;
 }
+export const loadSoldier = () => loadRigged('soldier');
+export const loadOrion = () => loadRigged('orion');
 
 // ---------------------------------------------------------------- channels
 const BONES = ['hips', 'spine', 'chest', 'neck', 'head', 'clavL', 'uarmL', 'farmL', 'handL', 'thighL', 'shinL', 'footL', 'clavR', 'uarmR', 'farmR', 'handR', 'thighR', 'shinR', 'footR'];
@@ -143,7 +152,7 @@ function mirrorAct(src) {
 ACT_SRC.stabL = mirrorAct(ACT_SRC.stabR);
 const ACTS = {};
 for (const [name, a] of Object.entries(ACT_SRC)) ACTS[name] = { name, dur: a.dur, ch: Object.entries(a.ch).map(([k, keys]) => [CH[k], keys]) };
-const COMBOS = { blade: ['slashA', 'slashB', 'heavy'], daggers: ['stabR', 'stabL', 'stabR', 'spin'], staff: ['cast'], none: ['slashA', 'slashB'] };
+const COMBOS = { blade: ['slashA', 'slashB', 'heavy'], greatsword: ['slashA', 'heavy', 'slashB', 'heavy'], daggers: ['stabR', 'stabL', 'stabR', 'spin'], staff: ['cast'], none: ['slashA', 'slashB'] };
 const HINTS = { slam: 'slam', guard: 'guard', restore: 'heal', bolt: 'cast', chain: 'cast', lance: 'lance', judge: 'heavy', wave: 'wave', salute: 'salute', cast: 'cast', blink: 'spin' };
 
 // ---------------------------------------------------------------- weapons (on the hand bones)
@@ -161,6 +170,29 @@ function makeWeapon(kind, accent, mats) {
     box(0.04, 0.12, 0.04, mats.dark(), 0, 0, 0);
     box(0.02, 0.46, 0.06, mats.armor(0x8996a6), 0, 0.29, -0.02);
     box(0.024, 0.46, 0.012, mats.glow(accent, 2.8), 0, 0.29, -0.056);
+  } else if (kind === 'greatsword') {
+    // Orion's sword: a long, straight blade with a dark frame round a glowing core, an angled chisel tip
+    // and a heavy mechanical guard. The blade lies in the y-z plane (flat faces toward ±x), point along +z.
+    g.rotation.x = 1.32;
+    const DARK = mats.dark(), FRAME = mats.armor(0x3a4048), STEEL = mats.armor(0x6d7682), GLOW = mats.glow(accent, 2.8);
+    const slab = (pts, th, m) => { // a flat polygon (y, z) with thickness th along x, flat-shaded
+      const p = [], n = pts.length, f = (i, s) => [s * th / 2, pts[i % n][0], pts[i % n][1]];
+      for (let i = 1; i < n - 1; i++) { p.push(...f(0, 1), ...f(i, 1), ...f(i + 1, 1)); p.push(...f(0, -1), ...f(i + 1, -1), ...f(i, -1)); }
+      for (let i = 0; i < n; i++) p.push(...f(i, 1), ...f(i, -1), ...f(i + 1, 1), ...f(i + 1, 1), ...f(i, -1), ...f(i + 1, -1));
+      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); geo.computeVertexNormals();
+      const me = new THREE.Mesh(geo, m); me.castShadow = true; g.add(me); return me;
+    };
+    // grip, pommel and guard
+    box(0.042, 0.042, 0.26, DARK, 0, 0, 0);
+    for (let i = 0; i < 5; i++) box(0.048, 0.048, 0.012, FRAME, 0, 0, -0.09 + i * 0.045);
+    box(0.06, 0.07, 0.06, STEEL, 0, 0, -0.15);
+    box(0.075, 0.2, 0.07, DARK, 0, 0, 0.15);
+    box(0.06, 0.05, 0.05, FRAME, 0, 0.12, 0.13).rotation.x = 0.5; box(0.06, 0.05, 0.05, FRAME, 0, -0.12, 0.13).rotation.x = -0.5;
+    box(0.078, 0.12, 0.012, GLOW, 0, 0, 0.187);
+    // blade: frame, glowing core, dark centre line
+    slab([[-0.056, 0.18], [0.056, 0.18], [0.056, 1.36], [-0.056, 1.5]], 0.026, FRAME);
+    slab([[-0.03, 0.24], [0.03, 0.24], [0.03, 1.33], [-0.03, 1.41]], 0.034, GLOW);
+    slab([[-0.005, 0.3], [0.005, 0.3], [0.005, 1.3], [-0.005, 1.34]], 0.038, STEEL);
   } else if (kind === 'staff') {
     const st = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 1.9, 8), mats.dark()); st.position.y = 0.25; st.castShadow = true; g.add(st);
     for (const y of [0.85, -0.55]) box(0.06, 0.08, 0.06, mats.armor(0x59626e), 0, y, 0);
@@ -170,11 +202,13 @@ function makeWeapon(kind, accent, mats) {
 }
 
 // ---------------------------------------------------------------- build
-// opts: { energy: hex (armour lights + visor), accent: hex (weapon glow), weapon: 'blade'|'staff'|'daggers'|'none', tint: hex|null, mats }
-export function makeSoldier({ energy = 0x3ee6ff, accent = 0x3ee6ff, weapon = 'none', tint = null, mats }) {
-  const root = cloneSkinned(proto);
-  const mesh = root.getObjectByName('soldier');
-  const m = mesh.material.clone(); m.emissive = new THREE.Color(energy); m.emissiveIntensity = 3.2; if (tint != null) m.color = new THREE.Color(tint);
+// opts: { model: 'soldier'|'orion', energy: hex (armour lights + visor), accent: hex (weapon glow),
+//         weapon: 'blade'|'staff'|'daggers'|'greatsword'|'none', tint: hex|null, mats }
+export function makeSoldier({ model = 'soldier', energy = 0x3ee6ff, accent = 0x3ee6ff, weapon = 'none', tint = null, mats }) {
+  const MD = MODELS[model];
+  const root = cloneSkinned(MD.proto);
+  const mesh = root.getObjectByName(MD.mesh);
+  const m = mesh.material.clone(); if (MD.energyGlow) { m.emissive = new THREE.Color(energy); m.emissiveIntensity = 3.2; } if (tint != null) m.color = new THREE.Color(tint);
   mesh.material = m; mesh.castShadow = true; mesh.receiveShadow = true;
   mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1, 0), 1.9); // posed silhouettes reach past the bind pose
   const B = {}; root.traverse(o => { if (o.isBone) B[o.name] = o; });
@@ -189,7 +223,7 @@ export function makeSoldier({ energy = 0x3ee6ff, accent = 0x3ee6ff, weapon = 'no
     isSoldier: true, group, pivot, bones: BONES.map(n => B[n]), hipsRest: B.hips.position.y, weapon, mesh,
     st: { lx: null, lz: 0, lyaw: 0, yawRate: 0, spd: 0, vy: 0, ly: 0, phase: Math.random() * TAU, seed: Math.random() * 100, air: 0, slide: 0, glide: 0, combat: 0,
       act: null, actT: 0, combo: 0, lastAtk: 0, C: new Float32Array(NCH), T: new Float32Array(NCH), Q: new Float32Array(NCH), flipWas: 0, bjWas: 0, rollWas: 0 },
-    farBake: () => ({ key: 'soldier', body: lodGeo, glow: null }),
+    farBake: () => ({ key: model, body: MD.lodGeo, glow: null }),
     // compatibility with the box rig's API (old code pokes these)
     legs: [], arms: [], torso: B.chest, head: B.head, hips: B.hips,
   };
@@ -205,6 +239,7 @@ function poseIdle(p, w, t, st, weapon) {
   S(p, 'neck.y', 0.32 * Math.sin(t * 0.29 + st.seed) * Math.sin(t * 0.11 + st.seed * 2), w); S(p, 'head.x', 0.06 * Math.sin(t * 0.41 + st.seed), w);
   M(p, 'uarm', 0.04, 0, 0.13, w); M(p, 'farm', -0.32, 0, 0, w);
   if (weapon === 'blade') { R(p, 'uarmR', -0.12, 0, 0.02, w); R(p, 'farmR', -0.35, 0, 0, w); }
+  if (weapon === 'greatsword') { R(p, 'uarmR', -0.05, 0, -0.1, w); R(p, 'farmR', -0.2, 0, 0, w); R(p, 'handR', 0.25, 0, 0, w); } // point down beside the boot
   if (weapon === 'staff') { R(p, 'uarmR', -0.12, 0, -0.18, w); R(p, 'farmR', -0.75, -0.2, 0, w); R(p, 'handR', 0.85, 0, 0, w); }
   if (weapon === 'daggers') { M(p, 'uarm', 0, 0, 0.08, w); M(p, 'farm', -0.15, 0, 0, w); }
 }
@@ -237,7 +272,7 @@ function poseGait(p, w, ph, k, weapon) {
   S(p, 'hips.z', 0.04 * Math.cos(ph) * (1 - run), w);
   S(p, 'spine.x', lean * 0.55, w); S(p, 'chest.x', lean * 0.45, w); S(p, 'neck.x', -lean * 0.5, w); S(p, 'head.x', -lean * 0.3, w);
   // arms: counter-swing to the legs, or the swept-back "ninja run" when sprinting with blades
-  const ninja = (weapon === 'blade' || weapon === 'daggers' || weapon === 'none') ? spr : 0;
+  const ninja = (weapon === 'blade' || weapon === 'greatsword' || weapon === 'daggers' || weapon === 'none') ? spr : 0;
   const armA = (0.3 + 0.6 * run) * (1 - ninja), elbow = 0.25 + 1.1 * run;
   R(p, 'uarmL', armA * sL, 0, 0.1 + 0.05 * run, w); R(p, 'farmL', -elbow - 0.25 * Math.max(0, -sL) * run, 0, 0, w);
   if (weapon === 'staff' && spr > 0) {
