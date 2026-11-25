@@ -56,7 +56,9 @@ The game runs at full quality on modest hardware, integrated graphics included:
 - **Concordia Plaza** is a sanctuary. Governor Mascar stands on his dais beneath the Statue of the Unmaking, and Quartermaster Ilse Varn sells medkits and upgrades.
 - **Scorched Veld** (east, lv 1–3) holds the Hollowed.
 - **Echo Plains** (west, lv 2–4) holds the Echo Drones.
-- **The Catharsis Crater** (north, lv 4–7) holds a crashed Catharsis beacon-ship, its shards, and the **Remnant of the Catharsis**.
+- **The Catharsis Crater** (north, lv 4–7) holds a crashed Catharsis beacon-ship, its shards, and the **Remnant of the Catharsis**. Vultures circle overhead.
+- **The Salt Lantern** (just south of the plaza) is a sanctuary cantina. Zuri Adeyemi keeps the bar and sells **Lantern Ale** (25 credits: +20% experience for 10 minutes). A bronze plaque in the floor marks where Orion Mascar fought Daniel Brown. Regulars drift in and out.
+- **Wildlife** roams the Scorched Veld and the Echo Plains: giraffes, elephants, zebras and gazelles move as herds, grazing and drifting across the plains. Zebras and gazelles bolt if you get close, and spook the rest of the herd.
 
 ## Classes
 - **Vanguard**: plate-armoured defender with heavy blade strikes, a ground slam and a barrier.
@@ -92,5 +94,5 @@ npm run build
 - [x] Mobile support: touch controls, responsive menus and HUD, lighter rendering on phones
 - [x] Savannah polish: dusk menu, world exposure and sky, sandstone towers, low crater rocks
 - [x] Performance for low-end PCs: merged static scenery, batched distant characters, chunked grass, no extra lights, dynamic resolution
-- [ ] Savannah wildlife
-- [ ] The Salt Lantern: a walk-in cantina with keeper Zuri Adeyemi, Lantern Ale (bonus XP), and the memorial plaque marking where Orion Mascar fought Daniel Brown. Its dialogue is already in `src/data.js` (`ZURI_LINES`, `CANTINA_CHAT`)
+- [x] Savannah wildlife: giraffes, elephants, zebras and gazelles in herds, vultures and small birds, and a procession on the menu horizon
+- [x] The Salt Lantern: a walk-in cantina with keeper Zuri Adeyemi, Lantern Ale (bonus XP), and the memorial plaque marking where Orion Mascar fought Daniel Brown
