@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#04070b">
 <title>AD-NOSTRA — Anno Domini 2137</title>
 <style>
 :root{
@@ -226,6 +230,153 @@ input[type=checkbox]{accent-color:var(--cyan);width:18px;height:18px}
 #farewell{position:fixed;inset:0;z-index:70;background:#030508;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
 #farewell p{margin-top:22px;color:var(--dim);letter-spacing:.2em;font-size:13px;line-height:1.8}
 #err{position:fixed;left:50%;top:20px;transform:translateX(-50%);z-index:99;padding:12px 18px;color:#ff9aa8;font-size:13px;max-width:80vw}
+
+/* ---------- TOUCH CONTROLS ---------- */
+:root{--sl:env(safe-area-inset-left,0px);--sr:env(safe-area-inset-right,0px);--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px)}
+html,body{-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;overscroll-behavior:none}
+canvas#scene{touch-action:none}
+#touch{display:none}
+.touch #touch{display:block}
+#joy{position:absolute;left:calc(28px + var(--sl));bottom:calc(30px + var(--sb));width:136px;height:136px;border-radius:50%;border:1px solid var(--line);background:radial-gradient(circle,rgba(62,230,255,.1),rgba(5,8,12,.35) 70%);touch-action:none}
+#joy::after{content:"";position:absolute;inset:28%;border-radius:50%;border:1px dashed rgba(62,230,255,.2);pointer-events:none}
+#joy-knob{position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;background:radial-gradient(circle at 40% 35%,rgba(62,230,255,.6),rgba(26,143,163,.35));border:1px solid var(--cyan);box-shadow:0 0 14px rgba(62,230,255,.4);transition:transform .12s;pointer-events:none}
+#joy.on #joy-knob{transition:none}
+.tb{width:62px;height:62px;border-radius:50%;border:1px solid var(--line);background:rgba(7,11,17,.62);color:var(--cyan);font-size:22px;line-height:1;display:flex;flex-direction:column;align-items:center;justify-content:center;touch-action:none;text-shadow:0 0 8px var(--cyan)}
+.tb small{font-size:8px;letter-spacing:.2em;color:var(--dim);margin-top:4px;text-shadow:none}
+.tb:active{background:rgba(62,230,255,.28);border-color:var(--cyan)}
+.tb.sm{width:44px;height:44px;font-size:15px;border-radius:8px}
+#tbtns{position:absolute;right:calc(18px + var(--sr));bottom:calc(104px + var(--sb));display:flex;gap:14px}
+#tmenu{position:absolute;top:calc(12px + var(--st));right:calc(150px + var(--sr));display:flex;gap:8px}
+.touch #keys{display:none}
+.touch #hotbar{left:auto;right:calc(12px + var(--sr));bottom:calc(18px + var(--sb));transform:none;padding:6px}
+.touch .slot{width:56px;height:56px}
+.touch #wallet{left:auto;right:calc(342px + var(--sr));bottom:calc(36px + var(--sb))}
+.touch #prompt{cursor:pointer;padding:12px 20px;font-size:14px;top:56%;border-color:var(--gold)}
+.touch #prompt b{margin-right:4px}
+.touch #chat-input{display:none}
+.touch #chat-input.open{display:block;position:fixed;left:50%;top:calc(10px + var(--st));transform:translateX(-50%);width:min(560px,92vw);font-size:16px;opacity:1;z-index:5}
+.touch #tooltip{display:none!important}
+.touch .mbtn:hover{padding-left:22px}
+
+/* ---------- SMALL SCREENS (phones, small windows) ---------- */
+@media (max-width:900px),(max-height:540px){
+  /* menu */
+  .menu-left{left:calc(5vw + var(--sl));top:calc(6vh + var(--st));width:auto}
+  .menu-left .logo{font-size:clamp(30px,7vw,56px)}
+  .menu-left .era{font-size:10px;margin-top:8px}
+  nav.mainnav{margin-top:3vh;gap:0}
+  .mbtn{font-size:15px;padding:8px 14px}
+  .mbtn small{font-size:9px;margin-top:2px}
+  .server{margin-top:2vh}
+  .server select{width:240px}
+  .nameplate{top:calc(8vh + var(--st));right:calc(5vw + var(--sr));max-width:300px}
+  .np-title{font-size:10px;letter-spacing:.35em}
+  .np-name{font-size:26px}
+  .np-rule{width:180px;margin:10px 0 10px auto}
+  .np-quote{font-size:12px}
+  .hint-drag{display:none}
+  .menu-foot{font-size:9px;bottom:calc(2vh + var(--sb));left:calc(5vw + var(--sl));right:calc(5vw + var(--sr))}
+  /* modals */
+  .modal .box{padding:18px;width:94vw;max-height:90vh}
+  .xbtn{width:40px;height:40px;right:10px;top:10px}
+  .box h2{font-size:18px}
+  .codex{grid-template-columns:170px 1fr;gap:14px;margin-top:14px}
+  .codex li{padding:8px}
+  .codex article h3{font-size:19px}
+  .codex article p{font-size:13px;line-height:1.6}
+  .setgrid{gap:4px 28px;margin-top:12px}
+  /* character creation */
+  #create{padding:calc(3vh + var(--st)) calc(5vw + var(--sr)) calc(3vh + var(--sb)) calc(5vw + var(--sl))}
+  #create .logo{font-size:28px!important}
+  .classes{gap:10px;margin-top:2vh}
+  .ccard{padding:14px}
+  .ccard h3{font-size:17px;margin-top:4px}
+  .ccard .cico{font-size:26px}
+  .ccard p{min-height:0;font-size:12px;margin-top:8px}
+  .ccard ul{display:none}
+  .crow{gap:16px;margin-top:2vh}
+  .field input{width:240px;font-size:16px}
+  /* loading */
+  #loading .title{font-size:32px}
+  #loading .bar{width:70vw}
+  #loading .tip{max-width:86vw;font-size:12px}
+  /* HUD */
+  .frame{width:210px;padding:8px 10px}
+  #pframe{left:calc(10px + var(--sl));top:calc(10px + var(--st))}
+  #tframe{top:calc(10px + var(--st));width:200px}
+  .frame .fn{font-size:12px}
+  .bar2{height:12px;margin-top:5px}
+  .bar2 span{line-height:11px;font-size:9px}
+  #mapwrap{right:calc(10px + var(--sr));top:calc(10px + var(--st));width:128px;padding:6px}
+  #minimap{width:116px;height:116px}
+  #zone-name{font-size:10px;margin-top:4px}
+  #zone-sub{display:none}
+  #tracker{right:calc(10px + var(--sr));top:calc(168px + var(--st));width:200px;padding:8px 10px}
+  #tracker .qt{font-size:12px}
+  #tracker .qo{font-size:11px}
+  #bossbar{top:calc(72px + var(--st));width:min(420px,56vw)}
+  #banner .b2{font-size:26px}
+  #banner .b1,#banner .b3{font-size:10px}
+  #chat{left:calc(10px + var(--sl));width:min(340px,40vw)}
+  #chat-log{height:110px;font-size:11px;line-height:1.35}
+  .touch #chat{top:calc(118px + var(--st));bottom:auto}
+  .touch #chat-log{height:84px}
+  #keys{display:none}
+  #dialog{padding:16px 18px;max-height:88vh;overflow:auto}
+  #dialog .whn{font-size:19px}
+  #dialog .txt{font-size:13px;line-height:1.6}
+  #dialog .opts{flex-wrap:wrap}
+  #vendor,#sheet{max-height:88vh;overflow:auto;padding:18px}
+  #pause{width:min(360px,90vw);padding:18px;max-height:92vh;overflow:auto}
+  #pause .btn{margin-top:8px;padding:10px}
+  #death{padding:22px;width:min(420px,90vw)}
+  #death h2{font-size:24px}
+}
+/* very short landscape phones */
+@media (max-height:440px){
+  .mbtn small,.server{display:none}
+  .ccard p{display:none}
+  .touch #chat-log{height:62px}
+  #dialog{padding:12px 16px 0}
+  #dialog .qtitle{margin-top:8px}
+  #dialog .txt{font-size:12px;line-height:1.5;margin-top:6px}
+  #dialog .opts{position:sticky;bottom:0;margin-top:10px;padding:10px 0 12px;background:linear-gradient(0deg,rgba(7,11,17,.98) 70%,rgba(7,11,17,0))}
+  nav.mainnav{margin-top:2vh}
+  .np-quote{display:none}
+  .touch #tracker{display:none}
+}
+/* portrait phones */
+@media (max-width:600px) and (orientation:portrait){
+  #menu::before{background:linear-gradient(0deg,rgba(3,6,10,.95) 0%,rgba(3,6,10,.75) 42%,transparent 62%),linear-gradient(180deg,rgba(3,6,10,.7) 0%,transparent 18%)}
+  .menu-left{left:calc(6vw + var(--sl));right:calc(6vw + var(--sr));top:auto;bottom:calc(8vh + var(--sb))}
+  .menu-left .logo{font-size:12vw}
+  .menu-left .era{white-space:normal;letter-spacing:.2em}
+  .server{display:none}
+  .nameplate{left:6vw;right:6vw;top:calc(4vh + var(--st));text-align:center;max-width:none}
+  .np-name{font-size:24px}
+  .np-rule{margin:8px auto}
+  .np-quote{display:none}
+  .menu-foot{bottom:calc(2vh + var(--sb))}
+  .menu-foot > span:first-child{display:none}
+  .codex{grid-template-columns:1fr}
+  .codex ul{display:flex;overflow-x:auto;border-right:none;border-bottom:1px solid var(--line)}
+  .codex li{white-space:nowrap}
+  .setgrid{grid-template-columns:1fr}
+  #create .head{flex-wrap:wrap;gap:12px}
+  .classes{grid-template-columns:1fr}
+  .field,.field input{width:100%}
+  .oath{margin-left:0;text-align:left;width:100%}
+  #create-go{width:100%}
+  .frame{width:180px}
+  #tframe{top:calc(96px + var(--st));width:180px}
+  #tracker{width:170px}
+  .touch #chat{width:44vw;top:calc(196px + var(--st))}
+  .touch #hotbar{left:50%;right:auto;transform:translateX(-50%)}
+  .touch #joy{bottom:calc(100px + var(--sb));width:124px;height:124px}
+  .touch #tbtns{bottom:calc(106px + var(--sb))}
+  .touch #wallet{right:auto;left:50%;transform:translateX(-50%);bottom:calc(96px + var(--sb))}
+  .touch #tmenu{top:auto;right:calc(12px + var(--sr));bottom:calc(186px + var(--sb))}
+}
 </style>
 </head>
 <body>
@@ -362,7 +513,21 @@ input[type=checkbox]{accent-color:var(--cyan);width:18px;height:18px}
   <div id="xpbar"><i id="xp-fill"></i><span id="xp-text"></span></div>
   <div id="keys">WASD MOVE · SHIFT SPRINT · SPACE JUMP · DRAG CAMERA · WHEEL ZOOM<br>CLICK / TAB TARGET · 1–4 ABILITIES · 5 MEDKIT · E INTERACT<br>ENTER CHAT · C CHARACTER · ESC MENU</div>
 
-  <div id="prompt" class="panel hidden"></div>
+  <div id="prompt" class="panel pe hidden"></div>
+
+  <!-- touch controls (shown only on touch devices) -->
+  <div id="touch">
+    <div id="joy" class="pe"><div id="joy-knob"></div></div>
+    <div id="tbtns" class="pe">
+      <button id="tb-target" class="tb" aria-label="Next target">◎<small>TARGET</small></button>
+      <button id="tb-jump" class="tb" aria-label="Jump">▲<small>JUMP</small></button>
+    </div>
+    <div id="tmenu" class="pe">
+      <button id="tb-chat" class="tb sm" aria-label="Chat">✉</button>
+      <button id="tb-sheet" class="tb sm" aria-label="Character">☰</button>
+      <button id="tb-menu" class="tb sm" aria-label="Menu">❚❚</button>
+    </div>
+  </div>
   <div id="center-msg" style="opacity:0"></div>
   <div id="banner" style="opacity:0"><div class="b1"></div><div class="b2"></div><div class="b3"></div></div>
 

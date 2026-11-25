@@ -18,6 +18,8 @@ The Salt Lantern is the cantina in Ad-Nostra where Orion Mascar fought Daniel Br
 ## Play
 Double-click **`index.html`**. It runs in Chrome, Edge or Firefox with no install and no server. Your progress saves in the browser by itself.
 
+It also plays on phones and tablets: host the folder anywhere static (or open it from a local server) and visit it in the mobile browser. Landscape is best; portrait works too. On touch devices the game switches to on-screen controls and a lighter render load.
+
 ## Controls
 | Key | Action |
 |---|---|
@@ -30,6 +32,17 @@ Double-click **`index.html`**. It runs in Chrome, Edge or Firefox with no instal
 | Enter | Chat (`/help`, `/who`, `/dance`, `/salute`, `/played`, `/loc`) |
 | C | Character sheet |
 | Esc | Menu |
+
+### Touch
+| Gesture / button | Action |
+|---|---|
+| Left joystick | Move (push to the rim to sprint) |
+| Drag the scene / pinch | Turn the camera / zoom |
+| Tap a character | Target (tap an NPC up close to talk) |
+| Hotbar | Abilities and medkit |
+| Gold prompt | Talk / interact / pick up shards |
+| ◎ / ▲ | Cycle target / jump |
+| ✉ ☰ ❚❚ | Chat / character sheet / menu |
 
 ## The world
 - **Concordia Plaza** is a sanctuary. Governor Mascar stands on his dais beneath the Statue of the Unmaking, and Quartermaster Ilse Varn sells medkits and upgrades.
@@ -67,5 +80,8 @@ npm run build
 ## In progress
 - [x] Lore retcon: new timeline, Codex, quests, Mascar's dialogue and chatter
 - [x] Cantina and savannah music modes in `src/audio.js`
-- [ ] Rebuild the world as African savannah at golden hour: grass, acacias, baobabs, wildlife, a sandstone city and a distant mountain. The menu scene and shared builders are drafted in `src/wip/savannah_menu_and_builders.js` but not wired in yet
+- [x] Rebuild the world as African savannah at golden hour: grass, acacias, baobabs, a sandstone city and a distant mountain (menu and world)
+- [x] Mobile support: touch controls, responsive menus and HUD, lighter rendering on phones
+- [ ] Savannah polish: menu bloom, world exposure, less office-like towers, lower crater rocks
+- [ ] Savannah wildlife
 - [ ] The Salt Lantern: a walk-in cantina with keeper Zuri Adeyemi, Lantern Ale (bonus XP), and the memorial plaque marking where Orion Mascar fought Daniel Brown. Its dialogue is already in `src/data.js` (`ZURI_LINES`, `CANTINA_CHAT`)

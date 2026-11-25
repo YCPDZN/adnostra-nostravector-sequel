@@ -37,10 +37,16 @@ const SAVE_KEY = 'adnostra_save_v1';
 const settings = Object.assign({ volume: 0.6, music: true, bloom: true, shadows: true, sens: 1, plates: true }, store.get('adnostra_settings', {}));
 Sound.volume = settings.volume; Sound.musicOn = settings.music;
 
+// ---------------------------------------------------------------- device
+// Touch devices get on-screen controls and a lighter render load.
+const TOUCH = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0 && !matchMedia('(pointer: fine)').matches;
+if (TOUCH) document.documentElement.classList.add('touch');
+const Q = TOUCH ? { pixelRatio: 1.5, shadowMap: 1024, worldGrass: 14000, menuGrass: 4000 } : { pixelRatio: 2, shadowMap: 2048, worldGrass: 36000, menuGrass: 9000 };
+
 // ---------------------------------------------------------------- renderer
 const canvas = $('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pixelRatio));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
@@ -364,7 +370,7 @@ function buildMenu() {
   makeMountains(S);
   S.add(new THREE.HemisphereLight(0xffcfa0, 0x4a3020, 0.7));
   const key = new THREE.SpotLight(0xffe6c8, 240, 0, 0.42, 0.7, 2); key.position.set(3.5, 7.5, 5.5); key.target.position.set(0, 1, 0);
-  key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -0.0002; key.shadow.normalBias = 0.02;
+  key.castShadow = true; key.shadow.mapSize.set(Q.shadowMap, Q.shadowMap); key.shadow.bias = -0.0002; key.shadow.normalBias = 0.02;
   S.add(key, key.target);
   const rim = new THREE.SpotLight(0xff9a4a, 420, 0, 0.55, 0.8, 2); rim.position.set(-2.5, 3.5, -6); rim.target.position.set(0, 1.2, 0); S.add(rim, rim.target);
   const rim2 = new THREE.SpotLight(0x3ee6ff, 120, 0, 0.5, 0.8, 2); rim2.position.set(4, 3, -4); rim2.target.position.set(0, 1.4, 0); S.add(rim2, rim2.target);
@@ -373,7 +379,7 @@ function buildMenu() {
   // savannah floor + grass
   const floor = new THREE.Mesh(new THREE.CircleGeometry(400, 64), new THREE.MeshStandardMaterial({ map: grassTex('#9a7440', '#6e5028', '#c9a160', 60), roughness: 1 }));
   floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; S.add(floor);
-  S.add(makeGrass(9000, 60, (x, z) => { const r = Math.hypot(x, z); return r > 3.2 && r < 60 && z < 8 ? 'gold' : null; }));
+  S.add(makeGrass(Q.menuGrass, 60, (x, z) => { const r = Math.hypot(x, z); return r > 3.2 && r < 60 && z < 8 ? 'gold' : null; }));
 
   // pedestal
   const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.45, 0.38, 48), new THREE.MeshStandardMaterial({ color: 0x2a2622, metalness: 0.85, roughness: 0.3 }));
@@ -432,9 +438,11 @@ function updateMenu(dt) {
   const p = menu.embers.geometry.attributes.position;
   for (let i = 0; i < p.count; i++) { let y = p.getY(i) + dt * (0.08 + (i % 7) * 0.02); if (y > 10) y = 0; p.setY(i, y); p.setX(i, p.getX(i) + Math.sin(t * 0.4 + i) * 0.003 + dt * 0.05); if (p.getX(i) > 14) p.setX(i, -14); }
   p.needsUpdate = true;
-  const tx = 1.9 + menu.mx * 0.35, ty = 1.75 - menu.my * 0.2;
-  menu.cam.position.x += (tx - menu.cam.position.x) * 0.04; menu.cam.position.y += (ty - menu.cam.position.y) * 0.04;
-  menu.cam.lookAt(-0.85, 1.22, 0);
+  // portrait screens: pull back and centre him in the upper half, above the menu buttons
+  const portrait = menu.cam.aspect < 1;
+  const tx = (portrait ? 0.5 : 1.9) + menu.mx * 0.35, ty = (portrait ? 1.6 : 1.75) - menu.my * 0.2, tz = portrait ? 6.4 + 4.5 / menu.cam.aspect : 6.4;
+  menu.cam.position.x += (tx - menu.cam.position.x) * 0.04; menu.cam.position.y += (ty - menu.cam.position.y) * 0.04; menu.cam.position.z += (tz - menu.cam.position.z) * 0.08;
+  menu.cam.lookAt(portrait ? 0 : -0.85, portrait ? 0.35 : 1.22, 0);
 }
 
 
@@ -476,7 +484,7 @@ function buildWorld() {
   S.environment = envTex; S.environmentIntensity = 0.45;
   S.add(new THREE.HemisphereLight(0xffe2b8, 0x5a4028, 0.85));
   const sun = new THREE.DirectionalLight(0xffd9a8, 2.6);
-  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+  sun.castShadow = true; sun.shadow.mapSize.set(Q.shadowMap, Q.shadowMap);
   Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 300 });
   sun.shadow.camera.updateProjectionMatrix();
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
@@ -661,7 +669,7 @@ function buildWorld() {
   S.add(W.ash);
 
   // grass: gold in the city gaps, burnt on the veld, pale on the Echo Plains, none on roads or in the crater
-  S.add(makeGrass(36000, 232, (x, z) => {
+  S.add(makeGrass(Q.worldGrass, 232, (x, z) => {
     if (Math.hypot(x, z) > 236 || !isOpen(x, z, -2)) return null;
     if (Math.abs(z) < 8 || (Math.abs(x) < 8 && z < 0 && z > -120)) return null;
     const zn = zoneAt(x, z);
@@ -1057,13 +1065,14 @@ function updatePlayer(dt) {
     if (keys.KeyW || keys.ArrowUp) fz += 1; if (keys.KeyS || keys.ArrowDown) fz -= 1;
     if (keys.KeyA || keys.ArrowLeft) fx -= 1; if (keys.KeyD || keys.ArrowRight) fx += 1;
     if (mouse.both) fz = 1;
+    if (joy.id !== null) { fx += joy.x; fz -= joy.y; }
   }
   const yaw = G.cam.yaw;
   const fwd = new V3(-Math.sin(yaw), 0, -Math.cos(yaw)), right = new V3(Math.cos(yaw), 0, -Math.sin(yaw));
   const dir = fwd.multiplyScalar(fz).add(right.multiplyScalar(fx));
   const moving = dir.lengthSq() > 0;
   if (moving) {
-    dir.normalize(); const sp = (keys.ShiftLeft || keys.ShiftRight) ? 10.5 : 7;
+    dir.normalize(); const sp = (keys.ShiftLeft || keys.ShiftRight || joy.mag > 0.92) ? 10.5 : 7;
     P.pos.addScaledVector(dir, sp * dt); P.yaw = Math.atan2(dir.x, dir.z); P.move = Math.min(1, P.move + dt * 6); P.danceT = 0;
   } else { P.move = Math.max(0, P.move - dt * 6); if (P.target && P.target.alive && P.autoOn) faceTo(P, P.target.pos); }
   // jump
@@ -1368,7 +1377,7 @@ function updateInteract() {
   const n = nearestInteract(), pr = $('prompt');
   if (n && !G.ui && !G.P.dead) {
     const label = n.kind === 'shard' ? 'Recover Beacon Shard' : n.id === 'mascar' ? 'Speak with Governor Mascar' : 'Trade with Ilse Varn';
-    pr.innerHTML = `<b>[E]</b> ${label}`; pr.classList.remove('hidden');
+    pr.innerHTML = `<b>${TOUCH ? '▶' : '[E]'}</b> ${label}`; pr.classList.remove('hidden');
   } else pr.classList.add('hidden');
 }
 
@@ -1386,7 +1395,7 @@ function buildHotbar() {
     const s = document.createElement('div'); s.className = 'slot';
     s.innerHTML = `<span class="k">${i + 1}</span>${ab.icon}<span class="c"></span><div class="cd" style="height:0"></div><div class="cdt"></div>`;
     s.onclick = () => useAbility(i);
-    s.onmouseenter = ev => { const tt = $('tooltip'); tt.innerHTML = `<b>${esc(ab.name)}</b>${esc(ab.desc)}<br><i>${ab.cost ? ab.cost + ' energy · ' : ''}${ab.cd ? ab.cd + 's cooldown' : 'no cooldown'}${ab.dmg ? ' · ' + Math.round(ab.dmg * dmgScale()) + ' dmg' : ''}</i>`; tt.classList.remove('hidden'); const r = s.getBoundingClientRect(); tt.style.left = (r.left - 80) + 'px'; tt.style.top = (r.top - tt.offsetHeight - 10) + 'px'; };
+    if (!TOUCH) s.onmouseenter = ev => { const tt = $('tooltip'); tt.innerHTML = `<b>${esc(ab.name)}</b>${esc(ab.desc)}<br><i>${ab.cost ? ab.cost + ' energy · ' : ''}${ab.cd ? ab.cd + 's cooldown' : 'no cooldown'}${ab.dmg ? ' · ' + Math.round(ab.dmg * dmgScale()) + ' dmg' : ''}</i>`; tt.classList.remove('hidden'); const r = s.getBoundingClientRect(); tt.style.left = (r.left - 80) + 'px'; tt.style.top = (r.top - tt.offsetHeight - 10) + 'px'; };
     s.onmouseleave = () => $('tooltip').classList.add('hidden');
     hb.appendChild(s);
   });
@@ -1621,7 +1630,7 @@ window.addEventListener('keydown', e => {
   if (inField) return;
   if (G.mode !== 'world') { if (e.code === 'Escape') closeModals(); return; }
   if (typing) {
-    if (e.code === 'Enter') { sendChat(chat.value); chat.value = ''; chat.blur(); }
+    if (e.code === 'Enter' || e.key === 'Enter') { sendChat(chat.value); chat.value = ''; chat.blur(); }
     else if (e.code === 'Escape') { chat.value = ''; chat.blur(); }
     return;
   }
@@ -1641,6 +1650,69 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 
+// ---------------------------------------------------------------- touch
+// Left thumb: virtual joystick. Anywhere else on the scene: drag to turn the
+// camera, pinch to zoom, tap to target/interact. Buttons map to the keyboard actions.
+const joy = { id: null, x: 0, y: 0, mag: 0, cx: 0, cy: 0, r: 52 };
+const tcam = new Map(); // touchId -> {x, y, sx, sy, t, moved}
+let pinchD = 0;
+function joyMove(t) {
+  let dx = t.clientX - joy.cx, dy = t.clientY - joy.cy; const d = Math.hypot(dx, dy);
+  if (d > joy.r) { dx *= joy.r / d; dy *= joy.r / d; }
+  joy.x = dx / joy.r; joy.y = dy / joy.r; joy.mag = Math.min(1, d / joy.r);
+  if (joy.mag < 0.15) { joy.x = joy.y = 0; }
+  $('joy-knob').style.transform = `translate(${dx}px, ${dy}px)`;
+}
+function joyEnd() { joy.id = null; joy.x = joy.y = joy.mag = 0; $('joy-knob').style.transform = ''; $('joy').classList.remove('on'); }
+$('joy').addEventListener('touchstart', e => {
+  e.preventDefault(); Sound.init();
+  if (joy.id !== null || G.ui) return;
+  const t = e.changedTouches[0], r = $('joy').getBoundingClientRect();
+  joy.id = t.identifier; joy.cx = r.left + r.width / 2; joy.cy = r.top + r.height / 2; joy.r = r.width * 0.4;
+  $('joy').classList.add('on'); joyMove(t);
+}, { passive: false });
+window.addEventListener('touchmove', e => {
+  for (const t of e.changedTouches) {
+    if (t.identifier === joy.id) { joyMove(t); continue; }
+    const c = tcam.get(t.identifier); if (!c) continue;
+    const dx = t.clientX - c.x, dy = t.clientY - c.y; c.x = t.clientX; c.y = t.clientY;
+    if (Math.abs(c.x - c.sx) + Math.abs(c.y - c.sy) > 10) c.moved = true;
+    if (G.mode === 'menu') { menu.yaw += dx * 0.01; menu.yawVel = dx * 0.002; continue; }
+    if (G.mode !== 'world' || tcam.size > 1) continue;
+    G.cam.yaw -= dx * 0.008 * settings.sens; G.cam.pitch = clamp(G.cam.pitch + dy * 0.005 * settings.sens, -0.1, 1.35);
+  }
+  if (tcam.size === 2 && G.mode === 'world') {
+    const [a, b] = [...tcam.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (pinchD) G.cam.dist = clamp(G.cam.dist - (d - pinchD) * 0.04, 3.5, 24);
+    pinchD = d;
+  }
+}, { passive: true });
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault(); Sound.init();
+  if (document.activeElement === $('chat-input')) $('chat-input').blur();
+  for (const t of e.changedTouches) tcam.set(t.identifier, { x: t.clientX, y: t.clientY, sx: t.clientX, sy: t.clientY, t: performance.now(), moved: false });
+  if (G.mode === 'menu') menu.drag = true;
+  pinchD = 0;
+}, { passive: false });
+function touchEnd(e) {
+  for (const t of e.changedTouches) {
+    if (t.identifier === joy.id) { joyEnd(); continue; }
+    const c = tcam.get(t.identifier); if (!c) continue; tcam.delete(t.identifier);
+    if (G.mode === 'world' && !c.moved && tcam.size === 0 && performance.now() - c.t < 350 && !G.ui) pick3D(t.clientX, t.clientY);
+  }
+  if (tcam.size === 0) { menu.drag = false; pinchD = 0; }
+}
+window.addEventListener('touchend', touchEnd); window.addEventListener('touchcancel', touchEnd);
+// action buttons (pointerdown so they respond instantly, without the click delay)
+const tap = (id, fn) => $(id).addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); Sound.init(); fn(); });
+tap('tb-jump', () => { if (G.P && G.P.pos.y === 0 && !G.P.dead) G.P.vy = 8; });
+tap('tb-target', () => cycleTarget());
+tap('tb-menu', () => { if (G.ui && G.ui !== 'pause') closeAllUI(); else togglePause(); });
+tap('tb-sheet', () => { if (G.ui === 'sheet') closeAllUI(); else openSheet(); });
+tap('tb-chat', () => { const c = $('chat-input'); c.classList.add('open'); c.focus(); });
+$('chat-input').addEventListener('blur', () => $('chat-input').classList.remove('open'));
+$('prompt').addEventListener('click', () => { if (G.ui !== 'dialog') interact(); });
+
 // =====================================================================
 //  SCREENS: splash → menu → create → world
 // =====================================================================
@@ -1650,6 +1722,8 @@ function hide(id) { $(id).classList.add('hidden'); }
 function closeModals() { hide('codex'); hide('settings'); }
 
 function enterMenuFromSplash() {
+  // phones: go fullscreen and hold landscape where the browser allows it (needs this tap's user gesture)
+  if (TOUCH) { const el = document.documentElement; try { const p = el.requestFullscreen && el.requestFullscreen({ navigationUI: 'hide' }); if (p) p.then(() => screen.orientation?.lock?.('landscape')).catch(() => {}); } catch (e) {} }
   Sound.init(); Sound.sfx('start'); setTimeout(() => Sound.playMusic('menu'), 300);
   $('splash').style.opacity = 0; setTimeout(() => hide('splash'), 1000);
   G.mode = 'menu'; showMenu();
@@ -1736,7 +1810,7 @@ function enterWorld(isNew = false) {
       Sound.playMusic('world');
       addChat('sys', null, `Welcome to Ad-Nostra, ${G.D.name}. Realm: ${$('realm').value.split(' · ')[0]}.`);
       addChat('gov', null, 'Anno Domini 2137. Ten years since Carax. The Catharsis is fallen — but its Remnants endure.');
-      if (isNew || G.D.q.i === 0 && G.D.q.st === 'available') addChat('sys', null, 'Governor Croxian Mascar awaits you on his dais. Walk up and press E.');
+      if (isNew || G.D.q.i === 0 && G.D.q.st === 'available') addChat('sys', null, `Governor Croxian Mascar awaits you on his dais. Walk up and ${TOUCH ? 'tap the prompt' : 'press E'}.`);
       setTimeout(() => botSay(pick(G.bots), `welcome ${G.D.name} o7`), 3500);
     }, 500);
   }, 900);
@@ -1778,6 +1852,7 @@ function loop() {
   renderPass.scene = menu.scene; renderPass.camera = menu.cam;
   loop();
   setTimeout(() => { hide('splash-load'); show('splash-press'); G.ready = true; }, 400);
-  $('splash').addEventListener('mousedown', () => { if (G.ready && G.mode === 'splash') enterMenuFromSplash(); });
+  $('splash').addEventListener('pointerdown', () => { if (G.ready && G.mode === 'splash') enterMenuFromSplash(); });
+  if (TOUCH) $('splash-press').textContent = 'TAP TO BEGIN';
   window.__AD = G; window.__ADdbg = { damage, killEnemy, talkMascar, updateTracker }; // debug handles
 })();
