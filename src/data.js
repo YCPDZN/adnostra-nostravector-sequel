@@ -164,6 +164,15 @@ export const ZURI_LINES = {
   fight: 'Right there, where the plaque is. That is where Orion Mascar fought Daniel Brown.\n\nAsk ten regulars how it started and you will hear ten different stories. Ask them how it ended and they will all go quiet and order another round.',
   gov: 'He comes in some evenings, alone. Sits where his father used to sit and orders one glass that he never finishes.\n\nPeople leave him be. Mostly.',
   aleOk: 'One Lantern Ale. Brewed with savannah honey and something I will not tell you about.\n\n(+20% experience for 10 minutes)',
+  aleAgain: 'Another? The first one is still working, Ascendant. I will top it up, and the clock starts over.\n\n(+20% experience for 10 minutes)',
+  aleNo: 'Twenty-five credits, Ascendant. The Lantern does not run a tab. Not since the Governor\'s father, anyway.',
+};
+
+// The bronze plate set into the floor of the Salt Lantern.
+export const PLAQUE = {
+  title: 'MEMORIAL PLAQUE',
+  name: 'THE SALT LANTERN',
+  text: 'HERE, IN THIS ROOM,\nORION MASCAR FOUGHT DANIEL BROWN.\n\nThe Lantern still stands.\n\nRaised by the regulars of the Salt Lantern.',
 };
 
 export const BOT_NAMES = ['Kaelith','Vex_2137','NovaRook','Seraphyn','Draxx','Ilmatar','LastLegion','Quorra','Ashwalker','Brennic','Zyra_Nyx','Holloway','Corvane','Mirelle','OrbitalOtter','Tavik','Severine','Juno_Arc','Kwame_X','Amara','Tendai'];

@@ -12,7 +12,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Sound } from './audio.js';
 import {
   CODEX, TIPS, CLASSES, VISORS, QUESTS, MASCAR_IDLE, BOT_NAMES, GUILDS,
-  WORLD_CHAT, ZONE_CHAT, GOV_ANNOUNCE, LORE_REPLIES, GREET_REPLIES
+  WORLD_CHAT, ZONE_CHAT, GOV_ANNOUNCE, LORE_REPLIES, GREET_REPLIES, ZURI_LINES, CANTINA_CHAT, PLAQUE
 } from './data.js';
 
 const V3 = THREE.Vector3;
@@ -87,7 +87,7 @@ function setScene(scene, cam) {
 }
 const G = {
   mode: 'splash', time: 0, world: null, P: null, D: null,
-  enemies: [], bots: [], npcs: [], shards: [], proj: [], fx: [], timers: [], floaters: [],
+  enemies: [], bots: [], npcs: [], shards: [], proj: [], fx: [], timers: [], floaters: [], props: [], animals: [], herds: [],
   colliders: [], ui: null, zone: '', autosave: 20, chatT: 6,
 };
 
@@ -167,6 +167,7 @@ const GEO = {
   ico: new THREE.IcosahedronGeometry(1, 0),
   cyl: new THREE.CylinderGeometry(1, 1, 1, 16),
   rock: new THREE.DodecahedronGeometry(1, 0),
+  ico1: new THREE.IcosahedronGeometry(1, 1),
 };
 function bx(w, h, d, m, x = 0, y = 0, z = 0, parent) {
   const me = new THREE.Mesh(GEO.box, m); me.scale.set(w, h, d); me.position.set(x, y, z);
@@ -347,7 +348,7 @@ function mergeStatic(scene, cell = 250) {
 const LOD_NEAR = 30;
 const farChars = { body: null, glow: null, geo: new Map(), ids: new Map() };
 function initFarChars(scene) {
-  const body = new THREE.BatchedMesh(192, 120000, 0, new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.55, roughness: 0.45 }));
+  const body = new THREE.BatchedMesh(256, 160000, 0, new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.55, roughness: 0.45 }));
   const glow = new THREE.BatchedMesh(192, 30000, 0, new THREE.MeshBasicMaterial({ vertexColors: true }));
   body.castShadow = true; body.receiveShadow = true; body.perObjectFrustumCulled = glow.perObjectFrustumCulled = true; body.frustumCulled = glow.frustumCulled = false; // instances move, so cull per character, not per batch
   scene.add(body, glow); Object.assign(farChars, { body, glow });
@@ -361,11 +362,12 @@ function bakeFarGeometry(ent) {
     const m = o.material; if (Array.isArray(m) || m.visible === false || m.transparent || m.wireframe) return;
     const g = toMergeable(o.geometry).applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld)); g.deleteAttribute('uv'); g.clearGroups();
     const isGlow = m.emissiveIntensity > 1 && m.emissive && m.emissive.getHex() !== 0;
-    const c = isGlow ? m.emissive.clone().multiplyScalar(Math.min(m.emissiveIntensity, 3) * 0.7) : (m.color || new THREE.Color(0x888888)).clone();
+    const c = isGlow ? m.emissive.clone().multiplyScalar(Math.min(m.emissiveIntensity, 3) * 0.7) : (m.userData.lodColor != null ? new THREE.Color(m.userData.lodColor) : (m.color || new THREE.Color(0x888888)).clone());
     const n = g.attributes.position.count, arr = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) arr.set([c.r, c.g, c.b], i * 3);
     g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
-    (isGlow ? glow : body).push(g); sig.push(m.uuid, o.geometry.uuid);
+    let cs = 0; const pa = g.attributes.position.array; for (let i = 0; i < pa.length; i += 7) cs += pa[i];
+    (isGlow ? glow : body).push(g); sig.push(m.uuid, pa.length, cs.toFixed(2));
   });
   return { key: sig.join(','), body: body.length ? mergeGeometries(body) : null, glow: glow.length ? mergeGeometries(glow) : null };
 }
@@ -391,7 +393,7 @@ const _lodM = new THREE.Matrix4();
 function updateLOD() {
   if (!farChars.body) return;
   const cp = W.cam.position, n2 = LOD_NEAR * LOD_NEAR, seen = new Set();
-  for (const list of [G.enemies, G.bots, G.npcs]) for (const e of list) {
+  for (const list of [G.enemies, G.bots, G.npcs, G.animals]) for (const e of list) {
     if (e.lod === undefined) bakeLOD(e);
     if (!e.lod) continue;
     seen.add(e);
@@ -651,12 +653,30 @@ function buildMenu() {
   // THE GOVERNOR
   menu.mascar = mascarInstance(2.05);
   menu.mascar.position.y = 0.38; menu.mascar.userData.dynamic = true; S.add(menu.mascar);
+  // a slow procession along the clear stretch of horizon left of the Governor, walking toward the sunset;
+  // each animal loops back to the left edge while hidden behind him, so the line never empties
+  menu.onView = onView; menu.herd = [];
+  for (const [kind, deg, dist] of [['elephant', -4, 62], ['elephant', -8, 66], ['giraffe', -13, 70], ['giraffe', -17, 74], ['giraffe', -22, 68]]) {
+    const rig = kind === 'giraffe' ? makeGiraffe() : makeElephant();
+    rig.group.userData.dynamic = true; S.add(rig.group);
+    menu.herd.push({ rig, deg, dist, phase: rand(0, 6), speed: kind === 'giraffe' ? 1.5 : 1.2 });
+  }
+  menu.birds = makeBirdFlock(birdRing(4, onView(-6, 120).x, onView(-6, 120).z, 14, 26, 26, 34, 6, 1.6)); S.add(menu.birds);
   mergeStatic(S, 400);
   menu.cam.position.set(1.9, 1.75, 6.4);
 }
 function updateMenu(dt) {
   const t = G.time;
   grassTime.value = t; menu.sky.material.uniforms.t.value = t;
+  for (const h of menu.herd) {
+    h.deg += h.speed * dt / h.dist * 180 / Math.PI; if (h.deg > 8) h.deg -= 38;
+    const p = menu.onView(h.deg, h.dist), q = menu.onView(h.deg + 1, h.dist), g = h.rig.group;
+    g.position.set(p.x, 0, p.z); g.rotation.y = Math.atan2(q.x - p.x, q.z - p.z);
+    h.phase += dt * h.speed / h.rig.legLen * 2.4;
+    h.rig.legs.forEach((l, i) => { l.rotation.x = Math.sin(h.phase + [0, Math.PI, Math.PI, 0][i]) * 0.34; });
+    h.rig.tail.rotation.z = Math.sin(t * 2 + h.dist) * 0.3;
+  }
+  updateBirds(menu.birds, t);
   if (!menu.drag) { menu.yawVel *= 0.94; menu.yaw += menu.yawVel; menu.yaw *= 0.985; }
   if (menu.mascar) { menu.mascar.rotation.y = menu.yaw + Math.sin(t * 0.25) * 0.18; menu.mascar.children[0].scale.y = menu.mascar.children[0].scale.x * (1 + Math.sin(t * 1.6) * 0.003); }
   menu.sigil.rotation.z = t * 0.05; menu.sigil.children[3].rotation.z = Math.PI / 2 - t * 0.12; menu.sigil.children[4].rotation.z = -Math.PI / 2 + t * 0.09;
@@ -683,9 +703,15 @@ const ZONES = {
   ashen: { name: 'SCORCHED VELD', sub: 'LEVEL 1–3 · CONTESTED' },
   echo: { name: 'ECHO PLAINS', sub: 'LEVEL 2–4 · CONTESTED' },
   crater: { name: 'THE CATHARSIS CRATER', sub: 'LEVEL 4–7 · HOSTILE' },
+  cantina: { name: 'THE SALT LANTERN', sub: 'CANTINA · SANCTUARY', safe: true },
 };
+// The Salt Lantern, just south of Concordia Plaza. Interior footprint; the door faces the plaza (north, -z).
+const CANTINA = { x0: -11, x1: 11, z0: 46, z1: 70, h: 6.2 };
+const inCantina = (x, z) => x > CANTINA.x0 + 0.3 && x < CANTINA.x1 - 0.3 && z > CANTINA.z0 + 0.3 && z < CANTINA.z1 - 0.3;
+const inCantinaLot = (x, z) => Math.abs(x) < 17 && z > 28 && z < 78;
 const CRATER = new V3(0, 0, -165);
 function zoneAt(x, z) {
+  if (inCantina(x, z)) return 'cantina';
   if (Math.hypot(x, z) < 34) return 'plaza';
   if (Math.hypot(x - CRATER.x, z - CRATER.z) < 72) return 'crater';
   if (x > 34 && x < 156 && Math.abs(z) < 62) return 'ashen';
@@ -694,6 +720,7 @@ function zoneAt(x, z) {
   return 'ward';
 }
 function isOpen(x, z, m) {
+  if (Math.abs(x) < 17 + m && z > 28 - m && z < 78 + m) return true; // the Salt Lantern's lot
   if (Math.hypot(x, z) < 40 + m) return true;
   if (Math.abs(z) < 12 + m || Math.abs(x) < 12 + m) return true;
   if (x > 30 - m && x < 160 + m && Math.abs(z) < 66 + m) return true;
@@ -907,7 +934,7 @@ function buildWorld() {
 
   // grass: gold in the city gaps, burnt on the veld, pale on the Echo Plains, none on roads or in the crater
   W.grass = makeGrass(Q.worldGrass, 232, (x, z) => {
-    if (Math.hypot(x, z) > 236 || !isOpen(x, z, -2)) return null;
+    if (Math.hypot(x, z) > 236 || !isOpen(x, z, -2) || inCantinaLot(x, z)) return null;
     if (Math.abs(z) < 8 || (Math.abs(x) < 8 && z < 0 && z > -120)) return null;
     const zn = zoneAt(x, z);
     if (zn === 'plaza') return null;
@@ -924,15 +951,437 @@ function buildWorld() {
   W.targetRing = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.05, 48), new THREE.MeshBasicMaterial({ color: 0xff2b4a, transparent: true, opacity: 0.9, depthWrite: false }));
   W.targetRing.rotation.x = -Math.PI / 2; W.targetRing.visible = false; S.add(W.targetRing);
 
+  buildCantina(S);
+  // vultures over the crater; small flocks over the plains
+  W.birds = makeBirdFlock([...birdRing(7, CRATER.x, CRATER.z, 22, 46, 30, 46, 7, 1.6), ...birdRing(10, -95, 8, 12, 24, 14, 20, 10, 0.45), ...birdRing(8, 95, -10, 12, 22, 14, 20, 10, 0.45)]);
+  S.add(W.birds);
   W.batch = mergeStatic(S, 250);
   initFarChars(S);
-  spawnNPCs(); spawnEnemies(); spawnShards(); spawnBots();
+  spawnNPCs(); spawnZuri(); spawnEnemies(); spawnShards(); spawnBots(); spawnAnimals();
   G.world = true;
 }
 
 // =====================================================================
 //  ENTITIES
 // =====================================================================
+// =====================================================================
+//  THE SALT LANTERN
+// =====================================================================
+const plasterTex = () => canvasTex(512, 512, (g, w, h) => {
+  g.fillStyle = '#ece5d6'; g.fillRect(0, 0, w, h);
+  speckle(g, w, h, 5000, ['rgba(0,0,0,0.035)', 'rgba(255,255,255,0.08)', 'rgba(120,90,50,0.05)'], 3);
+  const gr = g.createLinearGradient(0, h, 0, h * 0.55); gr.addColorStop(0, 'rgba(150,110,60,0.28)'); gr.addColorStop(1, 'rgba(150,110,60,0)');
+  g.fillStyle = gr; g.fillRect(0, h * 0.55, w, h * 0.45);   // dust splashed up from the street
+});
+const planksTex = () => canvasTex(512, 512, (g, w, h) => {
+  const rows = 16, rh = h / rows;
+  for (let r = 0; r < rows; r++) {
+    let x = -rand(0, 200);
+    while (x < w) { const L = rand(140, 260); g.fillStyle = pick(['#6b4527', '#5e3c22', '#74502e', '#634024']); g.fillRect(x, r * rh, L - 2, rh - 2); x += L; }
+  }
+  for (let i = 0; i < 900; i++) { g.fillStyle = 'rgba(30,15,5,0.18)'; g.fillRect(rand(0, w), rand(0, h), rand(8, 40), 1); } // grain
+}, 3);
+function textTex(w, h, bg, lines) {
+  const t = canvasTex(w, h, (g) => {
+    if (bg) { g.fillStyle = bg; g.fillRect(0, 0, w, h); }
+    for (const L of lines) { g.fillStyle = L.c; g.font = L.f; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(L.t, w / 2, L.y); }
+  });
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t;
+}
+
+function buildCantina(S) {
+  const { x0, x1, z0, z1, h: H } = CANTINA, T = 0.6, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, W_ = x1 - x0, D_ = z1 - z0;
+  const plaster = mat('plaster', () => new THREE.MeshStandardMaterial({ map: plasterTex(), roughness: 0.95 }));
+  const wood = mat('darkwood', () => new THREE.MeshStandardMaterial({ color: 0x3e2716, roughness: 0.75 }));
+  const lightWood = mat('lightwood', () => new THREE.MeshStandardMaterial({ color: 0x8a5a32, roughness: 0.55 }));
+  const iron = mat('iron', () => new THREE.MeshStandardMaterial({ color: 0x22201e, metalness: 0.7, roughness: 0.45 }));
+  const brass = mat('brass', () => new THREE.MeshStandardMaterial({ color: 0xc9a050, metalness: 0.9, roughness: 0.3 }));
+  const amber = glowMat(0xffb347, 2.2);
+  const wall = (w, h, d, x, y, z) => { const geo = new THREE.BoxGeometry(w, h, d); scaleUV(geo, w, h * 3, d); const m = new THREE.Mesh(geo, plaster); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; S.add(m); };
+  const cyl = (rt, rb, h, m, x, y, z, seg = 16) => { const c = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), m); c.position.set(x, y, z); c.castShadow = c.receiveShadow = true; S.add(c); return c; };
+
+  // ---- the lot: sandstone flags from the plaza to the door, two potted palms, benches
+  const paveTex = canvasTex(512, 512, (g, w, h) => {
+    g.fillStyle = '#b4936c'; g.fillRect(0, 0, w, h); speckle(g, w, h, 6000, ['#c0a07a', '#a6845e', '#c9ab86']);
+    g.strokeStyle = 'rgba(80,55,30,0.4)'; g.lineWidth = 3; for (let i = 0; i <= 8; i++) { g.beginPath(); g.moveTo(i * 64, 0); g.lineTo(i * 64, h); g.stroke(); g.beginPath(); g.moveTo(0, i * 64 + (i % 2) * 16); g.lineTo(w, i * 64 + (i % 2) * 16); g.stroke(); }
+  }, 5);
+  const lot = new THREE.Mesh(new THREE.PlaneGeometry(34, 50), new THREE.MeshStandardMaterial({ map: paveTex, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -1.2 }));
+  lot.rotation.x = -Math.PI / 2; lot.position.set(0, 0.022, 53); lot.receiveShadow = true; S.add(lot);
+  const pot = mat('terracotta', () => new THREE.MeshStandardMaterial({ color: 0xa4502e, roughness: 0.85 }));
+  const frond = mat('frond', () => new THREE.MeshStandardMaterial({ color: 0x5a6a2c, roughness: 0.85, side: THREE.DoubleSide }));
+  for (const sx of [-1, 1]) {
+    const px = sx * 4.4, pz = z0 - 1.6;
+    cyl(0.55, 0.42, 0.9, pot, px, 0.45, pz);
+    const trunk = cyl(0.1, 0.16, 3.2, mat('palmTrunk', () => new THREE.MeshStandardMaterial({ color: 0x6b5236, roughness: 0.95 })), px, 2.4, pz, 6); trunk.rotation.z = sx * 0.06;
+    for (let k = 0; k < 7; k++) { const f = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 2.2), frond); const a = k / 7 * Math.PI * 2; f.position.set(px + Math.sin(a) * 0.8, 3.9, pz + Math.cos(a) * 0.8); f.rotation.set(1.05, a, 0, 'YXZ'); f.castShadow = true; S.add(f); }
+    addCollider(px, pz, 1.1, 1.1, 2);
+    bx(2.4, 0.12, 0.6, lightWood, sx * 8, 0.55, z0 - 1.2, S); bx(0.12, 0.5, 0.5, wood, sx * 8 - 1, 0.25, z0 - 1.2, S); bx(0.12, 0.5, 0.5, wood, sx * 8 + 1, 0.25, z0 - 1.2, S);
+  }
+
+  // ---- walls: whitewashed, with the doorway facing the plaza
+  wall(T, H, D_ + T, x0, H / 2, cz); wall(T, H, D_ + T, x1, H / 2, cz); wall(W_ + T, H, T, cx, H / 2, z1);
+  const dw = 4.4, side = (W_ - dw) / 2;
+  wall(side, H, T, x0 + side / 2, H / 2, z0); wall(side, H, T, x1 - side / 2, H / 2, z0);
+  wall(dw, 2.0, T, cx, H - 1.0, z0);
+  addCollider(x0, cz, T, D_ + T, H + 0.5); addCollider(x1, cz, T, D_ + T, H + 0.5); addCollider(cx, z1, W_ + T, T, H + 0.5);
+  addCollider(x0 + side / 2, z0, side, T, H + 0.5); addCollider(x1 - side / 2, z0, side, T, H + 0.5);
+  // carved doorframe and an open Swahili-style door with brass studs
+  for (const sx of [-1, 1]) bx(0.3, 4.4, 0.8, wood, sx * (dw / 2 + 0.05), 2.2, z0, S);
+  bx(dw + 0.7, 0.35, 0.8, wood, cx, 4.35, z0, S);
+  const doorTex = canvasTex(128, 256, (g, w, h) => {
+    g.fillStyle = '#3a2414'; g.fillRect(0, 0, w, h); g.strokeStyle = '#24160b'; g.lineWidth = 6; g.strokeRect(10, 10, w - 20, h - 20); g.strokeRect(24, 30, w - 48, h - 60);
+    g.fillStyle = '#d4a94e'; for (let y = 40; y < h - 30; y += 26) for (const x of [36, w / 2, w - 36]) { g.beginPath(); g.arc(x, y, 4, 0, 7); g.fill(); }
+  });
+  const door = new THREE.Mesh(new THREE.BoxGeometry(2.0, 4.1, 0.14), new THREE.MeshStandardMaterial({ map: doorTex, roughness: 0.7 }));
+  door.geometry.translate(1.0, 0, 0); door.position.set(cx - dw / 2 + 0.1, 2.05, z0 + 0.25); door.rotation.y = -1.75; door.castShadow = true; S.add(door);
+  // arched windows glowing warm from within
+  const winTex = canvasTex(64, 128, (g, w, h) => {
+    g.fillStyle = '#2a1a10'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#ffc070'; g.beginPath(); g.moveTo(8, h - 8); g.lineTo(8, 30); g.arc(w / 2, 30, w / 2 - 8, Math.PI, 0); g.lineTo(w - 8, h - 8); g.fill();
+    g.fillStyle = '#2a1a10'; g.fillRect(w / 2 - 2, 10, 4, h - 18); g.fillRect(8, h / 2, w - 16, 4);
+  });
+  const winM = new THREE.MeshStandardMaterial({ map: winTex, emissive: 0xffffff, emissiveMap: winTex, emissiveIntensity: 0.9, roughness: 0.4 });
+  for (const zz of [51, 58, 65]) for (const xx of [x0, x1]) { const wm = new THREE.Mesh(new THREE.BoxGeometry(T + 0.06, 2.0, 1.1), winM); wm.position.set(xx, 2.8, zz); S.add(wm); }
+
+  // ---- the sign and the great crystal lantern over the door
+  const signTex = textTex(1024, 220, '#2a1a10', [{ t: 'THE SALT LANTERN', y: 100, c: '#f0c46a', f: 'bold 96px Georgia, serif' }, { t: '· EST. BEFORE ANYONE REMEMBERS ·', y: 178, c: '#b48a4a', f: '34px Georgia, serif' }]);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.0), new THREE.MeshStandardMaterial({ map: signTex, emissive: 0xffffff, emissiveMap: signTex, emissiveIntensity: 0.35, roughness: 0.6 }));
+  sign.position.set(cx, 5.25, z0 - T / 2 - 0.03); sign.rotation.y = Math.PI; S.add(sign);
+  bx(1.4, 0.5, 1.4, plaster, cx, H + 0.25, z0, S);                         // plinth on the facade
+  const lant = new THREE.Group(); lant.position.set(cx, H + 0.5, z0); S.add(lant);
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) bx(0.08, 2.0, 0.08, iron, sx * 0.5, 1.0, sz * 0.5, lant);
+  bx(1.2, 0.12, 1.2, iron, 0, 0.06, 0, lant);
+  const capM = new THREE.Mesh(new THREE.ConeGeometry(0.95, 0.7, 4), iron); capM.position.y = 2.35; capM.rotation.y = Math.PI / 4; capM.castShadow = true; lant.add(capM);
+  const crystal = new THREE.Mesh(GEO.oct, amber); crystal.scale.set(0.38, 0.75, 0.38); crystal.position.y = 1.0; crystal.userData.dynamic = true; lant.add(crystal);
+  W.lanternCrystal = crystal;
+
+  // ---- floor, rug and the roof (which steps aside when you are inside)
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W_, D_), new THREE.MeshStandardMaterial({ map: planksTex(), roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -2 }));
+  floor.rotation.x = -Math.PI / 2; floor.position.set(cx, 0.035, cz); floor.receiveShadow = true; S.add(floor);
+  const rugTex = canvasTex(128, 512, (g, w, h) => {
+    g.fillStyle = '#7a2a1c'; g.fillRect(0, 0, w, h); g.strokeStyle = '#d9a44e'; g.lineWidth = 6; g.strokeRect(8, 8, w - 16, h - 16);
+    g.fillStyle = '#1d3b4a'; for (let y = 40; y < h - 30; y += 48) { g.beginPath(); g.moveTo(w / 2, y); g.lineTo(w / 2 + 26, y + 20); g.lineTo(w / 2, y + 40); g.lineTo(w / 2 - 26, y + 20); g.fill(); }
+  });
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 7), new THREE.MeshStandardMaterial({ map: rugTex, roughness: 1, polygonOffset: true, polygonOffsetFactor: -3 }));
+  rug.rotation.x = -Math.PI / 2; rug.position.set(cx, 0.04, z0 + 4); rug.receiveShadow = true; S.add(rug);
+  const roof = new THREE.Group(); roof.userData.dynamic = true; S.add(roof);
+  const roofM = mat('cantinaRoof', () => new THREE.MeshStandardMaterial({ color: 0xd9cfbd, roughness: 0.95 }));
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(W_ + T + 0.8, 0.5, D_ + T + 0.8), roofM); slab.position.set(cx, H + 0.25, cz); roof.add(slab);
+  for (const [w, d, x, z] of [[W_ + T + 0.8, 0.4, cx, z1 + 0.6], [0.4, D_ + T + 0.8, x0 - 0.6, cz], [0.4, D_ + T + 0.8, x1 + 0.6, cz]]) { const p = new THREE.Mesh(new THREE.BoxGeometry(w, 0.9, d), roofM); p.position.set(x, H + 0.95, z); roof.add(p); }
+  roof.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  // shadow-only stand-in: keeps casting the roof's shadow while letting the camera see in
+  W.cantinaRoof = { group: roof, solid: roofM, ghost: new THREE.MeshStandardMaterial({ colorWrite: false, depthWrite: false }), inside: false };
+  // beams and hanging lanterns stay, so the room still reads as covered from above
+  for (const bz of [49.5, 54, 58.5, 63, 67.5]) bx(W_, 0.35, 0.4, wood, cx, H - 0.35, bz, S);
+  for (const [lx, lz] of [[-5, 54], [5, 54], [-5, 63], [5, 63], [0, 58.5]]) {
+    bx(0.03, 1.2, 0.03, iron, lx, H - 1.1, lz, S);
+    const l = new THREE.Mesh(GEO.oct, amber); l.scale.set(0.16, 0.26, 0.16); l.position.set(lx, H - 1.9, lz); S.add(l);
+    const c = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.18, 6), iron); c.position.set(lx, H - 1.6, lz); S.add(c);
+  }
+  // warm light inside (always present so the light count never changes; brightened when you enter)
+  const warm = new THREE.PointLight(0xffb066, 0, 26, 1.6); warm.position.set(cx, H - 1.6, cz); S.add(warm); W.cantinaLight = warm;
+
+  // ---- the bar, shelves of bottles, barrels and the chalkboard
+  const barX0 = -2, barX1 = 9.4, barZ = 66, bl = barX1 - barX0, bcx = (barX0 + barX1) / 2;
+  bx(bl, 1.1, 1.0, wood, bcx, 0.55, barZ, S);
+  bx(bl + 0.2, 0.1, 1.25, lightWood, bcx, 1.15, barZ, S);
+  const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, bl, 8), brass); rail.rotation.z = Math.PI / 2; rail.position.set(bcx, 0.25, barZ - 0.62); S.add(rail);
+  addCollider(bcx, barZ, bl, 1.0, 1.4);
+  for (const sy of [1.7, 2.5, 3.3]) {
+    bx(10.5, 0.08, 0.38, lightWood, 4, sy, z1 - 0.5, S);
+    for (let i = 0; i < 16; i++) {
+      const col = pick([0xc77a22, 0x3f7a3a, 0x7a1f24, 0x6a8fa8, 0xb89a4a]);
+      const bm = mat('bottle' + col, () => new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.35, roughness: 0.15, metalness: 0.1 }));
+      const bh = rand(0.28, 0.42); const b = new THREE.Mesh(GEO.cyl, bm); b.scale.set(0.07, bh, 0.07); b.position.set(-0.9 + i * 0.62 + rand(-0.1, 0.1), sy + 0.04 + bh / 2, z1 - 0.5); S.add(b);
+    }
+  }
+  const board = textTex(512, 256, '#1d211e', [{ t: 'LANTERN ALE', y: 70, c: '#f3ead6', f: 'bold 54px Georgia, serif' }, { t: 'savannah honey · and something else', y: 140, c: '#cfc6b0', f: 'italic 28px Georgia, serif' }, { t: '25 CREDITS', y: 205, c: '#f0c46a', f: 'bold 40px Georgia, serif' }]);
+  const chalk = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.3), new THREE.MeshStandardMaterial({ map: board, roughness: 0.9 })); chalk.position.set(-0.2, 4.6, z1 - T / 2 - 0.02); chalk.rotation.y = Math.PI; S.add(chalk);
+  for (const [bxp, by, bzp] of [[10, 0.6, 67.6], [10, 0.6, 68.9], [10, 1.72, 68.25]]) {
+    const br = cyl(0.55, 0.55, 1.1, mat('barrel', () => new THREE.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.8 })), bxp, by, bzp, 14); br.rotation.x = Math.PI / 2;
+    for (const o of [-0.35, 0.35]) { const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.03, 6, 20), iron); hoop.position.set(bxp, by, bzp + o); S.add(hoop); }
+  }
+  addCollider(10, 68.25, 1.2, 2.6, 2.3);
+
+  // ---- tables, stools and mugs
+  const mug = mat('mug', () => new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.6 }));
+  const ale = glowMat(0xd08a2a, 0.6);
+  const table = (x, z) => {
+    cyl(0.85, 0.85, 0.08, lightWood, x, 1.0, z, 20); cyl(0.08, 0.1, 0.96, wood, x, 0.5, z, 8); cyl(0.45, 0.5, 0.06, wood, x, 0.03, z, 12);
+    for (let k = 0; k < 3; k++) { const a = k / 3 * Math.PI * 2 + rand(0, 1); const sx = x + Math.cos(a) * 1.3, sz = z + Math.sin(a) * 1.3; cyl(0.3, 0.3, 0.07, lightWood, sx, 0.64, sz, 12); cyl(0.05, 0.07, 0.6, wood, sx, 0.31, sz, 6); }
+    for (let k = 0; k < randi(1, 3); k++) { const mx = x + rand(-0.45, 0.45), mz = z + rand(-0.45, 0.45); cyl(0.09, 0.08, 0.2, mug, mx, 1.14, mz, 10); cyl(0.075, 0.075, 0.01, ale, mx, 1.24, mz, 10); }
+    addCollider(x, z, 1.5, 1.5, 1.2);
+  };
+  table(-6, 51.5); table(6.5, 51.5); table(-6.5, 58.5); table(6.5, 59);
+  // the Governor's corner table: one chair, one glass he never finishes, and a brass RESERVED tag
+  const gx = -8.6, gz = 67.4;
+  bx(1.5, 0.08, 1.1, lightWood, gx, 1.0, gz, S); for (const [lx, lz] of [[-0.65, -0.45], [0.65, -0.45], [-0.65, 0.45], [0.65, 0.45]]) bx(0.08, 1.0, 0.08, wood, gx + lx, 0.5, gz + lz, S);
+  const chair = new THREE.Group(); chair.position.set(gx - 1.15, 0, gz + 0.9); chair.rotation.y = Math.PI * 0.8; S.add(chair);
+  bx(0.6, 0.08, 0.6, wood, 0, 0.62, 0, chair); bx(0.6, 0.9, 0.08, wood, 0, 1.1, -0.28, chair); for (const [lx, lz] of [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]]) bx(0.06, 0.62, 0.06, wood, lx, 0.31, lz, chair);
+  cyl(0.07, 0.06, 0.22, new THREE.MeshStandardMaterial({ color: 0xbfd9e0, transparent: false, roughness: 0.05, metalness: 0.2 }), gx + 0.2, 1.15, gz - 0.1, 12); cyl(0.06, 0.06, 0.012, ale, gx + 0.2, 1.22, gz - 0.1, 12);
+  bx(0.3, 0.05, 0.12, brass, gx - 0.3, 1.06, gz - 0.3, S);
+  addCollider(gx, gz, 1.6, 1.2, 1.2);
+
+  // ---- the plaque, set in the boards where it happened (and a stool nobody has bothered to stand up)
+  const plaqueTex = canvasTex(512, 512, (g, w, h) => {
+    const gr = g.createRadialGradient(w / 2, h / 2, 40, w / 2, h / 2, w / 2); gr.addColorStop(0, '#b98a3e'); gr.addColorStop(1, '#6e4a1c');
+    g.fillStyle = gr; g.beginPath(); g.arc(w / 2, h / 2, w / 2, 0, 7); g.fill();
+    g.strokeStyle = '#e6c27a'; g.lineWidth = 10; g.beginPath(); g.arc(w / 2, h / 2, w / 2 - 22, 0, 7); g.stroke();
+    g.fillStyle = '#2e1d0a'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = 'bold 34px Georgia, serif'; g.fillText('HERE', w / 2, 150);
+    g.font = 'bold 50px Georgia, serif'; g.fillText('ORION MASCAR', w / 2, 210);
+    g.font = 'italic 34px Georgia, serif'; g.fillText('fought', w / 2, 262);
+    g.font = 'bold 50px Georgia, serif'; g.fillText('DANIEL BROWN', w / 2, 316);
+    g.font = '24px Georgia, serif'; g.fillText('THE SALT LANTERN', w / 2, 390);
+  });
+  plaqueTex.wrapS = plaqueTex.wrapT = THREE.ClampToEdgeWrapping;
+  const PL = { x: 0.6, z: 56 };
+  const plq = new THREE.Mesh(new THREE.CircleGeometry(0.75, 40), new THREE.MeshStandardMaterial({ map: plaqueTex, metalness: 0.75, roughness: 0.35, polygonOffset: true, polygonOffsetFactor: -4 }));
+  plq.rotation.set(-Math.PI / 2, 0, Math.PI); plq.position.set(PL.x, 0.05, PL.z); plq.receiveShadow = true; S.add(plq);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.76, 0.035, 6, 40), brass); rim.rotation.x = Math.PI / 2; rim.position.set(PL.x, 0.05, PL.z); S.add(rim);
+  const stool = new THREE.Group(); stool.position.set(PL.x + 1.6, 0.3, PL.z - 1.1); stool.rotation.set(0, 0.6, 1.45); S.add(stool);
+  bx(0.6, 0.07, 0.6, lightWood, 0, 0.3, 0, stool); bx(0.07, 0.6, 0.07, wood, 0, 0, 0, stool);
+  G.props.push({ kind: 'prop', id: 'plaque', name: 'Memorial Plaque', pos: new V3(PL.x, 0, PL.z) });
+}
+
+// Zuri Adeyemi keeps the bar.
+function spawnZuri() {
+  const r = makeHumanoid({ armor: 0x6b4a2e, accent: 0xffb347, visor: 0xffb347, weapon: 'none' });
+  const pos = new V3(5.5, 0, 67.9);
+  r.group.position.copy(pos); r.group.rotation.y = Math.PI; W.scene.add(r.group);
+  const zuri = { kind: 'npc', id: 'zuri', name: 'Zuri Adeyemi', title: 'Keeper of the Salt Lantern', pos, group: r.group, rig: r, height: 2.1, radius: 1, alive: true };
+  zuri.plate = makePlate('npc', `<div class="n">Zuri Adeyemi</div><div class="g">&lt;Keeper of the Salt Lantern&gt;</div>`);
+  addHitbox(zuri, 1, 2, 1, 1);
+  G.npcs.push(zuri);
+}
+function talkZuri(text = ZURI_LINES.greet) {
+  dialog('KEEPER OF THE SALT LANTERN', 'ZURI ADEYEMI', '', text, G.D.aleT > 0 ? `LANTERN ALE · ${fmtTime(G.D.aleT)} LEFT` : '', [
+    { label: 'LANTERN ALE · 25 CR', gold: true, fn: buyAle },
+    { label: 'THE PLAQUE', fn: () => talkZuri(ZURI_LINES.fight) },
+    { label: 'THE GOVERNOR', fn: () => talkZuri(ZURI_LINES.gov) },
+    { label: 'LEAVE', fn: closeAllUI },
+  ]);
+}
+const ALE = { cost: 25, secs: 600, bonus: 0.2 };
+function buyAle() {
+  const D = G.D;
+  if (D.credits < ALE.cost) { Sound.sfx('error'); talkZuri(ZURI_LINES.aleNo); return; }
+  const again = D.aleT > 0;
+  D.credits -= ALE.cost; D.aleT = ALE.secs; Sound.sfx('coin');
+  addChat('loot', null, 'You drink a Lantern Ale. (+20% experience for 10 minutes)');
+  ringFx(G.P.pos, 0xffb347, 2.5, 0.8); burst(G.P.pos.clone().setY(1.4), 0xffb347, 16, 1.5);
+  saveGame(); talkZuri(again ? ZURI_LINES.aleAgain : ZURI_LINES.aleOk);
+}
+const fmtTime = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+function readPlaque() {
+  dialog(PLAQUE.title, PLAQUE.name, '', PLAQUE.text, '', [{ label: 'ASK ZURI ABOUT IT', fn: () => { const z = G.npcs.find(n => n.id === 'zuri'); if (z && d2(G.P.pos, z.pos) < 16) talkZuri(ZURI_LINES.fight); else closeAllUI(); } }, { label: 'CLOSE', fn: closeAllUI }]);
+}
+// spots near the tables where regulars like to stand
+const CANTINA_SPOTS = [[-6, 53.2], [-4.3, 51.6], [6.5, 53.2], [8.2, 51.4], [-6.5, 60.2], [-4.8, 58.4], [6.5, 60.7], [4.8, 59], [-1.5, 64.6], [1.5, 64.7], [4.5, 64.7], [7.5, 64.6]];
+const cantinaSpot = () => { const [x, z] = pick(CANTINA_SPOTS); return new V3(x + rand(-0.3, 0.3), 0, z + rand(-0.3, 0.3)); };
+
+// =====================================================================
+//  WILDLIFE
+// =====================================================================
+const _cg = new Map();
+const cylGeo = (rt, rb, seg = 8) => { const k = rt + ',' + rb + ',' + seg; if (!_cg.has(k)) _cg.set(k, new THREE.CylinderGeometry(rt, rb, 1, seg)); return _cg.get(k); };
+// a leg hanging from its hip pivot
+function limb(parent, x, y, z, h, rt, rb, m, hoofM) {
+  const p = new THREE.Group(); p.position.set(x, y, z); parent.add(p);
+  const leg = new THREE.Mesh(cylGeo(rt, rb), m); leg.scale.set(1, h, 1); leg.position.y = -h / 2; p.add(leg);
+  if (hoofM) { const hf = new THREE.Mesh(cylGeo(rb * 1.1, rb * 1.3, 6), hoofM); hf.scale.set(1, 0.1, 1); hf.position.y = -h + 0.05; p.add(hf); }
+  return p;
+}
+const darkHide = () => mat('animalDark', () => new THREE.MeshStandardMaterial({ color: 0x2b221c, roughness: 0.9 }));
+// reticulated giraffe coat: a jittered grid of patches with cream gaps (tiles seamlessly)
+const giraffeMat = () => mat('giraffe', () => {
+  const tex = canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#eedcb0'; g.fillRect(0, 0, w, h);
+    const N = 6, cw = w / N, P = [];
+    for (let j = 0; j <= N; j++) { P[j] = []; for (let i = 0; i <= N; i++) P[j][i] = [i * cw + (i % N ? rand(-cw * 0.28, cw * 0.28) : 0), j * cw + (j % N ? rand(-cw * 0.28, cw * 0.28) : 0)]; }
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const q = [P[j][i], P[j][i + 1], P[j + 1][i + 1], P[j + 1][i]], c = q.reduce((a, p) => [a[0] + p[0] / 4, a[1] + p[1] / 4], [0, 0]);
+      g.fillStyle = pick(['#8b5326', '#94592a', '#7e4a22']); g.beginPath(); q.forEach(p => g.lineTo(c[0] + (p[0] - c[0]) * 0.8, c[1] + (p[1] - c[1]) * 0.8)); g.closePath(); g.fill();
+    }
+  });
+  const m = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 }); m.userData.lodColor = 0xa87444; return m;
+});
+const zebraMat = (legs) => mat(legs ? 'zebraLegs' : 'zebra', () => {
+  const tex = canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#ece6da'; g.fillRect(0, 0, w, h); g.fillStyle = '#1c1a19';
+    for (let i = 0; i < 12; i++) {
+      const o = i * (legs ? h : w) / 12; g.beginPath();
+      if (legs) { for (let x = 0; x <= w; x += 8) g.lineTo(x, o + Math.sin(x * 0.05 + i) * 3); for (let x = w; x >= 0; x -= 8) g.lineTo(x, o + 9 + Math.sin(x * 0.05 + i) * 3); }
+      else { for (let y = 0; y <= h; y += 8) g.lineTo(o + Math.sin(y * 0.045 + i) * 6, y); for (let y = h; y >= 0; y -= 8) g.lineTo(o + 9 + Math.sin(y * 0.045 + i + 0.7) * 6, y); }
+      g.closePath(); g.fill();
+    }
+  });
+  const m = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }); m.userData.lodColor = 0x8f8a82; return m;
+});
+function finishAnimal(g, rig) { g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); compactRig(g); rig.bodyY = rig.body.position.y; rig.group = g; return rig; }
+
+function makeGiraffe() {
+  const g = new THREE.Group(), coat = giraffeMat(), dark = darkHide();
+  const body = new THREE.Group(); body.position.y = 2.45; g.add(body);
+  bx(0.8, 0.9, 1.9, coat, 0, 0, 0, body); bx(0.72, 0.62, 0.55, coat, 0, 0.16, 0.8, body);
+  const neck = new THREE.Group(); neck.position.set(0, 0.35, 0.95); neck.rotation.x = 0.42; body.add(neck);
+  bx(0.3, 2.4, 0.42, coat, 0, 1.15, 0, neck); bx(0.06, 2.2, 0.1, dark, 0, 1.15, -0.24, neck);
+  const head = new THREE.Group(); head.position.set(0, 2.35, 0.04); head.rotation.x = -0.17; neck.add(head);
+  bx(0.28, 0.3, 0.72, coat, 0, 0, 0.25, head); bx(0.2, 0.2, 0.2, dark, 0, -0.04, 0.6, head);
+  for (const s of [-1, 1]) { bx(0.06, 0.26, 0.06, dark, s * 0.09, 0.27, -0.02, head); bx(0.16, 0.06, 0.08, coat, s * 0.2, 0.12, -0.05, head); }
+  const legs = [[-0.28, 0.78], [0.28, 0.78], [-0.28, -0.78], [0.28, -0.78]].map(([x, z]) => limb(body, x, -0.35, z, 2.1, 0.08, 0.06, coat, dark));
+  const tail = new THREE.Group(); tail.position.set(0, 0.3, -0.95); tail.rotation.x = -0.25; body.add(tail); bx(0.05, 1.0, 0.05, dark, 0, -0.5, 0, tail);
+  return finishAnimal(g, { body, neck, head, legs, tail, legLen: 2.1, neckRest: 0.42, neckGraze: 0.62 });
+}
+function makeElephant() {
+  const g = new THREE.Group(), skin = mat('eleSkin', () => new THREE.MeshStandardMaterial({ color: 0x857c75, roughness: 0.95, flatShading: true }));
+  const ivory = mat('ivory', () => new THREE.MeshStandardMaterial({ color: 0xeee6d2, roughness: 0.5 })), toe = mat('eleToe', () => new THREE.MeshStandardMaterial({ color: 0x5f5853, roughness: 0.9 }));
+  const body = new THREE.Group(); body.position.y = 2.15; g.add(body);
+  const torso = new THREE.Mesh(GEO.ico1, skin); torso.scale.set(0.95, 0.95, 1.45); body.add(torso);
+  const neck = new THREE.Group(); neck.position.set(0, 0.35, 1.3); body.add(neck);    // the head pivots here
+  const head = new THREE.Mesh(GEO.ico1, skin); head.scale.set(0.62, 0.7, 0.6); head.position.set(0, 0.1, 0.35); neck.add(head);
+  const ears = [-1, 1].map(s => { const e = new THREE.Group(); e.position.set(s * 0.45, 0.15, 0.2); e.rotation.y = s * 0.25; neck.add(e); const m = bx(0.07, 1.1, 0.95, skin, s * 0.04, -0.05, -0.4, e); m.rotation.z = s * 0.1; return e; });
+  const trunk = []; let parent = neck, y0 = -0.25, z0 = 0.85;
+  for (const [len, r] of [[0.7, 0.2], [0.65, 0.15], [0.55, 0.1]]) { const seg = new THREE.Group(); seg.position.set(0, y0, z0); parent.add(seg); const m = new THREE.Mesh(cylGeo(r, r * 0.8, 8), skin); m.scale.set(1, len, 1); m.position.y = -len / 2; seg.add(m); trunk.push(seg); parent = seg; y0 = -len; z0 = 0; }
+  trunk[0].rotation.x = 0.35; trunk[1].rotation.x = 0.15;
+  for (const s of [-1, 1]) { const t = new THREE.Mesh(cylGeo(0.015, 0.07, 6), ivory); t.scale.set(1, 0.75, 1); t.position.set(s * 0.25, -0.35, 0.7); t.rotation.x = 2.1; neck.add(t); }
+  const legs = [[-0.5, 0.82], [0.5, 0.82], [-0.5, -0.82], [0.5, -0.82]].map(([x, z]) => limb(body, x, -0.6, z, 1.55, 0.32, 0.3, skin, toe));
+  const tail = new THREE.Group(); tail.position.set(0, 0.3, -1.4); tail.rotation.x = -0.15; body.add(tail); bx(0.06, 1.0, 0.06, skin, 0, -0.5, 0, tail);
+  return finishAnimal(g, { body, neck, head, legs, tail, ears, trunk, legLen: 1.55, neckRest: 0, neckGraze: 0.22 });
+}
+function makeZebra() {
+  const g = new THREE.Group(), coat = zebraMat(false), legM = zebraMat(true), dark = darkHide();
+  const body = new THREE.Group(); body.position.y = 1.32; g.add(body);
+  bx(0.5, 0.62, 1.35, coat, 0, 0, 0, body);
+  const neck = new THREE.Group(); neck.position.set(0, 0.2, 0.62); neck.rotation.x = 0.55; body.add(neck);
+  bx(0.2, 0.78, 0.38, coat, 0, 0.36, 0, neck); bx(0.06, 0.78, 0.12, dark, 0, 0.38, -0.21, neck);
+  const head = new THREE.Group(); head.position.set(0, 0.75, 0.04); head.rotation.x = 0.55; neck.add(head);
+  bx(0.2, 0.22, 0.55, coat, 0, 0, 0.22, head); bx(0.16, 0.16, 0.14, dark, 0, -0.02, 0.5, head);
+  for (const s of [-1, 1]) bx(0.05, 0.2, 0.06, coat, s * 0.08, 0.17, -0.02, head);
+  const legs = [[-0.17, 0.5], [0.17, 0.5], [-0.17, -0.5], [0.17, -0.5]].map(([x, z]) => limb(body, x, -0.3, z, 1.02, 0.065, 0.045, legM, dark));
+  const tail = new THREE.Group(); tail.position.set(0, 0.2, -0.68); tail.rotation.x = -0.3; body.add(tail); bx(0.04, 0.6, 0.04, dark, 0, -0.3, 0, tail);
+  return finishAnimal(g, { body, neck, head, legs, tail, legLen: 1.02, neckRest: 0.55, neckGraze: 1.95 });
+}
+function makeGazelle() {
+  const g = new THREE.Group(), dark = darkHide();
+  const coat = mat('gazelle', () => new THREE.MeshStandardMaterial({ color: 0xb8783c, roughness: 0.85 })), white = mat('gazelleBelly', () => new THREE.MeshStandardMaterial({ color: 0xefe6d6, roughness: 0.85 }));
+  const body = new THREE.Group(); body.position.y = 0.98; g.add(body);
+  bx(0.32, 0.36, 0.85, coat, 0, 0, 0, body); bx(0.28, 0.1, 0.7, white, 0, -0.16, 0, body); bx(0.22, 0.24, 0.05, white, 0, 0, -0.43, body);
+  const neck = new THREE.Group(); neck.position.set(0, 0.12, 0.38); neck.rotation.x = 0.5; body.add(neck);
+  bx(0.13, 0.5, 0.2, coat, 0, 0.24, 0, neck);
+  const head = new THREE.Group(); head.position.set(0, 0.5, 0.02); head.rotation.x = 0.6; neck.add(head);
+  bx(0.13, 0.14, 0.34, coat, 0, 0, 0.13, head);
+  for (const s of [-1, 1]) { const horn = new THREE.Mesh(cylGeo(0.008, 0.022, 5), dark); horn.scale.set(1, 0.4, 1); horn.position.set(s * 0.04, 0.24, -0.04); horn.rotation.set(-0.45, 0, s * 0.18); head.add(horn); bx(0.04, 0.14, 0.08, coat, s * 0.08, 0.08, -0.05, head); }
+  const legs = [[-0.1, 0.3], [0.1, 0.3], [-0.1, -0.3], [0.1, -0.3]].map(([x, z]) => limb(body, x, -0.12, z, 0.86, 0.035, 0.025, coat, dark));
+  const tail = new THREE.Group(); tail.position.set(0, 0.1, -0.44); tail.rotation.x = -0.3; body.add(tail); bx(0.03, 0.25, 0.03, dark, 0, -0.12, 0, tail);
+  return finishAnimal(g, { body, neck, head, legs, tail, legLen: 0.86, neckRest: 0.5, neckGraze: 1.95 });
+}
+
+// walk: diagonal pairs; run: front pair then back pair (a gallop)
+function animAnimal(a, dt, t) {
+  const r = a.rig, run = a.speed > a.spec.walk * 1.6;
+  a.phase += dt * a.speed / r.legLen * (run ? 1.7 : 2.4);
+  const amp = Math.min(1, a.speed / a.spec.walk) * (run ? 0.75 : 0.36);
+  const off = run ? [0, 0.4, Math.PI, Math.PI + 0.4] : [0, Math.PI, Math.PI, 0];
+  r.legs.forEach((l, i) => { l.rotation.x = Math.sin(a.phase + off[i]) * amp; });
+  r.body.position.y = r.bodyY + (run ? Math.abs(Math.sin(a.phase)) * 0.07 * r.legLen : 0);
+  const nt = a.state === 'graze' ? r.neckGraze : r.neckRest + Math.sin(t * 0.6 + a.seed) * 0.04;
+  r.neck.rotation.x += (nt - r.neck.rotation.x) * Math.min(1, dt * 2);
+  r.tail.rotation.z = Math.sin(t * 2.4 + a.seed) * 0.35;
+  if (r.ears) { r.ears[0].rotation.y = -0.25 - Math.max(0, Math.sin(t * 1.3 + a.seed)) * 0.35; r.ears[1].rotation.y = 0.25 + Math.max(0, Math.sin(t * 1.3 + a.seed + 0.5)) * 0.35; }
+  if (r.trunk) { r.trunk[0].rotation.x = 0.35 + Math.sin(t * 0.9 + a.seed) * 0.12 + (a.state === 'graze' ? 0.15 : 0); r.trunk[2].rotation.x = 0.25 + Math.sin(t * 1.4 + a.seed) * 0.3; }
+}
+
+const SPECIES = {
+  giraffe: { build: makeGiraffe, walk: 1.5, run: 6.5, flee: 0, herd: [3, 4], spread: 12, r: 0.9 },
+  elephant: { build: makeElephant, walk: 1.2, run: 3.5, flee: 0, herd: [3, 4], spread: 10, r: 1.4 },
+  zebra: { build: makeZebra, walk: 1.4, run: 8.5, flee: 12, herd: [5, 7], spread: 9, r: 0.55 },
+  gazelle: { build: makeGazelle, walk: 1.2, run: 10.5, flee: 14, herd: [6, 8], spread: 9, r: 0.35 },
+};
+const RANGES = { echo: { x0: -150, x1: -46, z0: -56, z1: 56 }, ashen: { x0: 46, x1: 150, z0: -56, z1: 56 } };
+const HERDS = [['zebra', 'echo'], ['gazelle', 'echo'], ['giraffe', 'echo'], ['elephant', 'echo'], ['gazelle', 'ashen'], ['zebra', 'ashen'], ['giraffe', 'ashen']];
+function spawnAnimals() {
+  for (const [sp, rg] of HERDS) {
+    const R = RANGES[rg], S = SPECIES[sp];
+    const herd = { R, c: new V3(rand(R.x0 + 15, R.x1 - 15), 0, rand(R.z0 + 15, R.z1 - 15)), to: null, t: 0 };
+    G.herds.push(herd);
+    for (let i = 0, n = randi(...S.herd); i < n; i++) {
+      const rig = S.build();
+      const a = { kind: 'animal', sp, spec: S, rig, group: rig.group, herd, pos: herd.c.clone().add(new V3(rand(-S.spread, S.spread), 0, rand(-S.spread, S.spread))), yaw: rand(0, 6.28), wantYaw: undefined, speed: 0, phase: rand(0, 6), seed: rand(0, 100), state: 'graze', t: rand(1, 8), to: null, fleeT: 0, alive: true };
+      a.group.scale.setScalar(rand(0.9, 1.08)); a.group.position.copy(a.pos); a.group.rotation.y = a.yaw;
+      W.scene.add(a.group); G.animals.push(a); bakeLOD(a);
+    }
+  }
+}
+function startFlee(a, from) {
+  for (const b of G.animals) if (b.herd === a.herd && b.state !== 'flee' && d2(b.pos, a.pos) < 18) { b.state = 'flee'; b.fleeT = rand(2.5, 4); b.from = from; b.jink = rand(-0.5, 0.5); }
+}
+function updateAnimals(dt) {
+  const P = G.P, t = G.time;
+  for (const h of G.herds) { // herds drift slowly across their range
+    h.t -= dt; if (h.t <= 0 || !h.to) { h.t = rand(25, 60); h.to = new V3(rand(h.R.x0 + 12, h.R.x1 - 12), 0, rand(h.R.z0 + 12, h.R.z1 - 12)); }
+    const dx = h.to.x - h.c.x, dz = h.to.z - h.c.z, L = Math.hypot(dx, dz); if (L > 0.5) { h.c.x += dx / L * 0.5 * dt; h.c.z += dz / L * 0.5 * dt; }
+  }
+  for (const a of G.animals) {
+    const S = a.spec, dp = d2(a.pos, P.pos);
+    if (S.flee && !P.dead && dp < S.flee && a.state !== 'flee') startFlee(a, P.pos);   // zebras and gazelles bolt, and spook their herd
+    let target = 0;
+    if (a.state === 'flee') {
+      a.fleeT -= dt; target = S.run;
+      if (a.fleeT <= 0 && dp > S.flee * 1.6) { a.state = 'graze'; a.t = rand(2, 5); }
+      else a.wantYaw = Math.atan2(a.pos.x - a.from.x, a.pos.z - a.from.z) + a.jink;
+    } else if (a.state === 'walk') {
+      target = S.walk;
+      if (!a.to || d2(a.pos, a.to) < 1) { a.state = 'graze'; a.t = rand(4, 12); }
+      else a.wantYaw = Math.atan2(a.to.x - a.pos.x, a.to.z - a.pos.z);
+    } else if ((a.t -= dt) <= 0) { a.state = 'walk'; a.to = a.herd.c.clone().add(new V3(rand(-S.spread, S.spread), 0, rand(-S.spread, S.spread))); }
+    const R = a.herd.R; // never wander off the plains (into the city, the plaza or the crater)
+    if (a.pos.x < R.x0 || a.pos.x > R.x1 || a.pos.z < R.z0 || a.pos.z > R.z1) a.wantYaw = Math.atan2(a.herd.c.x - a.pos.x, a.herd.c.z - a.pos.z);
+    a.speed += (target - a.speed) * Math.min(1, dt * (a.state === 'flee' ? 4 : 2));
+    if (a.wantYaw !== undefined) { let dy = a.wantYaw - a.yaw; while (dy > Math.PI) dy -= Math.PI * 2; while (dy < -Math.PI) dy += Math.PI * 2; a.yaw += dy * Math.min(1, dt * (a.state === 'flee' ? 5 : 1.6)); }
+    a.pos.x += Math.sin(a.yaw) * a.speed * dt; a.pos.z += Math.cos(a.yaw) * a.speed * dt;
+    resolveCollision(a.pos, S.r);
+    a.group.position.copy(a.pos); a.group.rotation.y = a.yaw;
+    if (a.lodNear !== false) animAnimal(a, dt, t); // far animals are drawn from the shared batch; no need to pose limbs
+  }
+}
+
+// Birds: every bird in the sky is one instanced mesh; wings flap in the vertex shader.
+function makeBirdFlock(list) {
+  const pos = [], wing = [];
+  const tri = (a, b, c, w) => { pos.push(...a, ...b, ...c); wing.push(w, w, w); };
+  // body (a thin diamond) and two swept wings
+  tri([0, 0.06, 0.45], [-0.09, 0, 0], [0.09, 0, 0], 0); tri([0, 0.06, 0.45], [0.09, 0, 0], [0, 0.05, -0.5], 0); tri([0, 0.06, 0.45], [0, 0.05, -0.5], [-0.09, 0, 0], 0);
+  for (const s of [-1, 1]) { tri([s * 0.08, 0.02, 0.2], [s * 1.3, 0, -0.15], [s * 0.08, 0.02, -0.25], 1); tri([s * 1.3, 0, -0.15], [s * 0.75, 0.01, -0.4], [s * 0.08, 0.02, -0.25], 1); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('wing', new THREE.Float32BufferAttribute(wing, 1)); geo.computeVertexNormals();
+  const m = new THREE.MeshLambertMaterial({ color: 0x2a221d, side: THREE.DoubleSide });
+  m.onBeforeCompile = sh => {
+    sh.uniforms.uTime = grassTime;
+    sh.vertexShader = 'uniform float uTime;\nattribute float wing;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      #ifdef USE_INSTANCING
+        float ph = instanceMatrix[3].x * 0.37 + instanceMatrix[3].z * 0.21;
+        float rate = length(instanceMatrix[0].xyz) < 1.0 ? 11.0 : 4.5;   // small birds flap fast, vultures slow
+      #else
+        float ph = 0.0; float rate = 5.0;
+      #endif
+      float glide = 0.2 + 0.8 * step(0.2, sin(uTime * 0.5 + ph));      // soar, then a burst of beats
+      transformed.y += wing * abs(position.x) * sin(uTime * rate + ph) * 0.55 * glide;`);
+  };
+  const im = new THREE.InstancedMesh(geo, m, list.length); im.frustumCulled = false; im.userData.birds = list;
+  return im;
+}
+const _bq = new THREE.Quaternion(), _be = new THREE.Euler(0, 0, 0, 'YXZ'), _bm = new THREE.Matrix4(), _bs = new V3(), _bp = new V3();
+function updateBirds(im, t) {
+  im.userData.birds.forEach((b, i) => {
+    const a = b.ph + t * b.speed / b.r * b.dir;
+    _bp.set(b.cx + Math.cos(a) * b.r, b.h + Math.sin(t * 0.3 + b.ph) * 1.5, b.cz + Math.sin(a) * b.r);
+    _be.set(0, Math.atan2(-Math.sin(a) * b.dir, Math.cos(a) * b.dir), -0.35 * b.dir); _bq.setFromEuler(_be);
+    im.setMatrixAt(i, _bm.compose(_bp, _bq, _bs.setScalar(b.s)));
+  });
+  im.instanceMatrix.needsUpdate = true;
+}
+function birdRing(n, cx, cz, r0, r1, h0, h1, speed, s) { return Array.from({ length: n }, () => ({ cx: cx + rand(-6, 6), cz: cz + rand(-6, 6), r: rand(r0, r1), h: rand(h0, h1), speed: speed * rand(0.85, 1.15), s: s * rand(0.85, 1.15), ph: rand(0, 6.28), dir: Math.random() < 0.5 ? 1 : -1 })); }
+
 function makePlate(cls, html) {
   const el = document.createElement('div'); el.className = 'plate ' + cls; el.innerHTML = html; el.style.display = 'none';
   $('plates').appendChild(el); return el;
@@ -1005,8 +1454,9 @@ function spawnShards() {
 }
 
 // ---------------------------------------------------------------- bots
-const GATES = { ashen: [new V3(36, 0, 0)], echo: [new V3(-36, 0, 0)], crater: [new V3(0, 0, -38), new V3(0, 0, -106)], plaza: [] };
+const GATES = { ashen: [new V3(36, 0, 0)], echo: [new V3(-36, 0, 0)], crater: [new V3(0, 0, -38), new V3(0, 0, -106)], plaza: [], cantina: [new V3(0, 0, 40), new V3(0, 0, 49)] };
 function zonePoint(z) {
+  if (z === 'cantina') return cantinaSpot();
   if (z === 'ashen') return new V3(rand(46, 145), 0, rand(-50, 50));
   if (z === 'echo') return new V3(rand(-145, -46), 0, rand(-50, 50));
   if (z === 'crater') { const a = rand(0, Math.PI * 2), r = rand(12, 50); return new V3(CRATER.x + Math.cos(a) * r, 0, CRATER.z + Math.sin(a) * r); }
@@ -1031,7 +1481,7 @@ function spawnBots() {
 // =====================================================================
 const SPAWN = new V3(0, 0, 8);
 function newSave(name, cls, visor) {
-  return { v: 1, name, cls, visor, level: 1, xp: 0, credits: 30, medkits: 3, wpn: 0, arm: 0, q: { i: 0, st: 'available', p: 0 }, kills: 0, deaths: 0, title: 'Ascendant', played: 0, completed: 0, pos: null, created: Date.now() };
+  return { v: 1, name, cls, visor, level: 1, xp: 0, credits: 30, medkits: 3, wpn: 0, arm: 0, q: { i: 0, st: 'available', p: 0 }, aleT: 0, kills: 0, deaths: 0, title: 'Ascendant', played: 0, completed: 0, pos: null, created: Date.now() };
 }
 const xpNext = l => Math.round(140 * Math.pow(l, 1.55));
 const CL = () => CLASSES[G.D.cls];
@@ -1114,6 +1564,7 @@ function killEnemy(e, src) {
 }
 function gainXp(n) {
   const D = G.D, P = G.P; if (D.level >= 30) return;
+  if (D.aleT > 0) n = Math.round(n * (1 + ALE.bonus)); // Lantern Ale
   D.xp += n; floater(P.pos, `+${n} XP`, '#c9a3ff', 2.8);
   while (D.xp >= xpNext(D.level) && D.level < 30) {
     D.xp -= xpNext(D.level); D.level++;
@@ -1295,6 +1746,7 @@ function updatePlayer(dt) {
   if (P.shieldT > 0) { P.shieldT -= dt; if (P.shieldT <= 0) P.shield = 0; }
   if (P.dead) { P.group.position.copy(P.pos).setY(0.3); return; }
   P.en = Math.min(maxEn(), P.en + 9 * dt);
+  if (D.aleT > 0) D.aleT = Math.max(0, D.aleT - dt);
   if (P.combatT <= 0) P.hp = Math.min(maxHp(), P.hp + maxHp() * 0.035 * dt);
 
   // movement
@@ -1340,6 +1792,7 @@ function updatePlayer(dt) {
     const prev = G.zone; G.zone = z; const Z = ZONES[z];
     $('zone-name').textContent = Z.name; $('zone-sub').textContent = Z.sub;
     if (!(prev === 'causeway' && z === 'ward') && !(prev === 'ward' && z === 'causeway')) banner(Z.safe ? 'SANCTUARY' : 'ENTERING', Z.name, Z.sub);
+    if (z === 'cantina') Sound.playMusic('cantina'); else if (prev === 'cantina') Sound.playMusic('world');
   }
 }
 
@@ -1433,10 +1886,14 @@ function updateBots(dt) {
       if (!b.wp || moveToward(b, b.wp, 2.5, dt)) { if (Math.random() < 0.01) b.wp = zonePoint('plaza'); }
       if (Math.random() < 0.0008) b.danceT = 4;
       b.hp = Math.min(b.maxHp, b.hp + 20 * dt);
-      if (b.idleT <= 0) { b.act = pick(['ashen', 'ashen', 'echo', 'echo', 'crater', 'crater']); b.path = [...GATES[b.act], zonePoint(b.act)]; b.state = 'travel'; b.actT = rand(60, 180); b.wp = null; }
+      if (b.idleT <= 0) { b.act = Math.random() < 0.25 ? 'cantina' : pick(['ashen', 'ashen', 'echo', 'echo', 'crater', 'crater']); b.path = [...GATES[b.act], zonePoint(b.act)]; b.state = 'travel'; b.actT = b.act === 'cantina' ? rand(40, 110) : rand(60, 180); b.wp = null; }
     } else if (b.state === 'travel') {
-      if (!b.path.length) { b.state = b.act === 'plaza' ? 'idle' : 'hunt'; b.idleT = rand(15, 50); continue; }
+      if (!b.path.length) { b.state = b.act === 'plaza' ? 'idle' : b.act === 'cantina' ? 'lounge' : 'hunt'; b.idleT = rand(15, 50); continue; }
       if (moveToward(b, b.path[0], 7, dt, 1)) b.path.shift();
+    } else if (b.state === 'lounge') {   // a regular at the Lantern: stand about, raise a glass, then wander back out
+      b.actT -= dt; b.move = Math.max(0, b.move - dt * 5);
+      if (Math.random() < 0.0015) b.danceT = 2.5;
+      if (b.actT <= 0) { b.act = 'plaza'; b.path = [...GATES.cantina].reverse().concat([zonePoint('plaza')]); b.state = 'travel'; }
     } else if (b.state === 'hunt') {
       b.actT -= dt;
       if (b.actT <= 0) { b.act = 'plaza'; b.path = [...GATES[zoneAt(b.pos.x, b.pos.z) === 'crater' ? 'crater' : (b.pos.x > 0 ? 'ashen' : 'echo')]].reverse().concat([zonePoint('plaza')]); b.state = 'travel'; b.target = null; continue; }
@@ -1491,7 +1948,16 @@ function updateShards(dt) {
 function updateAmbient(dt) {
   const t = G.time, P = G.P;
   W.sky.material.uniforms.t.value = t; grassTime.value = t;
+  updateAnimals(dt); updateBirds(W.birds, t);
   updateGrass(W.grass, W.cam); updateLOD();
+  // the Salt Lantern: crystal turns and breathes; inside, the roof steps aside and the room warms up
+  W.lanternCrystal.rotation.y += dt * 0.4; W.lanternCrystal.material.emissiveIntensity = 2.0 + Math.sin(t * 1.7) * 0.4;
+  const inside = G.zone === 'cantina', CR = W.cantinaRoof;
+  if (inside !== CR.inside) { CR.inside = inside; CR.group.traverse(o => { if (o.isMesh) o.material = inside ? CR.ghost : CR.solid; }); }
+  W.cantinaLight.intensity += ((inside ? 30 : 0) - W.cantinaLight.intensity) * Math.min(1, dt * 3);
+  const zuri = G.npcs.find(n => n.id === 'zuri');
+  if (zuri && zuri.lodNear) { animHumanoid(zuri.rig, 0, t); zuri.rig.arms[1].rotation.x = -1.0 + Math.sin(t * 2.6) * 0.25; zuri.rig.arms[1].rotation.z = Math.sin(t * 1.3) * 0.3; // polishing the bar
+    zuri.rig.head.rotation.y = d2(P.pos, zuri.pos) < 9 ? clamp(Math.atan2(P.pos.x - zuri.pos.x, P.pos.z - zuri.pos.z) - Math.PI, -0.8, 0.8) : Math.sin(t * 0.3) * 0.3; }
   W.blink.emissiveIntensity = (Math.sin(t * 3) > 0.6) ? 4 : 0.3;
   for (const f of W.fires) { const s = 0.8 + Math.random() * 0.4; f.scale.set(s, 0.8 + Math.random() * 0.5, s); if (f.userData.light) f.userData.light.intensity = 30 + Math.random() * 20; }
   for (const p of W.pylons) { p.r.rotation.z += dt; p.r.position.y = 12 + Math.sin(t + p.ph) * 1.5; p.top.material.emissiveIntensity = 2 + Math.sin(t * 4 + p.ph) * 2; }
@@ -1599,6 +2065,7 @@ function renderVendor() {
 function nearestInteract() {
   const P = G.P; let best = null, bd = 5;
   for (const n of G.npcs) { const d = d2(P.pos, n.pos); if (d < bd) { bd = d; best = n; } }
+  for (const p of G.props) { const d = d2(P.pos, p.pos); if (d < 2.2 && d < bd) { bd = d; best = p; } }
   for (const s of G.shards) { if (!s.active) continue; const d = d2(P.pos, s.pos); if (d < 3 && d < bd) { bd = d; best = s; } }
   return best;
 }
@@ -1606,6 +2073,8 @@ function interact(ent = nearestInteract()) {
   if (!ent || G.P.dead) return;
   if (ent.id === 'mascar') talkMascar();
   else if (ent.id === 'ilse') openVendor();
+  else if (ent.id === 'zuri') talkZuri();
+  else if (ent.id === 'plaque') readPlaque();
   else if (ent.kind === 'shard') {
     const D = G.D;
     if (D.q.i === 2 && D.q.st === 'active') { ent.active = false; ent.group.visible = false; ent.respawnT = 25; Sound.sfx('pickup'); addChat('loot', null, 'You recover: [Beacon Shard]'); burst(ent.pos.clone().setY(1), 0xff2b4a, 20, 2); questEvent('shard'); }
@@ -1616,7 +2085,7 @@ function interact(ent = nearestInteract()) {
 function updateInteract() {
   const n = nearestInteract(), pr = $('prompt');
   if (n && !G.ui && !G.P.dead) {
-    const label = n.kind === 'shard' ? 'Recover Beacon Shard' : n.id === 'mascar' ? 'Speak with Governor Mascar' : 'Trade with Ilse Varn';
+    const label = n.kind === 'shard' ? 'Recover Beacon Shard' : n.id === 'mascar' ? 'Speak with Governor Mascar' : n.id === 'zuri' ? 'Talk to Zuri Adeyemi' : n.id === 'plaque' ? 'Read the memorial plaque' : 'Trade with Ilse Varn';
     pr.innerHTML = `<b>${TOUCH ? '▶' : '[E]'}</b> ${label}`; pr.classList.remove('hidden');
   } else pr.classList.add('hidden');
 }
@@ -1647,7 +2116,7 @@ function updateHUD() {
   setT('p-name', D.name); setT('p-lvl', 'LV ' + D.level); setT('p-title', `${D.title.toUpperCase()} · ${c.name}`);
   const mh = maxHp(); setW('p-hp', P.hp / mh); setT('p-hpt', `${Math.ceil(P.hp)} / ${mh}`); setW('p-sh', P.shield / mh);
   setW('p-en', P.en / maxEn()); setT('p-ent', `${Math.floor(P.en)} / ${maxEn()}`);
-  const buffs = []; if (P.shield > 0) buffs.push(`⛨ ${P.shield}`); if (P.critNext) buffs.push('◐ CRIT'); if (P.combatT > 0) buffs.push('⚔ COMBAT'); if (ZONES[G.zone]?.safe) buffs.push('✦ SANCTUARY');
+  const buffs = []; if (P.shield > 0) buffs.push(`⛨ ${P.shield}`); if (P.critNext) buffs.push('◐ CRIT'); if (P.combatT > 0) buffs.push('⚔ COMBAT'); if (ZONES[G.zone]?.safe) buffs.push('✦ SANCTUARY'); if (D.aleT > 0) buffs.push(`◈ ALE ${fmtTime(D.aleT)}`);
   const bh = buffs.map(b => `<span class="buff">${b}</span>`).join(''); if (_cache.get('buffs') !== bh) { _cache.set('buffs', bh); $('p-buffs').innerHTML = bh; }
   const nx = xpNext(D.level); setW('xp-fill', D.xp / nx); setT('xp-text', D.level >= 30 ? 'MAX LEVEL' : `LEVEL ${D.level} · ${fmtNum(D.xp)} / ${fmtNum(nx)} XP`);
   setT('wallet', `⬡ ${fmtNum(D.credits)} CR`);
@@ -1719,6 +2188,8 @@ function drawMinimap() {
   mm.fillStyle = 'rgba(220,205,160,0.22)'; mm.fillRect(X(-156), Y(-62), 122 * sc, 124 * sc);
   mm.fillStyle = 'rgba(140,40,30,0.45)'; mm.beginPath(); mm.arc(X(CRATER.x), Y(CRATER.z), 72 * sc, 0, 7); mm.fill();
   mm.fillStyle = 'rgba(62,230,255,0.12)'; mm.beginPath(); mm.arc(X(0), Y(0), 34 * sc, 0, 7); mm.fill();
+  mm.fillStyle = 'rgba(255,179,71,0.35)'; mm.fillRect(X(CANTINA.x0), Y(CANTINA.z0), (CANTINA.x1 - CANTINA.x0) * sc, (CANTINA.z1 - CANTINA.z0) * sc);
+  mm.strokeStyle = 'rgba(255,179,71,0.9)'; mm.lineWidth = 1; mm.strokeRect(X(CANTINA.x0), Y(CANTINA.z0), (CANTINA.x1 - CANTINA.x0) * sc, (CANTINA.z1 - CANTINA.z0) * sc);
   mm.fillStyle = 'rgba(140,90,58,0.6)'; mm.fillRect(X(-150), Y(-7), 300 * sc, 14 * sc); mm.fillRect(X(-7), Y(-110), 14 * sc, 110 * sc);
   mm.fillStyle = 'rgba(220,190,150,0.3)';
   for (const c of G.colliders) { if (Math.abs(c.minX - P.pos.x) > 140 || Math.abs(c.minZ - P.pos.z) > 140) continue; const w = (c.maxX - c.minX) * sc; if (w < 2) continue; mm.fillRect(X(c.minX), Y(c.minZ), w, (c.maxZ - c.minZ) * sc); }
@@ -1760,6 +2231,7 @@ function addChat(ch, name, text, cls) {
 function botSay(b, text, ch = 'world') { if (!b) return; addChat(ch, b.name, text.replace(/\{name\}/g, G.D.name)); }
 function botChatter() {
   const r = Math.random();
+  if (G.zone === 'cantina' && r < 0.45) { const regs = G.bots.filter(b => zoneAt(b.pos.x, b.pos.z) === 'cantina'); botSay(regs.length ? pick(regs) : pick(G.bots), pick(CANTINA_CHAT), 'say'); return; }
   if (r < 0.55) botSay(pick(G.bots), pick(WORLD_CHAT));
   else if (r < 0.75) { const near = G.bots.filter(b => zoneAt(b.pos.x, b.pos.z) === G.zone); if (near.length) botSay(pick(near), pick(ZONE_CHAT), 'zone'); }
   else if (r < 0.82) addChat('gov', null, pick(GOV_ANNOUNCE));
@@ -2127,5 +2599,5 @@ function loop() {
   setTimeout(() => { hide('splash-load'); show('splash-press'); G.ready = true; }, 400);
   $('splash').addEventListener('pointerdown', () => { if (G.ready && G.mode === 'splash') enterMenuFromSplash(); });
   if (TOUCH) $('splash-press').textContent = 'TAP TO BEGIN';
-  window.__AD = G; window.__ADdbg = { W, damage, killEnemy, talkMascar, updateTracker, stats: () => ({ batch: W.batch, res: RES_STEPS[perf.level], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries, tex: renderer.info.memory.textures, pr: renderer.getPixelRatio() }) }; // debug handles
+  window.__AD = G; window.__ADdbg = { W, menu, damage, killEnemy, talkMascar, updateTracker, stats: () => ({ batch: W.batch, res: RES_STEPS[perf.level], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries, tex: renderer.info.memory.textures, pr: renderer.getPixelRatio() }) }; // debug handles
 })();
