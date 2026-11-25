@@ -94,9 +94,10 @@ The other Ascendants in the world are simulated. They have names, guilds and cla
 ## Project files
 - `index.html` is the game page and UI.
 - `game.js` is the compiled game, built from `src/`.
-- `src/main.js` holds the engine, world, combat, AI, movement and UI. `src/soldier.js` is the Ascendant soldier: its rig, weapons and every animation, all procedural. `src/data.js` holds lore, quests and classes. `src/audio.js` makes all the music and sound in code.
-- `assets/croxian_mascar.glb` is the Governor's model, optimised to 165k triangles. `assets/model.js` is the same model embedded so the game runs from a double-click.
+- `src/main.js` holds the engine, world, combat, AI, movement and UI. `src/soldier.js` is the Ascendant soldier: its rig, weapons and every animation, all procedural. `src/data.js` holds lore, quests and classes. `src/audio.js` makes the sound effects and in-game music in code, and plays the main menu theme.
+- `assets/croxian_mascar.glb` is the Governor's model, optimised to 165k triangles. His scythe isn't part of the file: `makeScythe()` in `src/main.js` builds it in code and fixes it in his right hand, so it appears on the menu, on his dais and on the statue. `assets/model.js` is the same model embedded so the game runs from a double-click.
 - `assets/ascendant_soldier.glb` is the player and Ascendant model: cut from 1.9M to 16k triangles, with textures baked onto new UVs, a 19-bone skeleton, and a 2.4k-triangle copy for distant characters. `assets/soldier.js` is the same model embedded.
+- `assets/main_menu_theme.mp3` is the main menu theme. It loops on the title and character-creation screens and fades out when you enter the world.
 - `tools/soldier/` is the pipeline that turned the raw model export into that asset.
 
 To rebuild after editing `src/`, run:
@@ -115,3 +116,5 @@ npm run build
 - [x] Savannah wildlife: giraffes, elephants, zebras and gazelles in herds, vultures and small birds, and a procession on the menu horizon
 - [x] The Salt Lantern: a walk-in cantina with keeper Zuri Adeyemi, Lantern Ale (bonus XP), and the memorial plaque marking where Orion Mascar fought Daniel Brown
 - [x] Ascendant soldier model for the player and bots: rigged, with Warframe-style movement (sprint, slide, bullet jump, flip, glide, roll, hero landing) and animated combos
+- [x] Sound: removed the background hum and the drone shot beep; added the recorded main menu theme
+- [x] Croxian's scythe: four curved blades with cyan edges on a tall pole, held in his right hand

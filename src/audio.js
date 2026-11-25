@@ -22,8 +22,31 @@ export const Sound = {
     for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.4); }
     return b;
   },
-  setVolume(v) { this.volume = v; if (this.master) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05); },
-  setMusic(on) { this.musicOn = on; if (this.music) this.music.gain.setTargetAtTime(on ? 0.32 : 0, this.ctx.currentTime, 0.3); },
+  setVolume(v) { this.volume = v; if (this.master) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05); this._syncTheme(); },
+  setMusic(on) { this.musicOn = on; if (this.music) this.music.gain.setTargetAtTime(on ? 0.32 : 0, this.ctx.currentTime, 0.3); this._syncTheme(); },
+
+  // Main menu theme: a recorded track played through an <audio> element, which also works when the game is opened by double-click.
+  theme: null, themeFade: null, THEME_LEVEL: 0.8,
+  _themeVol() { return this.musicOn ? Math.min(1, this.volume * this.THEME_LEVEL) : 0; },
+  _fadeTheme(to, sec, then) {
+    const a = this.theme; if (!a) return;
+    clearInterval(this.themeFade);
+    const from = a.volume, steps = Math.max(1, Math.round(sec * 30)); let i = 0;
+    this.themeFade = setInterval(() => {
+      i++; a.volume = Math.min(1, Math.max(0, from + (to - from) * i / steps));
+      if (i >= steps) { clearInterval(this.themeFade); this.themeFade = null; if (then) then(); }
+    }, 1000 / 30);
+  },
+  _startTheme() {
+    if (!this.theme) { this.theme = new Audio('assets/main_menu_theme.mp3'); this.theme.loop = true; this.theme.preload = 'auto'; this.theme.volume = 0; }
+    const p = this.theme.play(); if (p && p.catch) p.catch(() => {});
+    this._fadeTheme(this._themeVol(), 1.5);
+  },
+  _stopTheme() {
+    const a = this.theme; if (!a || a.paused) return;
+    this._fadeTheme(0, 1.2, () => { a.pause(); a.currentTime = 0; });
+  },
+  _syncTheme() { if (this.theme && this.mode === 'menu') { clearInterval(this.themeFade); this.themeFade = null; this.theme.volume = this._themeVol(); } },
 
   playMusic(mode) {
     if (!this.ctx || this.mode === mode) return;
@@ -31,36 +54,13 @@ export const Sound = {
     const c = this.ctx, t = c.currentTime;
     for (const n of this.nodes) { try { n.g.gain.setTargetAtTime(0, t, 0.8); n.o.forEach(o => o.stop(t + 4)); } catch (e) {} }
     this.nodes = [];
-    const chords = {
-      menu: [73.42, 110, 146.83, 185, 220, 329.63],      // D major add9, dusk on the savannah
-      world: [65.41, 98, 130.81, 155.56, 196, 233.08],   // C minor 7
-      boss: [61.74, 92.5, 123.47, 146.83, 185, 174.61],
-      cantina: [87.31, 130.81, 174.61, 220, 261.63, 329.63], // F maj7, warm
-      savannah: [73.42, 110, 146.83, 185, 220, 277.18],     // D major add9, open and golden
-    };
-    const g = c.createGain(); g.gain.value = 0; g.gain.setTargetAtTime(1, t, 2.5);
-    const filt = c.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = mode === 'boss' ? 1400 : mode === 'cantina' ? 1100 : 700; filt.Q.value = 3;
-    const lfo = c.createOscillator(); lfo.frequency.value = 0.07; const lg = c.createGain(); lg.gain.value = 380;
-    lfo.connect(lg); lg.connect(filt.frequency); lfo.start();
-    filt.connect(g); g.connect(this.music);
-    const os = [lfo];
-    chords[mode].forEach((f, i) => {
-      for (const det of [-7, 6]) {
-        const o = c.createOscillator(); o.type = i < 2 ? 'sawtooth' : 'triangle'; o.frequency.value = f; o.detune.value = det + Math.random() * 3;
-        const og = c.createGain(); og.gain.value = (i < 2 ? 0.05 : 0.04);
-        o.connect(og); og.connect(filt); o.start(); os.push(o);
-      }
-    });
-    if (mode === 'boss') { // pulse
-      const p = c.createOscillator(); p.type = 'square'; p.frequency.value = 2.2; const pg = c.createGain(); pg.gain.value = 0.5;
-      p.connect(pg); pg.connect(g.gain); p.start(); os.push(p);
-    }
-    this.nodes.push({ g, o: os });
+    // The sustained chord pad (the background hum) has been removed; tick() still plays the bells and the cantina beat.
+    if (mode === 'menu') this._startTheme(); else this._stopTheme();
   },
 
   // ambient bells, called each frame
   tick(dt) {
-    if (!this.ctx || !this.musicOn || !this.mode) return;
+    if (!this.ctx || !this.musicOn || !this.mode || this.mode === 'menu') return; // the menu has its own theme
     if (this.mode === 'cantina') { // plucked sequencer + shaker, ~108 bpm
       this.seqT = (this.seqT || 0) - dt;
       if (this.seqT <= 0) {
@@ -119,7 +119,6 @@ export const Sound = {
       case 'shield': this.tone(300, 0.6, 'sine', 0.1, 600); this.tone(450, 0.6, 'triangle', 0.05, 900); break;
       case 'blink': this.tone(1200, 0.25, 'sine', 0.08, 200); this.noise(0.2, 0.1, 6000, 3); break;
       case 'boom': this.noise(0.9, 0.5, 200, 0.4); this.tone(70, 0.9, 'sine', 0.3, 30); break;
-      case 'drone': this.tone(900, 0.2, 'square', 0.04, 1400); break;
       case 'die': this.tone(200, 0.6, 'sawtooth', 0.08, 40); break;
       case 'levelup': [392, 523, 659, 784, 1047].forEach((f, i) => { this.tone(f, 0.9, 'triangle', 0.08, null, null, i * 0.09); this.tone(f * 2, 0.6, 'sine', 0.03, null, null, i * 0.09); }); break;
       case 'quest': [659, 784, 988].forEach((f, i) => this.tone(f, 0.7, 'sine', 0.09, null, null, i * 0.12)); break;
