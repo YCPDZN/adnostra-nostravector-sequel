@@ -229,6 +229,7 @@ input[type=checkbox]{accent-color:var(--cyan);width:18px;height:18px}
 #vignette{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 160px rgba(255,20,50,0);transition:box-shadow .3s}
 #farewell{position:fixed;inset:0;z-index:70;background:#030508;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
 #farewell p{margin-top:22px;color:var(--dim);letter-spacing:.2em;font-size:13px;line-height:1.8}
+#fps{position:fixed;left:50%;top:calc(4px + var(--st,0px));transform:translateX(-50%);z-index:98;font-size:10px;letter-spacing:.18em;color:#9fe9ff;background:rgba(4,7,11,.6);padding:3px 8px;pointer-events:none}
 #err{position:fixed;left:50%;top:20px;transform:translateX(-50%);z-index:99;padding:12px 18px;color:#ff9aa8;font-size:13px;max-width:80vw}
 
 /* ---------- TOUCH CONTROLS ---------- */
@@ -444,6 +445,8 @@ canvas#scene{touch-action:none}
       <label>SHADOWS <input type="checkbox" id="set-shadows"></label>
       <label>CAMERA SENSITIVITY <input type="range" id="set-sens" min="0.3" max="2" step="0.1"></label>
       <label>NAMEPLATES <input type="checkbox" id="set-plates"></label>
+      <label title="Lowers render resolution on slow frames to keep the game smooth">DYNAMIC RESOLUTION <input type="checkbox" id="set-dynres"></label>
+      <label>SHOW FPS <input type="checkbox" id="set-fps"></label>
     </div>
   </div>
 </div>
@@ -575,6 +578,7 @@ canvas#scene{touch-action:none}
 <div id="tooltip" class="panel hidden"></div>
 <div id="farewell" class="hidden"><div class="logo" style="font-size:48px">AD<b>-</b>NOSTRA</div><p>THE GOVERNOR THANKS YOU FOR YOUR SERVICE.<br>YOU MAY NOW CLOSE THIS WINDOW.</p><button class="btn ghost" style="margin-top:28px" onclick="location.reload()">RETURN</button></div>
 <div id="err" class="panel hidden"></div>
+<div id="fps" class="hidden"></div>
 
 <script src="game.js"></script>
 </body>

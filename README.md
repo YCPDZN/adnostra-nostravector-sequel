@@ -44,6 +44,14 @@ It also plays on phones and tablets: host the folder anywhere static (or open it
 | ◎ / ▲ | Cycle target / jump |
 | ✉ ☰ ❚❚ | Chat / character sheet / menu |
 
+## Graphics and performance
+The game runs at full quality on modest hardware, integrated graphics included:
+- Static scenery is merged into a few dozen batches, and every distant character is drawn in a single shared batch, so the world costs roughly 250–500 draw calls instead of ~1,400.
+- Grass is split into chunks that are skipped when off-screen or far away.
+- Only the sun and sky light the world, because every extra light costs every pixel. Glows come from emissive materials and bloom.
+- **Dynamic resolution** (on by default in Settings) renders fewer pixels when frames run long and steps back up when there is headroom. Effects, shadows and anti-aliasing stay on.
+- **Show FPS** in Settings displays frame rate, current resolution and draw calls.
+
 ## The world
 - **Concordia Plaza** is a sanctuary. Governor Mascar stands on his dais beneath the Statue of the Unmaking, and Quartermaster Ilse Varn sells medkits and upgrades.
 - **Scorched Veld** (east, lv 1–3) holds the Hollowed.
@@ -82,6 +90,7 @@ npm run build
 - [x] Cantina and savannah music modes in `src/audio.js`
 - [x] Rebuild the world as African savannah at golden hour: grass, acacias, baobabs, a sandstone city and a distant mountain (menu and world)
 - [x] Mobile support: touch controls, responsive menus and HUD, lighter rendering on phones
-- [ ] Savannah polish: menu bloom, world exposure, less office-like towers, lower crater rocks
+- [x] Savannah polish: dusk menu, world exposure and sky, sandstone towers, low crater rocks
+- [x] Performance for low-end PCs: merged static scenery, batched distant characters, chunked grass, no extra lights, dynamic resolution
 - [ ] Savannah wildlife
 - [ ] The Salt Lantern: a walk-in cantina with keeper Zuri Adeyemi, Lantern Ale (bonus XP), and the memorial plaque marking where Orion Mascar fought Daniel Brown. Its dialogue is already in `src/data.js` (`ZURI_LINES`, `CANTINA_CHAT`)
