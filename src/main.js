@@ -10,10 +10,10 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Sound } from './audio.js';
-import { loadSoldier, soldierReady, makeSoldier, animSoldier, MOVE_DUR } from './soldier.js';
+import { loadSoldier, loadOrion, soldierReady, makeSoldier, animSoldier, MOVE_DUR } from './soldier.js';
 import {
   CODEX, TIPS, CLASSES, VISORS, QUESTS, MASCAR_IDLE, BOT_NAMES, GUILDS,
-  WORLD_CHAT, ZONE_CHAT, GOV_ANNOUNCE, LORE_REPLIES, GREET_REPLIES, ZURI_LINES, CANTINA_CHAT, PLAQUE
+  WORLD_CHAT, ZONE_CHAT, GOV_ANNOUNCE, LORE_REPLIES, GREET_REPLIES, ZURI_LINES, CANTINA_CHAT, PLAQUE, ORION_LINES
 } from './data.js';
 
 const V3 = THREE.Vector3;
@@ -1020,7 +1020,7 @@ function buildWorld() {
   S.add(W.birds);
   W.batch = mergeStatic(S, 250);
   initFarChars(S);
-  spawnNPCs(); spawnZuri(); spawnEnemies(); spawnShards(); spawnBots(); spawnAnimals();
+  spawnNPCs(); spawnZuri(); spawnEnemies(); spawnShards(); spawnBots(); spawnOrion(); spawnAnimals();
   G.world = true;
 }
 
@@ -1541,6 +1541,31 @@ function spawnBots() {
     G.bots.push(b);
   }
 }
+// Orion Mascar, the Governor's father. He walks the whole map the way the Ascendants do (the plaza, the
+// three zones, the Salt Lantern) but at his own pace: no bullet jumps, no chatter, and he never stays down.
+// He lives in G.bots so he shares their travel and hunting; b.legend marks the differences.
+const ORION_PLAQUE_SPOT = new V3(1.9, 0, 57.3);   // where he stands in the Lantern, looking down at his plaque
+function spawnOrion() {
+  if (!soldierReady('orion')) return;
+  const rig = makeSoldier({ model: 'orion', accent: 0x8fe6ff, weapon: 'greatsword', mats: SOLDIER_MATS });
+  const o = { kind: 'bot', legend: true, id: 'orion', name: 'Orion Mascar', title: 'Father of the Governor', cls: 'vanguard', level: 60, guild: '', rig, group: rig.group,
+    pos: zonePoint('plaza'), alive: true, hp: 4000, maxHp: 4000, state: 'idle', path: [], idleT: rand(6, 14), actT: 0, act: 'plaza', target: null, atkT: 0, yaw: 0, move: 0, atk: 0, danceT: 0,
+    height: 2.1, radius: 0.5, vy: 0, slideT: -1, rollT: 0, bjT: 0, flipT: 0, landT: 0, landHard: false, boost: 1, canFlip: false, talkT: 0 };
+  o.group.position.copy(o.pos); W.scene.add(o.group);
+  o.plate = makePlate('npc', `<div class="n">Orion Mascar</div><div class="g">&lt;Father of the Governor&gt;</div>`);
+  addHitbox(o, 0.9, 2, 0.9, 1);
+  G.bots.push(o);
+}
+const chatBots = () => G.bots.filter(b => !b.legend);   // the simulated players (Orion doesn't chat like one)
+function talkOrion(o, text = pick(ORION_LINES.greet)) {
+  o.talkT = 12;
+  dialog('FATHER OF THE GOVERNOR', 'ORION MASCAR', '', text, '', [
+    { label: 'THE WAR', fn: () => talkOrion(o, ORION_LINES.war) },
+    { label: 'THE SALT LANTERN', fn: () => talkOrion(o, ORION_LINES.lantern) },
+    { label: 'YOUR SON', fn: () => talkOrion(o, ORION_LINES.son) },
+    { label: 'FAREWELL', fn: () => { o.talkT = 1.5; closeAllUI(); } },
+  ]);
+}
 
 // =====================================================================
 //  PLAYER
@@ -1612,6 +1637,7 @@ function damage(tgt, amt, src, opt = {}) {
     if (src === P && tgt.target && tgt.target.kind === 'bot' && Math.random() < 0.15) tgt.target = P;
     if (tgt.hp <= 0) killEnemy(tgt, src);
   } else if (tgt.kind === 'bot') {
+    if (tgt.legend) tgt.hp = Math.max(tgt.hp, tgt.maxHp * 0.25);
     if (tgt.hp <= 0) botDie(tgt);
   }
 }
@@ -1629,7 +1655,7 @@ function killEnemy(e, src) {
     questEvent(e.isBoss ? 'boss' : e.type, e);
     if (zoneAt(e.pos.x, e.pos.z) === 'crater' && !e.isBoss && D.q.i === 2 && D.q.st === 'active' && Math.random() < 0.4) { addChat('loot', null, 'You loot: [Beacon Shard]'); questEvent('shard'); }
     if (Math.random() < 0.06 && !e.isBoss) { D.medkits++; addChat('loot', null, 'You loot: [Concord Medkit]'); }
-    if (e.isBoss) { addChat('world', null, `${D.name} has destroyed the Remnant of the Catharsis!`, 'sys'); setTimeout(() => botSay(pick(G.bots), pick(['GG ' + D.name + '!!', 'legend', 'WOW', 'grats ' + D.name, 'o7 hero'])), 1500); }
+    if (e.isBoss) { addChat('world', null, `${D.name} has destroyed the Remnant of the Catharsis!`, 'sys'); setTimeout(() => botSay(pick(chatBots()), pick(['GG ' + D.name + '!!', 'legend', 'WOW', 'grats ' + D.name, 'o7 hero'])), 1500); }
   }
   if (e.isBoss) { $('bossbar').classList.add('hidden'); Sound.playMusic('world'); }
 }
@@ -1643,7 +1669,7 @@ function gainXp(n) {
     banner('LEVEL UP', 'LEVEL ' + D.level, 'YOUR POWER GROWS', 'lv'); Sound.sfx('levelup');
     ringFx(P.pos, 0xe8c46a, 6, 1.2); burst(P.pos.clone().setY(1), 0xe8c46a, 40, 4);
     addChat('sys', null, `Congratulations, you have reached level ${D.level}!`);
-    if (Math.random() < 0.6) setTimeout(() => botSay(pick(G.bots), pick(['grats!', 'gz', 'grats ' + D.name, 'ding!'])), 1200);
+    if (Math.random() < 0.6) setTimeout(() => botSay(pick(chatBots()), pick(['grats!', 'gz', 'grats ' + D.name, 'ding!'])), 1200);
     saveGame();
   }
 }
@@ -2056,23 +2082,28 @@ function updateBots(dt) {
       b.group.position.copy(b.pos).setY(0.3); if (b.rig.isSoldier) animSoldier(b.rig, b, dt, G.time, b.lodNear !== false); continue;
     }
     b.atk = Math.max(0, b.atk - dt); b.danceT = Math.max(0, b.danceT - dt);
-    if (b.state === 'idle') {
+    if (b.legend && b.talkT > 0) {   // stops to talk to you
+      b.talkT -= dt; b.move = Math.max(0, b.move - dt * 5); faceTo(b, G.P.pos);
+    } else if (b.state === 'idle') {
       b.idleT -= dt;
       if (!b.wp || moveToward(b, b.wp, 2.2, dt)) { if (Math.random() < 0.01) b.wp = zonePoint('plaza'); }
-      if (Math.random() < 0.0008) b.danceT = 4;
+      if (Math.random() < 0.0008 && !b.legend) b.danceT = 4;
       b.hp = Math.min(b.maxHp, b.hp + 20 * dt);
-      if (b.idleT <= 0) { b.act = Math.random() < 0.25 ? 'cantina' : pick(['ashen', 'ashen', 'echo', 'echo', 'crater', 'crater']); b.path = [...GATES[b.act], zonePoint(b.act)]; b.state = 'travel'; b.actT = b.act === 'cantina' ? rand(40, 110) : rand(60, 180); b.wp = null; }
+      if (b.legend && G.P && d2(b.pos, G.P.pos) < 7 && (!b.wp || d2(b.pos, b.wp) < 0.5)) faceTo(b, G.P.pos);
+      if (b.idleT <= 0) { b.act = Math.random() < 0.25 ? 'cantina' : pick(['ashen', 'ashen', 'echo', 'echo', 'crater', 'crater']); b.path = [...GATES[b.act], b.legend && b.act === 'cantina' ? ORION_PLAQUE_SPOT.clone() : zonePoint(b.act)]; b.state = 'travel'; b.actT = b.act === 'cantina' ? rand(40, 110) : rand(60, 180); b.wp = null; }
     } else if (b.state === 'travel') {
       if (!b.path.length) { b.state = b.act === 'plaza' ? 'idle' : b.act === 'cantina' ? 'lounge' : 'hunt'; b.idleT = rand(15, 50); continue; }
-      if (b.rig.isSoldier && b.pos.y === 0 && b.slideT < 0 && b.act !== 'cantina' && d2(b.pos, b.path[0]) > 24) {
+      if (b.rig.isSoldier && !b.legend && b.pos.y === 0 && b.slideT < 0 && b.act !== 'cantina' && d2(b.pos, b.path[0]) > 24) {
         if (Math.random() < dt * 0.3) { b.vy = 10.5; b.bjT = 1e-4; b.boost = 1.6; b.canFlip = Math.random() < 0.6; }   // bullet jump
         else if (Math.random() < dt * 0.12) b.slideT = 0;                                                         // slide
       }
-      const tsp = (b.act === 'cantina' && zoneAt(b.pos.x, b.pos.z) === 'cantina' ? 3 : 13) * (b.pos.y > 0 ? b.boost : 1) * (b.slideT >= 0 ? 1.15 : 1);
+      const tsp = b.legend ? (zoneAt(b.pos.x, b.pos.z) === 'cantina' || zoneAt(b.pos.x, b.pos.z) === 'plaza' ? 2.2 : 6.5)   // he walks in town and jogs the plains
+        : (b.act === 'cantina' && zoneAt(b.pos.x, b.pos.z) === 'cantina' ? 3 : 13) * (b.pos.y > 0 ? b.boost : 1) * (b.slideT >= 0 ? 1.15 : 1);
       if (moveToward(b, b.path[0], tsp, dt, 1)) b.path.shift();
     } else if (b.state === 'lounge') {   // a regular at the Lantern: stand about, raise a glass, then wander back out
       b.actT -= dt; b.move = Math.max(0, b.move - dt * 5);
-      if (Math.random() < 0.0015) b.danceT = 2.5;
+      if (b.legend) { if (G.P && d2(b.pos, G.P.pos) < 7) faceTo(b, G.P.pos); else faceTo(b, new V3(0.6, 0, 56)); }   // the plaque, unless you come over
+      else if (Math.random() < 0.0015) b.danceT = 2.5;
       if (b.actT <= 0) { b.act = 'plaza'; b.path = [...GATES.cantina].reverse().concat([zonePoint('plaza')]); b.state = 'travel'; }
     } else if (b.state === 'hunt') {
       b.actT -= dt;
@@ -2082,14 +2113,14 @@ function updateBots(dt) {
         for (const e of G.enemies) { if (!e.alive || (e.isBoss && Math.random() < 0.995)) continue; const d = d2(b.pos, e.pos); if (d < bd && zoneAt(e.pos.x, e.pos.z) === zoneAt(b.pos.x, b.pos.z)) { bd = d; b.target = e; } }
         if (!b.target) { if (!b.wp || moveToward(b, b.wp, 9, dt)) b.wp = zonePoint(b.act); }
       } else {
-        const t = b.target, c = CLASSES[b.cls], reach = (c.range > 5 ? 14 : 2.2) + t.radius;
-        if (d2(b.pos, t.pos) > reach) moveToward(b, t.pos, 10, dt, reach * 0.9);
+        const t = b.target, c = CLASSES[b.cls], reach = (c.range > 5 ? 14 : b.legend ? 2.7 : 2.2) + t.radius;
+        if (d2(b.pos, t.pos) > reach) moveToward(b, t.pos, b.legend ? 7 : 10, dt, reach * 0.9);
         else {
           b.move = Math.max(0, b.move - dt * 5); faceTo(b, t.pos); b.atkT -= dt;
           if (b.atkT <= 0) {
-            b.atkT = rand(1.4, 1.9); b.atk = 0.3; if (c.range > 5) b.actHint = 'cast'; const dmg = 6 + b.level * 0.7;
+            b.atkT = rand(1.4, 1.9); b.atk = 0.3; if (c.range > 5) b.actHint = 'cast'; const dmg = b.legend ? 22 : 6 + b.level * 0.7;
             if (c.range > 5) projectile(b.pos.clone().setY(b.pos.y + 1.4), t, c.hex, 0.12, 30, () => damage(t, dmg, b), b);
-            else { damage(t, dmg, b); if (d2(b.pos, G.P.pos) < 30 && Math.random() < 0.5) slashFx(t, c.hex, 0.9); }
+            else { damage(t, dmg, b); if (d2(b.pos, G.P.pos) < 30 && (b.legend || Math.random() < 0.5)) slashFx(t, b.legend ? 0x8fe6ff : c.hex, b.legend ? 1.3 : 0.9); }
           }
         }
         if (b.hp < b.maxHp * 0.3 && Math.random() < 0.01) { b.hp = b.maxHp; burst(b.pos.clone().setY(1), 0x4dff9a, 12, 2); }
@@ -2249,6 +2280,7 @@ function renderVendor() {
 function nearestInteract() {
   const P = G.P; let best = null, bd = 5;
   for (const n of G.npcs) { const d = d2(P.pos, n.pos); if (d < bd) { bd = d; best = n; } }
+  for (const b of G.bots) if (b.legend && b.alive) { const d = d2(P.pos, b.pos); if (d < 4 && d < bd) { bd = d; best = b; } }
   for (const p of G.props) { const d = d2(P.pos, p.pos); if (d < 2.2 && d < bd) { bd = d; best = p; } }
   for (const s of G.shards) { if (!s.active) continue; const d = d2(P.pos, s.pos); if (d < 3 && d < bd) { bd = d; best = s; } }
   return best;
@@ -2259,6 +2291,7 @@ function interact(ent = nearestInteract()) {
   else if (ent.id === 'ilse') openVendor();
   else if (ent.id === 'zuri') talkZuri();
   else if (ent.id === 'plaque') readPlaque();
+  else if (ent.id === 'orion') talkOrion(ent);
   else if (ent.kind === 'shard') {
     const D = G.D;
     if (D.q.i === 2 && D.q.st === 'active') { ent.active = false; ent.group.visible = false; ent.respawnT = 25; Sound.sfx('pickup'); addChat('loot', null, 'You recover: [Beacon Shard]'); burst(ent.pos.clone().setY(1), 0xff2b4a, 20, 2); questEvent('shard'); }
@@ -2269,7 +2302,7 @@ function interact(ent = nearestInteract()) {
 function updateInteract() {
   const n = nearestInteract(), pr = $('prompt');
   if (n && !G.ui && !G.P.dead) {
-    const label = n.kind === 'shard' ? 'Recover Beacon Shard' : n.id === 'mascar' ? 'Speak with Governor Mascar' : n.id === 'zuri' ? 'Talk to Zuri Adeyemi' : n.id === 'plaque' ? 'Read the memorial plaque' : 'Trade with Ilse Varn';
+    const label = n.kind === 'shard' ? 'Recover Beacon Shard' : n.id === 'mascar' ? 'Speak with Governor Mascar' : n.id === 'zuri' ? 'Talk to Zuri Adeyemi' : n.id === 'plaque' ? 'Read the memorial plaque' : n.id === 'orion' ? 'Speak with Orion Mascar' : 'Trade with Ilse Varn';
     pr.innerHTML = `<b>${TOUCH ? '▶' : '[E]'}</b> ${label}`; pr.classList.remove('hidden');
   } else pr.classList.add('hidden');
 }
@@ -2325,7 +2358,7 @@ function updateTargetFrame(force) {
   if (t.kind === 'enemy') {
     setT('t-name', t.name); setT('t-lvl', 'LV ' + t.level); setT('t-sub', t.isBoss ? 'ELITE · REMNANT' : t.type === 'drone' ? 'MECHANICAL · REMNANT' : 'HOLLOWED · REMNANT');
     $('t-bar').style.display = ''; setW('t-hp', t.hp / t.maxHp); setT('t-hpt', `${Math.max(0, Math.ceil(t.hp))} / ${t.maxHp}`);
-  } else if (t.kind === 'bot') {
+  } else if (t.kind === 'bot' && !t.legend) {
     setT('t-name', t.name); setT('t-lvl', 'LV ' + t.level); setT('t-sub', `${CLASSES[t.cls].name}${t.guild ? ' · ' + t.guild.toUpperCase() : ''}`);
     $('t-bar').style.display = ''; setW('t-hp', t.hp / t.maxHp); setT('t-hpt', 'ASCENDANT');
   } else { setT('t-name', t.name); setT('t-lvl', ''); setT('t-sub', t.title.toUpperCase()); $('t-bar').style.display = 'none'; }
@@ -2380,8 +2413,8 @@ function drawMinimap() {
   mm.strokeStyle = 'rgba(232,196,106,0.6)'; mm.lineWidth = 2; mm.beginPath(); mm.arc(X(0), Y(0), 246 * sc, 0, 7); mm.stroke();
   if (G.D.q.i === 2 && G.D.q.st === 'active') { mm.fillStyle = '#ff6b7f'; for (const s of G.shards) if (s.active) { mm.save(); mm.translate(X(s.pos.x), Y(s.pos.z)); mm.rotate(Math.PI / 4); mm.fillRect(-2.5, -2.5, 5, 5); mm.restore(); } }
   for (const e of G.enemies) { if (!e.alive) continue; mm.fillStyle = e.isBoss ? '#ff2b4a' : '#ff5a6e'; const r = e.isBoss ? 5 : 2.2; mm.beginPath(); mm.arc(X(e.pos.x), Y(e.pos.z), r, 0, 7); mm.fill(); }
-  mm.fillStyle = '#7fe3ff'; for (const b of G.bots) if (b.alive) { mm.beginPath(); mm.arc(X(b.pos.x), Y(b.pos.z), 2.2, 0, 7); mm.fill(); }
-  mm.fillStyle = '#e8c46a'; for (const n of G.npcs) { mm.beginPath(); mm.arc(X(n.pos.x), Y(n.pos.z), 3.5, 0, 7); mm.fill(); }
+  mm.fillStyle = '#7fe3ff'; for (const b of G.bots) if (b.alive && !b.legend) { mm.beginPath(); mm.arc(X(b.pos.x), Y(b.pos.z), 2.2, 0, 7); mm.fill(); }
+  mm.fillStyle = '#e8c46a'; for (const n of [...G.npcs, ...G.bots.filter(b => b.legend)]) { mm.beginPath(); mm.arc(X(n.pos.x), Y(n.pos.z), 3.5, 0, 7); mm.fill(); }
   // objective pointer
   const obj = objectivePos();
   if (obj) {
@@ -2415,9 +2448,9 @@ function addChat(ch, name, text, cls) {
 function botSay(b, text, ch = 'world') { if (!b) return; addChat(ch, b.name, text.replace(/\{name\}/g, G.D.name)); }
 function botChatter() {
   const r = Math.random();
-  if (G.zone === 'cantina' && r < 0.45) { const regs = G.bots.filter(b => zoneAt(b.pos.x, b.pos.z) === 'cantina'); botSay(regs.length ? pick(regs) : pick(G.bots), pick(CANTINA_CHAT), 'say'); return; }
-  if (r < 0.55) botSay(pick(G.bots), pick(WORLD_CHAT));
-  else if (r < 0.75) { const near = G.bots.filter(b => zoneAt(b.pos.x, b.pos.z) === G.zone); if (near.length) botSay(pick(near), pick(ZONE_CHAT), 'zone'); }
+  if (G.zone === 'cantina' && r < 0.45) { const regs = chatBots().filter(b => zoneAt(b.pos.x, b.pos.z) === 'cantina'); botSay(regs.length ? pick(regs) : pick(chatBots()), pick(CANTINA_CHAT), 'say'); return; }
+  if (r < 0.55) botSay(pick(chatBots()), pick(WORLD_CHAT));
+  else if (r < 0.75) { const near = chatBots().filter(b => zoneAt(b.pos.x, b.pos.z) === G.zone); if (near.length) botSay(pick(near), pick(ZONE_CHAT), 'zone'); }
   else if (r < 0.82) addChat('gov', null, pick(GOV_ANNOUNCE));
 }
 function sendChat(text) {
@@ -2426,11 +2459,11 @@ function sendChat(text) {
     const [cmd] = text.slice(1).toLowerCase().split(' ');
     switch (cmd) {
       case 'help': addChat('sys', null, 'Commands: /who /played /loc /dance /wave /salute /help'); break;
-      case 'who': { const l = G.bots.slice(0, 6).map(b => `${b.name} (${b.level} ${CLASSES[b.cls].name.toLowerCase()}, ${ZONES[zoneAt(b.pos.x, b.pos.z)].name.toLowerCase()})`); addChat('sys', null, `Online: ${l.join(', ')} …and ${fmtNum(onlineCount - 6)} others.`); break; }
+      case 'who': { const l = chatBots().slice(0, 6).map(b => `${b.name} (${b.level} ${CLASSES[b.cls].name.toLowerCase()}, ${ZONES[zoneAt(b.pos.x, b.pos.z)].name.toLowerCase()})`); addChat('sys', null, `Online: ${l.join(', ')} …and ${fmtNum(onlineCount - 6)} others.`); break; }
       case 'played': { const s = D.played | 0; addChat('sys', null, `Time played: ${Math.floor(s / 3600)}h ${Math.floor(s / 60) % 60}m ${s % 60}s`); break; }
       case 'loc': addChat('sys', null, `${ZONES[G.zone].name}: ${P.pos.x.toFixed(0)}, ${(-P.pos.z).toFixed(0)}`); break;
       case 'dance': P.danceT = 5; addChat('say', null, `${D.name} bursts into dance.`, 'sys'); break;
-      case 'wave': P.actHint = 'wave'; P.atk = 0.3; addChat('say', null, `${D.name} waves.`, 'sys'); setTimeout(() => { const b = G.bots.find(b => d2(b.pos, P.pos) < 20); if (b) addChat('say', b.name, 'o/'); }, 900); break;
+      case 'wave': P.actHint = 'wave'; P.atk = 0.3; addChat('say', null, `${D.name} waves.`, 'sys'); setTimeout(() => { const b = chatBots().find(b => d2(b.pos, P.pos) < 20); if (b) addChat('say', b.name, 'o/'); }, 900); break;
       case 'salute': {
         P.actHint = 'salute'; P.atk = 0.3; const near = d2(P.pos, G.npcs[0].pos) < 15;
         addChat('say', null, near ? `${D.name} salutes Governor Mascar.` : `${D.name} salutes.`, 'sys');
@@ -2443,7 +2476,7 @@ function sendChat(text) {
   }
   addChat('world', D.name, text); Sound.sfx('chat');
   const low = text.toLowerCase();
-  const reply = (pool, delay = rand(1, 3)) => setTimeout(() => botSay(pick(G.bots), pick(pool)), delay * 1000);
+  const reply = (pool, delay = rand(1, 3)) => setTimeout(() => botSay(pick(chatBots()), pick(pool)), delay * 1000);
   if (/\b(hi|hello|hey|yo|sup|o7|o\/|greetings)\b/.test(low)) { reply(GREET_REPLIES); if (Math.random() < 0.5) reply(GREET_REPLIES, rand(2, 4)); }
   else if (/mascar|governor|croxian/.test(low)) reply(LORE_REPLIES);
   else if (/catharsis|remnant|monolith/.test(low)) reply(['don\'t say that name too loud', 'the crater still gives me nightmares', 'the remnant hits like a tram, bring medkits']);
@@ -2515,7 +2548,7 @@ function pick3D(x, y) {
   if (hit) {
     const ent = hit.object.userData.ent; setTarget(ent);
     if (ent.kind === 'enemy') G.P.autoOn = true;
-    if (ent.kind === 'npc' && d2(G.P.pos, ent.pos) < 6) interact(ent);
+    if ((ent.kind === 'npc' || ent.legend) && d2(G.P.pos, ent.pos) < 6) interact(ent);
     Sound.sfx('click');
   } else setTarget(null);
 }
@@ -2721,7 +2754,7 @@ function enterWorld(isNew = false) {
       addChat('sys', null, `Welcome to Ad-Nostra, ${G.D.name}. Realm: ${$('realm').value.split(' · ')[0]}.`);
       addChat('gov', null, 'Anno Domini 2137. Ten years since Carax. The Catharsis is fallen — but its Remnants endure.');
       if (isNew || G.D.q.i === 0 && G.D.q.st === 'available') addChat('sys', null, `Governor Croxian Mascar awaits you on his dais. Walk up and ${TOUCH ? 'tap the prompt' : 'press E'}.`);
-      setTimeout(() => botSay(pick(G.bots), `welcome ${G.D.name} o7`), 3500);
+      setTimeout(() => botSay(pick(chatBots()), `welcome ${G.D.name} o7`), 3500);
     }, 500);
   }, 900);
 }
@@ -2789,6 +2822,8 @@ function loop() {
   catch (err) { console.error(err); status.textContent = 'GOVERNOR MODEL UNAVAILABLE — USING FALLBACK'; showError(err.message); }
   try { await loadSoldier(); }
   catch (err) { console.error(err); showError('Ascendant model unavailable, using the fallback: ' + err.message); }
+  try { await loadOrion(); }
+  catch (err) { console.error(err); }   // without his model, Orion simply isn't in the world
   buildMenu();
   setScene(menu.scene, menu.cam);
   loop();
