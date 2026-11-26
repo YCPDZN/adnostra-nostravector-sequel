@@ -36,6 +36,7 @@ It also plays on phones and tablets: host the folder anywhere static (or open it
 | E | Talk / interact / pick up shards |
 | Enter | Chat (`/help`, `/who`, `/party`, `/dismiss`, `/dance`, `/salute`, `/played`, `/loc`) |
 | C | Character sheet |
+| M | Map of Ad-Nostra |
 | Esc | Menu |
 
 ### Touch
@@ -47,7 +48,7 @@ It also plays on phones and tablets: host the folder anywhere static (or open it
 | Hotbar | Abilities and medkit |
 | Gold prompt | Talk / interact / pick up shards |
 | ◎ / ⤵ / ▲ | Cycle target / slide or roll / jump (hold to glide) |
-| ✉ ☰ ❚❚ | Chat / character sheet / menu |
+| ✉ ☰ ⌖ ❚❚ | Chat / character sheet / map / menu |
 
 ## Movement
 Every Ascendant, you and the simulated players alike, wears the same rigged soldier armour and moves like a Warframe:
@@ -66,11 +67,37 @@ The other Ascendants bullet-jump, flip and slide on their way out to the zones.
 The game runs at full quality on modest hardware, integrated graphics included:
 - Static scenery is merged into a few dozen batches, and every distant character is drawn in a single shared batch, so the world costs roughly 250–500 draw calls instead of ~1,400.
 - Grass is split into chunks that are skipped when off-screen or far away.
+- In the bigger city, static batches out in the fog (beyond about 365 m) are hidden, and walls are kept in a spatial grid so collision checks stay cheap however large the city gets. Around 90 static batches are drawn on average.
 - Only the sun and sky light the world, because every extra light costs every pixel. Glows come from emissive materials and bloom.
 - **Dynamic resolution** (on by default in Settings) renders fewer pixels when frames run long and steps back up when there is headroom. Effects, shadows and anti-aliasing stay on.
 - **Show FPS** in Settings displays frame rate, current resolution and draw calls.
 
 ## The world
+Ad-Nostra is a big city now: the rampart sits about 470 m from the plaza, nearly twice as far out as before, so the city covers roughly 3.5 times the area. The old districts sit in the middle and the **Outer Wards** surround them. Press **M** for the map.
+
+### Power levels (0–9)
+Like RuneScape: Dragonwilds, every Ascendant, district and Remnant has a **power level** from 0 to 9.
+- **Yours comes from your armour.** New Ascendants start in Recruit Weave (power level 1). Quartermaster **Ilse Varn** sells the next tier each time, up to **Carax Plate** (power level 9); each tier needs a minimum character level and gives +20 health. Older saves start at power level 1–3 depending on their level.
+- **Fighting above your power level is brutal.** For each level a Remnant is above you, it hits you about 55% harder and your hits on it land at 60% strength. Two or more levels above means it kills you in a few hits. Being above a Remnant helps, but not as dramatically.
+- **The colour of the ◆ tells you where you stand**: green below you, yellow at your level, orange one above, red with a ☠ two or more above. You see it on Remnant nameplates, the target frame, the zone banner, the minimap and the map. Entering a district far above you posts a warning in chat.
+- Orion and Malia are power level 6. Simulated Ascendants hunt in districts that suit their own power level, and Residents use the armour they retired in.
+
+| District | Where | Power level |
+|---|---|---|
+| Concordia Plaza, the Salt Lantern | centre | sanctuary |
+| Scorched Veld | east | 1 |
+| Echo Plains | west | 2 |
+| The Catharsis Crater (boss: 4) | north | 3 |
+| The Sunken Rail Yards | far east, Outer Wards | 4 |
+| The Ashfall Tenements | far west, Outer Wards | 5 |
+| The Dry Reservoir | far south, Outer Wards | 6 |
+
+### Getting around
+- **Avenues** run east and west out to the rampart and south past the Salt Lantern to the Dry Reservoir.
+- **Concord tram stops** stand in the plaza and at each district. Walk past a stop to add it to your network, then press E at any stop to ride to any stop you've found. Your companions ride with you. You can't board in combat.
+- **M** (or ⌖ on touch) opens the map: districts coloured by danger for your power level, tram stops, the Mascars, your companions, your objective and you.
+
+### Places
 - **Concordia Plaza** is a sanctuary. Governor Mascar stands on his dais beneath the Statue of the Unmaking, and Quartermaster Ilse Varn sells medkits and upgrades.
 - **Scorched Veld** (east, lv 1–3) holds the Hollowed.
 - **Echo Plains** (west, lv 2–4) holds the Echo Drones.
@@ -81,6 +108,9 @@ The game runs at full quality on modest hardware, integrated graphics included:
 - If either of them is nearby when a Remnant goes for you, they come over and help, then go back to what they were doing. Walk up and press E to talk to them, and choose **FIGHT AT MY SIDE** to keep them with you: they follow you everywhere, attack whatever is attacking you or what you are fighting, and their kills count as yours (experience, credits, loot and quest progress). Up to three companions at once. They show under your own health frame with their health and where they are, and your companions are saved with your character. `/party` lists them and `/dismiss` (or `/dismiss malia`) sends them off.
 - They can be defeated. When they are, they get back up in **Concordia Plaza** after 20 seconds, and if they were with you, they walk back out to find you.
 - **Residents**: from the **ASCENDANTS** menu you can retire a character you no longer play as a **Resident of Ad-Nostra**. Residents live in the world as allies, at their own level and class and in their own visor colour: they walk the plaza, drink at the Salt Lantern, hunt the plains, come to your aid in a fight and respawn in Concordia Plaza when defeated. Talk to one to see their record, or ask them to fight at your side. **RECALL** a Resident to play them again.
+- **The Sunken Rail Yards** (power level 4): a rusting freight terminus of tracks, toppled freight cars, gantry cranes and signals still blinking red. Rail-Yard Hollowed and Scrap Drones.
+- **The Ashfall Tenements** (power level 5): burnt-out housing blocks you can walk into, with fires still burning. Ashfall Stalkers, fast and aggressive, and Cinder Drones.
+- **The Dry Reservoir** (power level 6): the city's drained basin, with a broken retaining wall, a crimson-ringed intake tower, outfall pipes and Catharsis growths in the silt. Reservoir Brutes, huge and slow, and Catharsis Sentinels.
 - **Wildlife** roams the Scorched Veld and the Echo Plains: giraffes, elephants, zebras and gazelles move as herds, grazing and drifting across the plains. Zebras and gazelles bolt if you get close, and spook the rest of the herd.
 
 ## Classes
@@ -130,4 +160,7 @@ npm run build
 - [x] Orion Mascar: rigged, wandering the whole map with his greatsword, and talkable
 - [x] Malia Mascar: rigged, strolling the plaza and the Salt Lantern with her energy blade, and talkable
 - [x] Orion and Malia at level 15: they hunt every zone, help you when Remnants go for you, can fight at your side (Orion taunts, Malia heals), and respawn in Concordia Plaza when defeated
+- [x] Bigger city, phase 1: rampart moved out to 470 m, Outer Wards with three new districts (power levels 4–6), Concord trams, world map
+- [x] Power levels 0–9 from armour, Dragonwilds-style: zone and enemy power levels, damage scaling, coloured diamonds and skulls, armour tiers from Ilse Varn
+- [ ] Bigger city, phase 2: the Frontier beyond the rampart, with power level 7–9 districts and bosses
 - [x] Character registry with multiple Ascendants, and Residents: retired characters who live in the city as allies

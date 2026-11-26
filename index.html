@@ -219,6 +219,15 @@ input[type=checkbox]{accent-color:var(--cyan);width:18px;height:18px}
 .plate.npc .n{color:var(--gold)}
 .plate.bot .n{color:#7fe3ff}
 .plate.enemy .n{color:#ff6b7f}
+.plate .pld{font-weight:700;margin-right:2px}
+.plate.pl-g .pld{color:#4dff9a}.plate.pl-y .pld{color:#ffd84a}.plate.pl-o .pld{color:#ff9a3c}
+.plate.pl-r .pld{color:#ff4a5e}.plate.pl-r .pld::after{content:" ☠"}
+#worldmap{position:fixed;inset:0;z-index:35;display:flex;align-items:center;justify-content:center;background:rgba(2,4,7,.55)}
+#worldmap.hidden{display:none}
+.wm-box{position:relative;padding:18px 22px 14px}
+#wm-canvas{display:block;width:min(74vh,86vw);height:min(74vh,86vw);margin-top:10px}
+.wm-foot{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:10px;letter-spacing:.18em;color:var(--dim)}
+#wm-pl{color:#fff}
 .plate.res .n{color:#9dffb0}
 .plate .hb.ally i{background:#4dff9a}
 .plate.party .n::before{content:"◆ ";color:#4dff9a}
@@ -557,7 +566,7 @@ canvas#scene{touch-action:none}
   <div id="hotbar" class="panel cut pe"></div>
   <div id="wallet">⬡ 0 CR</div>
   <div id="xpbar"><i id="xp-fill"></i><span id="xp-text"></span></div>
-  <div id="keys">WASD MOVE · SHIFT SPRINT · SPACE JUMP (AGAIN IN AIR: FLIP, HOLD: GLIDE) · Q SLIDE / ROLL · Q+SPACE BULLET JUMP<br>DRAG CAMERA · WHEEL ZOOM · CLICK / TAB TARGET · 1–4 ABILITIES · 5 MEDKIT · E INTERACT<br>ENTER CHAT · C CHARACTER · ESC MENU</div>
+  <div id="keys">WASD MOVE · SHIFT SPRINT · SPACE JUMP (AGAIN IN AIR: FLIP, HOLD: GLIDE) · Q SLIDE / ROLL · Q+SPACE BULLET JUMP<br>DRAG CAMERA · WHEEL ZOOM · CLICK / TAB TARGET · 1–4 ABILITIES · 5 MEDKIT · E INTERACT<br>ENTER CHAT · C CHARACTER · M MAP · ESC MENU</div>
 
   <div id="prompt" class="panel pe hidden"></div>
 
@@ -572,6 +581,7 @@ canvas#scene{touch-action:none}
     <div id="tmenu" class="pe">
       <button id="tb-chat" class="tb sm" aria-label="Chat">✉</button>
       <button id="tb-sheet" class="tb sm" aria-label="Character">☰</button>
+      <button id="tb-map" class="tb sm" aria-label="World map">⌖</button>
       <button id="tb-menu" class="tb sm" aria-label="Menu">❚❚</button>
     </div>
   </div>
@@ -594,6 +604,15 @@ canvas#scene{touch-action:none}
     <p style="font-size:14px;color:#aebdca;margin:10px 0 6px;font-style:italic">“Credits for kit. Concord prices — which means fair, not cheap.”</p>
     <div id="vendor-items"></div>
     <div style="margin-top:14px;font-size:12px;letter-spacing:.15em;color:var(--gold)" id="vendor-wallet"></div>
+  </div>
+
+  <div id="worldmap" class="hidden pe">
+    <div class="wm-box panel cut">
+      <button class="xbtn" id="wm-x">✕</button>
+      <h2 style="font-size:18px;letter-spacing:.3em"><small style="display:block;font-size:10px;color:var(--cyan);letter-spacing:.35em;margin-bottom:6px;font-weight:400">CONCORD SURVEY</small>AD-NOSTRA</h2>
+      <canvas id="wm-canvas" width="760" height="760"></canvas>
+      <div class="wm-foot"><span id="wm-pl"></span><span><b style="color:#4dff9a">◆</b> BELOW YOU · <b style="color:#ffd84a">◆</b> YOUR LEVEL · <b style="color:#ff9a3c">◆</b> ONE ABOVE · <b style="color:#ff4a5e">◆ ☠</b> DEADLY · <b style="color:#3ee6ff">◆</b> TRAM</span></div>
+    </div>
   </div>
 
   <div id="sheet" class="panel cut hidden">
