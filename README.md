@@ -18,6 +18,8 @@ The Salt Lantern is the cantina in Ad-Nostra where Orion Mascar fought Daniel Br
 ## Play
 Double-click **`index.html`**. It runs in Chrome, Edge or Firefox with no install and no server. Your progress saves in the browser by itself.
 
+You can keep as many Ascendants as you like. **NEW ASCENDANT** adds one to the registry instead of replacing the last, **CONTINUE** picks up the one you played last, and **ASCENDANTS** lists them all: play any of them, make one a Resident, recall a Resident, or delete one. A save from an earlier version moves into the registry the first time you open the menu.
+
 It also plays on phones and tablets: host the folder anywhere static (or open it from a local server) and visit it in the mobile browser. Landscape is best; portrait works too. On touch devices the game switches to on-screen controls and a lighter render load.
 
 ## Controls
@@ -32,7 +34,7 @@ It also plays on phones and tablets: host the folder anywhere static (or open it
 | 1–4 | Class abilities |
 | 5 | Concord Medkit |
 | E | Talk / interact / pick up shards |
-| Enter | Chat (`/help`, `/who`, `/dance`, `/salute`, `/played`, `/loc`) |
+| Enter | Chat (`/help`, `/who`, `/party`, `/dismiss`, `/dance`, `/salute`, `/played`, `/loc`) |
 | C | Character sheet |
 | Esc | Menu |
 
@@ -74,8 +76,11 @@ The game runs at full quality on modest hardware, integrated graphics included:
 - **Echo Plains** (west, lv 2–4) holds the Echo Drones.
 - **The Catharsis Crater** (north, lv 4–7) holds a crashed Catharsis beacon-ship, its shards, and the **Remnant of the Catharsis**. Vultures circle overhead.
 - **The Salt Lantern** (just south of the plaza) is a sanctuary cantina. Zuri Adeyemi keeps the bar and sells **Lantern Ale** (25 credits: +20% experience for 10 minutes). A bronze plaque in the floor marks where Orion Mascar fought Daniel Brown. Regulars drift in and out.
-- **Orion Mascar**, the Governor's father, walks the whole map with his greatsword. He strolls the plaza, heads out to the Scorched Veld, the Echo Plains and the Crater to cut down Remnants, and stops in at the Salt Lantern to stand over his plaque. Walk up and press E to talk to him; he stops to face you.
-- **Malia Mascar**, the Governor's wife, keeps to the safe streets with a short energy blade at her side. She strolls Concordia Plaza and stops in at the Salt Lantern to stand by her husband's corner table. Press E to talk to her.
+- **Orion Mascar** (level 15), the Governor's father, walks the whole map with his greatsword. He strolls the plaza, heads out to the Scorched Veld, the Echo Plains and the Crater to cut down Remnants, and stops in at the Salt Lantern to stand over his plaque. Every fourth swing is a wide sweep that hits everything around him, and when you drop low on health with Remnants on you, he shouts them onto himself.
+- **Malia Mascar** (level 15), the Governor's wife, hunts the Veld, the Plains and the Crater with a short energy blade, and stops in at the Salt Lantern to stand by her husband's corner table. She strikes fast, often twice, and when you fall below half health she heals you for 35% (it also works on hurt companions).
+- If either of them is nearby when a Remnant goes for you, they come over and help, then go back to what they were doing. Walk up and press E to talk to them, and choose **FIGHT AT MY SIDE** to keep them with you: they follow you everywhere, attack whatever is attacking you or what you are fighting, and their kills count as yours (experience, credits, loot and quest progress). Up to three companions at once. They show under your own health frame with their health and where they are, and your companions are saved with your character. `/party` lists them and `/dismiss` (or `/dismiss malia`) sends them off.
+- They can be defeated. When they are, they get back up in **Concordia Plaza** after 20 seconds, and if they were with you, they walk back out to find you.
+- **Residents**: from the **ASCENDANTS** menu you can retire a character you no longer play as a **Resident of Ad-Nostra**. Residents live in the world as allies, at their own level and class and in their own visor colour: they walk the plaza, drink at the Salt Lantern, hunt the plains, come to your aid in a fight and respawn in Concordia Plaza when defeated. Talk to one to see their record, or ask them to fight at your side. **RECALL** a Resident to play them again.
 - **Wildlife** roams the Scorched Veld and the Echo Plains: giraffes, elephants, zebras and gazelles move as herds, grazing and drifting across the plains. Zebras and gazelles bolt if you get close, and spook the rest of the herd.
 
 ## Classes
@@ -124,3 +129,5 @@ npm run build
 - [x] Croxian's scythe: four curved blades with cyan edges on a tall pole, held in his right hand
 - [x] Orion Mascar: rigged, wandering the whole map with his greatsword, and talkable
 - [x] Malia Mascar: rigged, strolling the plaza and the Salt Lantern with her energy blade, and talkable
+- [x] Orion and Malia at level 15: they hunt every zone, help you when Remnants go for you, can fight at your side (Orion taunts, Malia heals), and respawn in Concordia Plaza when defeated
+- [x] Character registry with multiple Ascendants, and Residents: retired characters who live in the city as allies

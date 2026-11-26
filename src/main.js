@@ -13,7 +13,7 @@ import { Sound } from './audio.js';
 import { loadSoldier, loadOrion, loadMalia, soldierReady, makeSoldier, animSoldier, MOVE_DUR } from './soldier.js';
 import {
   CODEX, TIPS, CLASSES, VISORS, QUESTS, MASCAR_IDLE, BOT_NAMES, GUILDS,
-  WORLD_CHAT, ZONE_CHAT, GOV_ANNOUNCE, LORE_REPLIES, GREET_REPLIES, ZURI_LINES, CANTINA_CHAT, PLAQUE, ORION_LINES, MALIA_LINES
+  WORLD_CHAT, ZONE_CHAT, GOV_ANNOUNCE, LORE_REPLIES, GREET_REPLIES, ZURI_LINES, CANTINA_CHAT, PLAQUE, ORION_LINES, MALIA_LINES, RESIDENT_LINES
 } from './data.js';
 
 const V3 = THREE.Vector3;
@@ -34,7 +34,22 @@ const store = {
   get(k, d = null) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
 };
-const SAVE_KEY = 'adnostra_save_v1';
+const SAVE_KEY = 'adnostra_save_v1';   // the old single-character save; read once to seed the registry
+// The registry: every Ascendant the player has made. Residents are retired ones who live in the city.
+const ROSTER_KEY = 'adnostra_roster_v1', ACTIVE_KEY = 'adnostra_active';
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+function loadRoster() {
+  let r = store.get(ROSTER_KEY);
+  if (!Array.isArray(r)) { r = []; const old = store.get(SAVE_KEY); if (old && old.name) { old.id = old.id || newId(); r.push(old); store.set(ACTIVE_KEY, old.id); } }
+  for (const c of r) if (!c.id) c.id = newId();
+  store.set(ROSTER_KEY, r);
+  return r;
+}
+const saveRoster = () => store.set(ROSTER_KEY, G.roster);
+function lastPlayable() {
+  const list = G.roster.filter(c => !c.resident), id = store.get(ACTIVE_KEY);
+  return list.find(c => c.id === id) || list.sort((a, b) => (b.lastPlayed || b.created || 0) - (a.lastPlayed || a.created || 0))[0] || null;
+}
 const settings = Object.assign({ volume: 0.6, music: true, bloom: true, shadows: true, sens: 1, plates: true, dynres: true, fps: false }, store.get('adnostra_settings', {}));
 Sound.volume = settings.volume; Sound.musicOn = settings.music;
 
@@ -1541,63 +1556,304 @@ function spawnBots() {
     G.bots.push(b);
   }
 }
-// Orion Mascar, the Governor's father. He walks the whole map the way the Ascendants do (the plaza, the
-// three zones, the Salt Lantern) but at his own pace: no bullet jumps, no chatter, and he never stays down.
-// He lives in G.bots so he shares their travel and hunting; b.legend marks the differences.
+// =====================================================================
+//  ALLIES: Orion and Malia Mascar, and your Residents
+// =====================================================================
+// Orion and Malia are level 15 and roam the whole map like the Ascendants do: the plaza, the Scorched Veld,
+// the Echo Plains, the Crater and the Salt Lantern. They hunt Remnants, come to your aid when Remnants go for
+// you, and will fight at your side if you ask (Orion draws Remnants off you, Malia heals you). They can be
+// defeated; when they are, they get back up in Concordia Plaza. Residents are the player's own retired
+// Ascendants, living in the city as allies. Allies live in G.bots: b.ally marks them, b.legend the Mascars.
 const ORION_PLAQUE_SPOT = new V3(1.9, 0, 57.3);   // where he stands in the Lantern, looking down at his plaque
+const PARTY_MAX = 3, RESIDENTS_MAX = 16;
+function allyBase(extra) {
+  return Object.assign({ kind: 'bot', ally: true, guild: '', alive: true, state: 'idle', path: [], idleT: rand(6, 14), actT: 0, act: 'plaza', target: null,
+    atkT: 0, yaw: 0, move: 0, atk: 0, danceT: 0, height: 2.1, radius: 0.5, vy: 0, slideT: -1, rollT: 0, bjT: 0, flipT: 0, landT: 0, landHard: false, boost: 1,
+    canFlip: false, talkT: 0, party: false, thinkT: 0, routeT: 0, supT: 0, medT: 0, hitT: 0, swings: 0, stuckN: 0, resume: null }, extra);
+}
+function allyPlate(b, cls) {
+  b.plate = makePlate(cls, `<div class="n">${esc(b.name)} <span style="color:#aaa">${b.level}</span></div><div class="g">&lt;${esc(b.title)}&gt;</div><div class="hb ally"><i></i></div>`);
+  b.plateBar = b.plate.querySelector('.hb i'); b.plateHb = b.plate.querySelector('.hb'); b.plateHb.style.visibility = 'hidden';
+}
 function spawnOrion() {
   if (!soldierReady('orion')) return;
   const rig = makeSoldier({ model: 'orion', accent: 0x8fe6ff, weapon: 'greatsword', mats: SOLDIER_MATS });
-  const o = { kind: 'bot', legend: true, id: 'orion', name: 'Orion Mascar', title: 'Father of the Governor', cls: 'vanguard', level: 60, guild: '', rig, group: rig.group,
-    pos: zonePoint('plaza'), alive: true, hp: 4000, maxHp: 4000, state: 'idle', path: [], idleT: rand(6, 14), actT: 0, act: 'plaza', target: null, atkT: 0, yaw: 0, move: 0, atk: 0, danceT: 0,
-    height: 2.1, radius: 0.5, vy: 0, slideT: -1, rollT: 0, bjT: 0, flipT: 0, landT: 0, landHard: false, boost: 1, canFlip: false, talkT: 0,
-    loungeSpot: ORION_PLAQUE_SPOT, loungeLook: new V3(0.6, 0, 56) };
+  const o = allyBase({ legend: true, id: 'orion', name: 'Orion Mascar', title: 'Father of the Governor', cls: 'vanguard', level: 15, rig, group: rig.group,
+    pos: zonePoint('plaza'), hp: 950, maxHp: 950, dmg: 38, atkCd: [1.3, 1.7], reach: 2.7, glow: 0x8fe6ff, pron: 'He', poss: 'his', lines: ORION_LINES,
+    zones: ['ashen', 'echo', 'crater', 'crater'], respawnT: 20, loungeSpot: ORION_PLAQUE_SPOT, loungeLook: new V3(0.6, 0, 56) });
   o.group.position.copy(o.pos); W.scene.add(o.group);
-  o.plate = makePlate('npc', `<div class="n">Orion Mascar</div><div class="g">&lt;Father of the Governor&gt;</div>`);
-  addHitbox(o, 0.9, 2, 0.9, 1);
+  allyPlate(o, 'npc'); addHitbox(o, 0.9, 2, 0.9, 1);
   G.bots.push(o);
 }
-// Malia Mascar, the Governor's wife. She keeps to the safe streets: she strolls Concordia Plaza and drops in at
-// the Salt Lantern, where she stands by her husband's corner table. Her left hand stays on her hip.
+// Malia Mascar, the Governor's wife. Her left hand stays on her hip; the right carries a short energy blade.
 function spawnMalia() {
   if (!soldierReady('malia')) return;
   const rig = makeSoldier({ model: 'malia', accent: 0x8fe6ff, weapon: 'sabre', mats: SOLDIER_MATS, hold: ['clavL', 'uarmL', 'farmL', 'handL'] });
-  const m = { kind: 'bot', legend: true, city: true, id: 'malia', name: 'Malia Mascar', title: 'Wife of the Governor', cls: 'vanguard', level: 40, guild: '', rig, group: rig.group,
-    pos: new V3(rand(-6, 6), 0, rand(-4, 2)), alive: true, hp: 4000, maxHp: 4000, state: 'idle', path: [], idleT: rand(10, 25), actT: 0, act: 'plaza', target: null, atkT: 0, yaw: 0, move: 0, atk: 0, danceT: 0,
-    height: 2.0, radius: 0.5, vy: 0, slideT: -1, rollT: 0, bjT: 0, flipT: 0, landT: 0, landHard: false, boost: 1, canFlip: false, talkT: 0,
-    loungeSpot: new V3(-7.0, 0, 65.6), loungeLook: new V3(-8.6, 0, 67.4) };
+  const m = allyBase({ legend: true, id: 'malia', name: 'Malia Mascar', title: 'Wife of the Governor', cls: 'vanguard', level: 15, rig, group: rig.group,
+    pos: new V3(rand(-6, 6), 0, rand(-4, 2)), hp: 760, maxHp: 760, dmg: 27, atkCd: [0.9, 1.25], reach: 2.4, glow: 0x8fe6ff, pron: 'She', poss: 'her', lines: MALIA_LINES,
+    zones: ['ashen', 'ashen', 'echo', 'echo', 'crater'], respawnT: 20, height: 2.0, idleT: rand(10, 25), loungeSpot: new V3(-7.0, 0, 65.6), loungeLook: new V3(-8.6, 0, 67.4) });
   m.group.position.copy(m.pos); W.scene.add(m.group);
-  m.plate = makePlate('npc', `<div class="n">Malia Mascar</div><div class="g">&lt;Wife of the Governor&gt;</div>`);
-  addHitbox(m, 0.9, 2, 0.9, 1);
+  allyPlate(m, 'npc'); addHitbox(m, 0.9, 2, 0.9, 1);
   G.bots.push(m);
 }
+// ---- residents
+const residentStats = s => { const c = CLASSES[s.cls] || CLASSES.vanguard; return { level: s.level, maxHp: Math.round(c.hp * (1 + 0.1 * (s.level - 1)) * 1.6), dmg: 6 + s.level * 1.4 }; };
+function spawnResident(s) {
+  const c = CLASSES[s.cls] || CLASSES.vanguard, visor = new THREE.Color(s.visor).getHex(), st = residentStats(s);
+  const rig = soldierReady() ? makeSoldier({ energy: visor, accent: c.hex, weapon: c.weapon, mats: SOLDIER_MATS })
+    : makeHumanoid({ armor: 0x2f3742, accent: c.hex, visor, weapon: c.weapon });
+  const b = allyBase({ resident: true, id: 'res:' + s.id, save: s, name: s.name, title: 'Resident of Ad-Nostra', cls: s.cls, level: st.level, rig, group: rig.group,
+    pos: zonePoint('plaza'), hp: st.maxHp, maxHp: st.maxHp, dmg: st.dmg, pron: 'They', poss: 'their', lines: RESIDENT_LINES, respawnT: 15, idleT: rand(3, 15) });
+  if (Math.random() < 0.6) { b.act = pick(['ashen', 'echo', 'crater']); b.pos.copy(zonePoint(b.act)); b.state = 'hunt'; b.actT = rand(40, 160); }
+  b.group.position.copy(b.pos); W.scene.add(b.group);
+  allyPlate(b, 'bot res'); addHitbox(b, 0.9, 2, 0.9, 1);
+  G.bots.push(b);
+  return b;
+}
+function removeBot(b) {
+  W.scene.remove(b.group); b.plate.remove(); b.removed = true;
+  for (const e of G.enemies) if (e.target === b) { e.target = null; e.state = 'return'; }
+  if (G.P && G.P.target === b) setTarget(null);
+}
+// Bring the world's residents in line with the registry (called each time you enter the world).
+function syncResidents() {
+  const want = G.roster.filter(c => c.resident && c.id !== G.D.id).slice(-RESIDENTS_MAX);
+  const ids = new Set(want.map(c => 'res:' + c.id));
+  for (const b of G.bots) if (b.resident && !ids.has(b.id)) removeBot(b);
+  G.bots = G.bots.filter(b => !b.removed);
+  for (const s of want) {
+    const b = G.bots.find(x => x.id === 'res:' + s.id);
+    if (!b) { spawnResident(s); continue; }
+    const st = residentStats(s); b.save = s;
+    if (b.level !== st.level) { Object.assign(b, { level: st.level, maxHp: st.maxHp, dmg: st.dmg }); b.hp = Math.min(b.hp, b.maxHp); b.plate.querySelector('.n span').textContent = st.level; }
+  }
+}
+// ---- the party: allies who fight at your side
+const partyList = () => G.bots.filter(b => b.party);
+const ZONE_IN = { plaza: 'Concordia Plaza', causeway: 'the Concord Causeway', ward: 'the Spire Ward', ashen: 'the Scorched Veld', echo: 'the Echo Plains', crater: 'the Catharsis Crater', cantina: 'the Salt Lantern' };
+const PARTY_SLOTS = [[-1.9, -2.2], [1.9, -2.2], [0, -3.9]];   // [right, forward] from the player, in metres
+function partyOffset(b) {
+  const i = Math.max(0, partyList().indexOf(b)), [sx, fz] = PARTY_SLOTS[i % PARTY_SLOTS.length];
+  const yaw = G.P.group.rotation.y, s = Math.sin(yaw), c = Math.cos(yaw);
+  return { x: s * fz + c * sx, z: c * fz - s * sx };
+}
+function routeTo(from, to) {   // waypoints through the zone gates, so nobody walks into the city walls
+  const zf = zoneAt(from.x, from.z), zt = zoneAt(to.x, to.z);
+  const path = (zf === zt ? [] : [...(GATES[zf] || [])].reverse().concat(GATES[zt] || [])).map(p => p.clone());
+  path.push(new V3(to.x, 0, to.z));
+  while (path.length > 1 && d2(from, path[1]) < d2(path[0], path[1])) path.shift();   // gates already behind us
+  return path;
+}
+function sendHome(b) {   // back to their own business, wherever they are
+  b.party = false; b.target = null; b.resume = null; b.wp = null; b.path = [];
+  const z = zoneAt(b.pos.x, b.pos.z);
+  if (z === 'ashen' || z === 'echo' || z === 'crater') { b.state = 'hunt'; b.act = z; b.actT = rand(40, 120); }
+  else if (z === 'cantina') { b.state = 'lounge'; b.act = 'cantina'; b.actT = rand(20, 60); }
+  else if (z === 'plaza') { b.state = 'idle'; b.act = 'plaza'; b.idleT = rand(6, 16); }
+  else { b.state = 'travel'; b.act = 'plaza'; b.path = routeTo(b.pos, zonePoint('plaza')); }
+}
+function joinParty(b) {
+  b.party = true; b.resume = null; b.target = null; b.path = []; b.wp = null;
+  if (b.alive) b.state = 'escort';
+  G.D.party = partyList().map(x => x.id); renderParty(); saveGame();
+  addChat('sys', null, `${b.name} is now fighting at your side.`);
+  setTimeout(() => addChat('say', b.name, pick(b.lines.joinSay)), 700);
+}
+function leaveParty(b, quiet = false) {
+  if (b.alive) sendHome(b); else b.party = false;
+  G.D.party = partyList().map(x => x.id); renderParty(); saveGame();
+  if (quiet) return;
+  addChat('sys', null, `${b.name} has left your side.`);
+  setTimeout(() => addChat('say', b.name, pick(b.lines.partSay)), 600);
+}
+// On entering the world: your saved companions are with you again, standing beside you.
+function restoreParty() {
+  const want = new Set(G.D.party || []);
+  for (const b of G.bots) if (b.ally) {
+    const was = b.party; b.party = want.has(b.id);
+    if (b.party && b.alive) {
+      b.state = 'escort'; b.target = null; b.path = []; b.resume = null; b.talkT = 0;
+      const o = partyOffset(b); b.pos.set(G.P.pos.x + o.x, 0, G.P.pos.z + o.z); resolveCollision(b.pos, 0.4); b.group.position.copy(b.pos);
+    } else if (was && !b.party && b.alive) sendHome(b);
+  }
+  G.D.party = partyList().map(x => x.id);
+  renderParty();
+}
+function partyOpt(b, talk) {
+  return b.party ? { label: 'PART WAYS', fn: () => { leaveParty(b); talk(b, fmtQ(b.lines.part)); } }
+    : { label: 'FIGHT AT MY SIDE', gold: true, fn: () => {
+      if (partyList().length >= PARTY_MAX) { talk(b, fmtQ(b.lines.full)); return; }
+      joinParty(b); talk(b, fmtQ(b.lines.join));
+    } };
+}
+// ---- what an ally does
+const engagedWith = (e, b) => e.alive && (e.target === G.P || e.target === b || (e.target && e.target.party));
+function enemyOnPlayer(from, range) {   // the nearest Remnant going for you (or for one of your companions)
+  let best = null, bd = range;
+  for (const e of G.enemies) { if (!e.alive || !(e.target === G.P || (e.target && e.target.party))) continue; const d = d2(from, e.pos); if (d < bd) { bd = d; best = e; } }
+  return best;
+}
+function allyPickTarget(b) {
+  const P = G.P, anchor = P.dead ? b.pos : P.pos, cur = b.target;
+  if (cur && engagedWith(cur, b) && d2(cur.pos, anchor) < 30) return cur;
+  let best = null, bd = 1e9;
+  for (const e of G.enemies) { if (!engagedWith(e, b) || d2(e.pos, anchor) > 30) continue; const d = d2(e.pos, b.pos); if (d < bd) { bd = d; best = e; } }
+  if (best) return best;
+  const pt = P.target;   // otherwise, whatever you are fighting
+  if (!P.dead && pt && pt.kind === 'enemy' && pt.alive && P.combatT > 0 && d2(pt.pos, P.pos) < 30) return pt;
+  return null;
+}
+// Melee or ranged strikes, shared by every bot. The Mascars add their own flourishes.
+function botFight(b, t, dt) {
+  const c = CLASSES[b.cls], ranged = c.range > 5, reach = (ranged ? 14 : b.reach || 2.2) + t.radius;
+  if (d2(b.pos, t.pos) > reach) { moveToward(b, t.pos, b.party ? 12 : b.legend ? 7.5 : 10, dt, reach * 0.9); return; }
+  b.move = Math.max(0, b.move - dt * 5); faceTo(b, t.pos); b.atkT -= dt;
+  if (b.atkT > 0) return;
+  b.atkT = b.atkCd ? rand(b.atkCd[0], b.atkCd[1]) : rand(1.4, 1.9); b.atk = 0.3; b.swings++;
+  const dmg = (b.dmg || 6 + b.level * 0.7) * rand(0.9, 1.1), near = d2(b.pos, G.P.pos) < 30;
+  if (ranged) { b.actHint = 'cast'; projectile(b.pos.clone().setY(b.pos.y + 1.4), t, c.hex, 0.12, 30, () => damage(t, dmg, b), b); return; }
+  if (b.id === 'orion' && b.swings % 4 === 0) {   // a wide greatsword sweep through everything around him
+    b.actHint = 'judge';
+    for (const e of G.enemies) if (e.alive && d2(e.pos, b.pos) < 5 + e.radius) damage(e, dmg * (e === t ? 1.3 : 0.8), b);
+    if (near) { ringFx(b.pos, 0x8fe6ff, 5, 0.45); slashFx(t, 0x8fe6ff, 1.8); Sound.sfx('heavy'); }
+    return;
+  }
+  damage(t, dmg, b);
+  if (b.id === 'malia' && b.swings % 3 === 0) setTimeout(() => { if (t.alive && b.alive) { damage(t, dmg * 0.7, b); if (near) slashFx(t, 0x8fe6ff, 0.9); } }, 220);   // a quick second cut
+  if (near && (b.ally || Math.random() < 0.5)) slashFx(t, b.glow || c.hex, b.legend ? 1.3 : 0.9);
+}
+function stuckCheck(b, dt, moving) {   // if a companion is wedged on scenery, they catch up the quick way
+  b.stuckClock = (b.stuckClock || 0) + dt; if (b.stuckClock < 1) return; b.stuckClock = 0;
+  const lp = b.lastP || (b.lastP = b.pos.clone()), moved = d2(b.pos, lp); lp.copy(b.pos);
+  if (!moving || moved > 1.2) { b.stuckN = 0; return; }
+  if (++b.stuckN < 3) return;
+  b.stuckN = 0; b.path = [];
+  const o = partyOffset(b); b.pos.set(G.P.pos.x + o.x, 0, G.P.pos.z + o.z); resolveCollision(b.pos, 0.4);
+  burst(b.pos.clone().setY(1), 0x3ee6ff, 16, 2);
+}
+const _fv = new V3();
+function allyFollow(b, dt) {
+  const P = G.P, d = d2(b.pos, P.pos);
+  b.routeT -= dt;
+  if (d > 40 && b.routeT <= 0) { b.routeT = 1.5; b.path = routeTo(b.pos, P.pos); }
+  if (d < 18) b.path = [];
+  if (b.path.length > 1) { if (moveToward(b, b.path[0], 14.5, dt, 1.2)) b.path.shift(); stuckCheck(b, dt, true); return; }
+  const o = partyOffset(b), dest = _fv.set(P.pos.x + o.x, 0, P.pos.z + o.z), dd = d2(b.pos, dest);
+  const sp = d > 16 ? 14.5 : clamp(Math.hypot(P.vel.x, P.vel.z) * 1.1 + dd * 0.8, 3.5, 14.5);
+  if (dd > 0.9) { moveToward(b, dest, sp, dt, 0.6); stuckCheck(b, dt, dd > 6); }
+  else { b.move = Math.max(0, b.move - dt * 5); b.stuckN = 0; }
+}
+function escortLogic(b, dt) {
+  b.thinkT -= dt;
+  if (b.thinkT <= 0) { b.thinkT = 0.3; b.target = allyPickTarget(b); }
+  const t = b.target;
+  if (t && t.alive) botFight(b, t, dt); else { b.target = null; allyFollow(b, dt); }
+}
+// Not in your party, but close by when a Remnant goes for you: they drop what they were doing and help.
+function startAssist(b, e) {
+  b.resume = { state: b.state, act: b.act, actT: b.actT, idleT: b.idleT, dest: b.path.length ? b.path[b.path.length - 1] : null };
+  b.state = 'assist'; b.target = e; b.wp = null; b.path = [];
+}
+function assistCheck(b, dt) {
+  b.thinkT -= dt; if (b.thinkT > 0) return; b.thinkT = 0.4;
+  const P = G.P;
+  if (!P || P.dead || b.state === 'lounge' || zoneAt(b.pos.x, b.pos.z) === 'cantina' || d2(b.pos, P.pos) > 30) return;
+  const e = enemyOnPlayer(b.pos, 24); if (e) startAssist(b, e);
+}
+function assistLogic(b, dt) {
+  const P = G.P;
+  if (!b.target || !engagedWith(b.target, b)) b.target = enemyOnPlayer(b.pos, 24);
+  if (!b.target || P.dead || d2(b.pos, P.pos) > 45) { endAssist(b); return; }
+  botFight(b, b.target, dt);
+}
+function endAssist(b) {
+  const r = b.resume; b.resume = null; b.target = null; b.path = [];
+  if (!r) { sendHome(b); return; }
+  Object.assign(b, { state: r.state, act: r.act, actT: r.actT, idleT: r.idleT });
+  if (r.state === 'travel' && r.dest) b.path = routeTo(b.pos, r.dest);
+  else if (r.state === 'travel' || r.state === 'escort') sendHome(b);
+}
+// Abilities that make the Mascars worth having around: Malia heals, Orion pulls Remnants off you.
+function allySupport(b, dt) {
+  b.supT = Math.max(0, b.supT - dt); b.medT = Math.max(0, b.medT - dt); b.hitT = Math.max(0, b.hitT - dt);
+  if (b.hitT <= 0) b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.03 * dt);   // out of the fight, they recover
+  if (b.hp < b.maxHp * 0.3 && b.medT <= 0) {   // their own Concord medkit
+    b.medT = 30; const h = Math.round(b.maxHp * 0.4); b.hp = Math.min(b.maxHp, b.hp + h);
+    if (d2(b.pos, G.P.pos) < 30) { burst(b.pos.clone().setY(1), 0x4dff9a, 14, 2); floater(b.pos, '+' + h, '#4dff9a', 2.4); }
+  }
+  const P = G.P;
+  if (!b.legend || b.supT > 0 || !P || P.dead || b.talkT > 0 || d2(b.pos, P.pos) > (b.party ? 28 : 20)) return;
+  if (b.id === 'malia') {
+    let who = P.hp < maxHp() * 0.5 ? P : null;
+    if (!who) for (const o of G.bots) if (o.party && o.alive && o !== b && o.hp < o.maxHp * 0.4 && d2(o.pos, b.pos) < 22) { who = o; break; }
+    if (!who) return;
+    const mx = who === P ? maxHp() : who.maxHp, amt = Math.round(mx * 0.35);
+    who.hp = Math.min(mx, who.hp + amt); b.supT = 14; b.atk = 0.3; b.actHint = 'restore'; faceTo(b, who.pos);
+    ringFx(who.pos, 0x4dff9a, 2.4, 0.6); burst(who.pos.clone().setY(1.1), 0x4dff9a, 22, 2.2); boltFx(b.pos.clone().setY(1.4), who.pos.clone().setY(1.2), 0x4dff9a);
+    floater(who.pos, '+' + amt, '#4dff9a', 2.7); Sound.sfx('heal');
+    if (who === P) addChat('say', b.name, pick(MALIA_LINES.heal));
+  } else if (b.id === 'orion') {
+    if (P.hp >= maxHp() * 0.4) return;
+    const foes = G.enemies.filter(e => e.alive && e.target === P && d2(e.pos, P.pos) < 20);
+    if (!foes.length) return;
+    b.supT = 18; b.atk = 0.3; b.actHint = 'slam';
+    for (const e of foes) { e.target = b; e.state = 'chase'; }
+    ringFx(b.pos, 0xe8c46a, 6, 0.5); floater(b.pos, 'HOLD THE LINE', '#e8c46a', 2.9); Sound.sfx('shield');
+    addChat('say', b.name, pick(ORION_LINES.taunt));
+    if (!b.party && b.state !== 'assist') startAssist(b, foes[0]); else b.target = foes[0];
+  }
+}
+function reviveBot(b) {
+  Object.assign(b, { alive: true, hp: b.maxHp, act: 'plaza', idleT: rand(5, 20), path: [], vy: 0, slideT: -1, bjT: 0, flipT: 0, landT: 0, target: null, wp: null, resume: null, talkT: 0 });
+  b.pos.copy(zonePoint('plaza')); b.group.rotation.x = 0;
+  b.state = b.party ? 'escort' : 'idle';
+  if (!b.ally) return;
+  b.hitT = 0; b.medT = 0;
+  if (d2(b.pos, G.P.pos) < 60) burst(b.pos.clone().setY(1), 0x3ee6ff, 30, 3);
+  if (b.party || b.legend) addChat('sys', null, `${b.name} is back on ${b.poss} feet in Concordia Plaza.`);
+  if (b.party && b.lines.back) setTimeout(() => addChat('say', b.name, pick(b.lines.back)), 900);
+}
+// ---- talking to them
+function allyDialog(b, who, text, extra) {
+  b.talkT = 12;
+  dialog(who, b.name.toUpperCase(), `LV ${b.level} · ${b.alive ? (b.party ? 'FIGHTING AT YOUR SIDE' : (ZONE_IN[zoneAt(b.pos.x, b.pos.z)] || '').toUpperCase()) : 'FALLEN'}`, text, '', [
+    ...extra, partyOpt(b, (x, t) => allyDialog(x, who, t, extra)),
+    { label: 'FAREWELL', fn: () => { b.talkT = 1.5; closeAllUI(); } },
+  ]);
+}
 function talkMalia(m, text = pick(MALIA_LINES.greet)) {
-  m.talkT = 12;
-  dialog('WIFE OF THE GOVERNOR', 'MALIA MASCAR', '', text, '', [
+  allyDialog(m, 'WIFE OF THE GOVERNOR', text, [
     { label: 'THE CITY', fn: () => talkMalia(m, MALIA_LINES.city) },
     { label: 'CROXIAN', fn: () => talkMalia(m, MALIA_LINES.croxian) },
     { label: 'ORION', fn: () => talkMalia(m, MALIA_LINES.orion) },
     { label: 'THE BLADE', fn: () => talkMalia(m, MALIA_LINES.blade) },
-    { label: 'FAREWELL', fn: () => { m.talkT = 1.5; closeAllUI(); } },
   ]);
 }
-const chatBots = () => G.bots.filter(b => !b.legend);   // the simulated players (Orion doesn't chat like one)
 function talkOrion(o, text = pick(ORION_LINES.greet)) {
-  o.talkT = 12;
-  dialog('FATHER OF THE GOVERNOR', 'ORION MASCAR', '', text, '', [
+  allyDialog(o, 'FATHER OF THE GOVERNOR', text, [
     { label: 'THE WAR', fn: () => talkOrion(o, ORION_LINES.war) },
     { label: 'THE SALT LANTERN', fn: () => talkOrion(o, ORION_LINES.lantern) },
     { label: 'YOUR SON', fn: () => talkOrion(o, ORION_LINES.son) },
-    { label: 'FAREWELL', fn: () => { o.talkT = 1.5; closeAllUI(); } },
   ]);
 }
+function talkResident(b, text = pick(RESIDENT_LINES.greet)) {
+  const s = b.save, c = CLASSES[s.cls];
+  b.talkT = 12;
+  const since = s.residentSince ? new Date(s.residentSince).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+  dialog('RESIDENT OF AD-NOSTRA', s.name.toUpperCase(), `LV ${s.level} ${c.name}${s.title && s.title !== 'Ascendant' ? ' · ' + s.title.toUpperCase() : ''}`, fmtQ(text),
+    `Remnants destroyed: ${fmtNum(s.kills | 0)}${since ? ' · Resident since ' + since : ''}`, [
+      partyOpt(b, talkResident),
+      { label: 'FAREWELL', fn: () => { b.talkT = 1.5; closeAllUI(); } },
+    ]);
+}
+const chatBots = () => G.bots.filter(b => !b.ally);   // the simulated players (allies don't chat like them)
 
 // =====================================================================
 //  PLAYER
 // =====================================================================
 const SPAWN = new V3(0, 0, 8);
 function newSave(name, cls, visor) {
-  return { v: 1, name, cls, visor, level: 1, xp: 0, credits: 30, medkits: 3, wpn: 0, arm: 0, q: { i: 0, st: 'available', p: 0 }, aleT: 0, kills: 0, deaths: 0, title: 'Ascendant', played: 0, completed: 0, pos: null, created: Date.now() };
+  return { v: 1, id: newId(), name, cls, visor, party: [], level: 1, xp: 0, credits: 30, medkits: 3, wpn: 0, arm: 0, q: { i: 0, st: 'available', p: 0 }, aleT: 0, kills: 0, deaths: 0, title: 'Ascendant', played: 0, completed: 0, pos: null, created: Date.now() };
 }
 const xpNext = l => Math.round(140 * Math.pow(l, 1.55));
 const CL = () => CLASSES[G.D.cls];
@@ -1657,12 +1913,14 @@ function damage(tgt, amt, src, opt = {}) {
   }
   tgt.hp -= amt;
   if (tgt.kind === 'enemy') {
+    const party = src && src.party && d2(src.pos, P.pos) < 45;   // your companions' hits count as yours
+    if (party) tgt.tagged = true;
     if (src === P) { tgt.tagged = true; floater(tgt.pos, String(amt), opt.crit ? '#ffd166' : '#ffffff', tgt.height * 0.75 + (tgt.type === 'drone' ? 0.6 : 0), opt.crit); Sound.sfx('hit'); }
-    if (tgt.state === 'idle' || !tgt.target || !tgt.target.alive) { if (tgt.isBoss && src === P && tgt.state === 'idle') bossEngage(); tgt.target = src; tgt.state = 'chase'; }
+    if (tgt.state === 'idle' || !tgt.target || !tgt.target.alive) { if (tgt.isBoss && (src === P || party) && tgt.state === 'idle') bossEngage(); tgt.target = src; tgt.state = 'chase'; }
     if (src === P && tgt.target && tgt.target.kind === 'bot' && Math.random() < 0.15) tgt.target = P;
     if (tgt.hp <= 0) killEnemy(tgt, src);
   } else if (tgt.kind === 'bot') {
-    if (tgt.legend) tgt.hp = Math.max(tgt.hp, tgt.maxHp * 0.25);
+    tgt.hitT = 5;
     if (tgt.hp <= 0) botDie(tgt);
   }
 }
@@ -1671,6 +1929,7 @@ function killEnemy(e, src) {
   burst(e.pos.clone().setY(e.height * 0.5), e.isBoss ? 0xff2b4a : 0xff5a6e, e.isBoss ? 120 : 30, e.isBoss ? 9 : 4);
   Sound.sfx(e.isBoss ? 'boom' : 'die');
   if (G.P.target === e) setTimeout(() => { if (G.P.target === e) setTarget(null); }, 600);
+  if (src && src.resident && src.save) src.save.kills = (src.save.kills | 0) + 1;
   if (e.tagged) {
     const D = G.D; let xp = e.xp; const diff = D.level - e.level;
     if (diff >= 4) xp = Math.round(xp * 0.2); else if (diff >= 2) xp = Math.round(xp * 0.6);
@@ -1713,6 +1972,13 @@ function botDie(b) {
   b.alive = false; b.hp = 0; b.state = 'dead'; b.deadT = 0; b.target = null;
   b.group.rotation.x = -Math.PI / 2; b.group.position.y = 0.3;
   for (const e of G.enemies) if (e.target === b) { e.target = null; e.state = 'return'; }
+  if (b.ally) {
+    b.resume = null; b.path = [];
+    const near = d2(b.pos, G.P.pos) < 45;
+    if (b.party || b.legend || near) addChat('sys', null, `${b.name} has fallen in ${ZONE_IN[zoneAt(b.pos.x, b.pos.z)]}. ${b.pron} will return to Concordia Plaza.`);
+    if (near && b.lines.fallen) setTimeout(() => addChat('say', b.name, pick(b.lines.fallen)), 500);
+    return;
+  }
   if (Math.random() < 0.3) setTimeout(() => addChat('zone', b.name, pick(['ugh', 'rip', 'that thing hits HARD', 'brb corpse run', 'nooo'])), 800);
 }
 
@@ -1846,7 +2112,7 @@ function resolveCollision(p, r) {
 }
 function moveToward(ent, dest, speed, dt, stopAt = 0.2) {
   const dx = dest.x - ent.pos.x, dz = dest.z - ent.pos.z, d = Math.hypot(dx, dz);
-  if (d <= stopAt) { ent.move = Math.max(0, ent.move - dt * 5); return true; }
+  if (d <= stopAt + 1e-3) { ent.move = Math.max(0, ent.move - dt * 5); return true; }   // (+1e-3: never creep forever toward the stop distance)
   const s = Math.min(d - stopAt, speed * dt); ent.pos.x += dx / d * s; ent.pos.z += dz / d * s;
   ent.yaw = Math.atan2(dx, dz); ent.move = Math.min(1, ent.move + dt * 5); return false;
 }
@@ -2103,27 +2369,32 @@ function botMotion(b, dt) {
 function updateBots(dt) {
   for (const b of G.bots) {
     if (!b.alive) {
-      b.deadT += dt; if (b.deadT > 12) { b.alive = true; b.hp = b.maxHp; b.pos.copy(zonePoint('plaza')); b.group.rotation.x = 0; b.state = 'idle'; b.act = 'plaza'; b.idleT = rand(5, 20); b.path = []; b.vy = 0; b.slideT = -1; b.bjT = b.flipT = b.landT = 0; }
-      b.group.position.copy(b.pos).setY(0.3); if (b.rig.isSoldier) animSoldier(b.rig, b, dt, G.time, b.lodNear !== false); continue;
+      b.deadT += dt; if (b.deadT > (b.respawnT || 12)) reviveBot(b);
+      b.group.position.copy(b.pos).setY(b.alive ? 0 : 0.3); if (b.rig.isSoldier) animSoldier(b.rig, b, dt, G.time, b.lodNear !== false); continue;
     }
     b.atk = Math.max(0, b.atk - dt); b.danceT = Math.max(0, b.danceT - dt);
-    if (b.legend && b.talkT > 0) {   // stops to talk to you
+    const px = b.pos.x, pz = b.pos.z;
+    if (b.ally) { allySupport(b, dt); if (!b.party && b.state !== 'assist' && b.talkT <= 0) assistCheck(b, dt); }
+    if (b.ally && b.talkT > 0) {   // stops to talk to you
       b.talkT -= dt; b.move = Math.max(0, b.move - dt * 5); faceTo(b, G.P.pos);
+    } else if (b.state === 'escort') {   // fighting at your side
+      escortLogic(b, dt);
+    } else if (b.state === 'assist') {   // came over to help you
+      assistLogic(b, dt);
     } else if (b.state === 'idle') {
       b.idleT -= dt;
       if (!b.wp || moveToward(b, b.wp, 2.2, dt)) { if (Math.random() < 0.01) b.wp = zonePoint('plaza'); }
       if (Math.random() < 0.0008 && !b.legend) b.danceT = 4;
-      b.hp = Math.min(b.maxHp, b.hp + 20 * dt);
-      if (b.legend && G.P && d2(b.pos, G.P.pos) < 7 && (!b.wp || d2(b.pos, b.wp) < 0.5)) faceTo(b, G.P.pos);
-      if (b.idleT <= 0 && b.city && Math.random() < 0.55) { b.idleT = rand(20, 45); b.wp = zonePoint('plaza'); }   // another turn about the plaza
-      else if (b.idleT <= 0) { b.act = b.city || Math.random() < 0.25 ? 'cantina' : pick(['ashen', 'ashen', 'echo', 'echo', 'crater', 'crater']); b.path = [...GATES[b.act], b.loungeSpot && b.act === 'cantina' ? b.loungeSpot.clone() : zonePoint(b.act)]; b.state = 'travel'; b.actT = b.act === 'cantina' ? rand(40, 110) : rand(60, 180); b.wp = null; }
+      if (!b.ally) b.hp = Math.min(b.maxHp, b.hp + 20 * dt);
+      if (b.ally && G.P && d2(b.pos, G.P.pos) < 7 && (!b.wp || d2(b.pos, b.wp) < 0.5)) faceTo(b, G.P.pos);
+      if (b.idleT <= 0) { b.act = Math.random() < (b.legend ? 0.3 : 0.25) ? 'cantina' : pick(b.zones || ['ashen', 'ashen', 'echo', 'echo', 'crater', 'crater']); b.path = [...GATES[b.act], b.loungeSpot && b.act === 'cantina' ? b.loungeSpot.clone() : zonePoint(b.act)]; b.state = 'travel'; b.actT = b.act === 'cantina' ? rand(40, 110) : rand(60, 180); b.wp = null; }
     } else if (b.state === 'travel') {
       if (!b.path.length) { b.state = b.act === 'plaza' ? 'idle' : b.act === 'cantina' ? 'lounge' : 'hunt'; b.idleT = rand(15, 50); continue; }
       if (b.rig.isSoldier && !b.legend && b.pos.y === 0 && b.slideT < 0 && b.act !== 'cantina' && d2(b.pos, b.path[0]) > 24) {
         if (Math.random() < dt * 0.3) { b.vy = 10.5; b.bjT = 1e-4; b.boost = 1.6; b.canFlip = Math.random() < 0.6; }   // bullet jump
         else if (Math.random() < dt * 0.12) b.slideT = 0;                                                         // slide
       }
-      const tsp = b.legend ? (zoneAt(b.pos.x, b.pos.z) === 'cantina' || zoneAt(b.pos.x, b.pos.z) === 'plaza' ? 2.2 : 6.5)   // he walks in town and jogs the plains
+      const tsp = b.legend ? (zoneAt(b.pos.x, b.pos.z) === 'cantina' || zoneAt(b.pos.x, b.pos.z) === 'plaza' ? 2.2 : 6.5)   // the Mascars walk in town and jog the plains
         : (b.act === 'cantina' && zoneAt(b.pos.x, b.pos.z) === 'cantina' ? 3 : 13) * (b.pos.y > 0 ? b.boost : 1) * (b.slideT >= 0 ? 1.15 : 1);
       if (moveToward(b, b.path[0], tsp, dt, 1)) b.path.shift();
     } else if (b.state === 'lounge') {   // a regular at the Lantern: stand about, raise a glass, then wander back out
@@ -2133,29 +2404,27 @@ function updateBots(dt) {
       if (b.actT <= 0) { b.act = 'plaza'; b.path = [...GATES.cantina].reverse().concat([zonePoint('plaza')]); b.state = 'travel'; }
     } else if (b.state === 'hunt') {
       b.actT -= dt;
-      if (b.actT <= 0) { b.act = 'plaza'; b.path = [...GATES[zoneAt(b.pos.x, b.pos.z) === 'crater' ? 'crater' : (b.pos.x > 0 ? 'ashen' : 'echo')]].reverse().concat([zonePoint('plaza')]); b.state = 'travel'; b.target = null; continue; }
+      if (b.actT <= 0) { b.act = 'plaza'; b.path = [...GATES[zoneAt(b.pos.x, b.pos.z) === 'crater' ? 'crater' : (b.pos.x > 0 ? 'ashen' : 'echo')]].reverse().concat([zonePoint('plaza')]); b.state = 'travel'; b.target = null; b.wp = null; continue; }
       if (!b.target || !b.target.alive) {
         b.target = null; let bd = 30;
         for (const e of G.enemies) { if (!e.alive || (e.isBoss && Math.random() < 0.995)) continue; const d = d2(b.pos, e.pos); if (d < bd && zoneAt(e.pos.x, e.pos.z) === zoneAt(b.pos.x, b.pos.z)) { bd = d; b.target = e; } }
-        if (!b.target) { if (!b.wp || moveToward(b, b.wp, 9, dt)) b.wp = zonePoint(b.act); }
+        if (!b.target) { if (!b.wp || moveToward(b, b.wp, b.legend ? 6.5 : 9, dt)) b.wp = zonePoint(b.act); }
       } else {
-        const t = b.target, c = CLASSES[b.cls], reach = (c.range > 5 ? 14 : b.legend ? 2.7 : 2.2) + t.radius;
-        if (d2(b.pos, t.pos) > reach) moveToward(b, t.pos, b.legend ? 7 : 10, dt, reach * 0.9);
-        else {
-          b.move = Math.max(0, b.move - dt * 5); faceTo(b, t.pos); b.atkT -= dt;
-          if (b.atkT <= 0) {
-            b.atkT = rand(1.4, 1.9); b.atk = 0.3; if (c.range > 5) b.actHint = 'cast'; const dmg = b.legend ? 22 : 6 + b.level * 0.7;
-            if (c.range > 5) projectile(b.pos.clone().setY(b.pos.y + 1.4), t, c.hex, 0.12, 30, () => damage(t, dmg, b), b);
-            else { damage(t, dmg, b); if (d2(b.pos, G.P.pos) < 30 && (b.legend || Math.random() < 0.5)) slashFx(t, b.legend ? 0x8fe6ff : c.hex, b.legend ? 1.3 : 0.9); }
-          }
-        }
-        if (b.hp < b.maxHp * 0.3 && Math.random() < 0.01) { b.hp = b.maxHp; burst(b.pos.clone().setY(1), 0x4dff9a, 12, 2); }
+        botFight(b, b.target, dt);
+        if (!b.ally && b.hp < b.maxHp * 0.3 && Math.random() < 0.01) { b.hp = b.maxHp; burst(b.pos.clone().setY(1), 0x4dff9a, 12, 2); }
       }
     }
+    // walk around scenery instead of grinding into it: if a wall ate most of this step, sidestep along it
+    const ix = b.pos.x - px, iz = b.pos.z - pz, want = Math.hypot(ix, iz);
     resolveCollision(b.pos, 0.4);
+    if (want > 0.01 && Math.hypot(b.pos.x - px, b.pos.z - pz) < want * 0.35) {
+      const sd = b.side || (b.side = Math.random() < 0.5 ? 1 : -1), qx = b.pos.x, qz = b.pos.z;
+      b.pos.x -= iz * sd; b.pos.z += ix * sd; resolveCollision(b.pos, 0.4); b.blockT = 0;
+      if (Math.hypot(b.pos.x - qx, b.pos.z - qz) < want * 0.3) b.side = -sd;   // a corner: try the other way
+    } else if (want > 0.01 && (b.blockT = (b.blockT || 0) + dt) > 1.5) b.side = 0;
     if (b.rig.isSoldier) botMotion(b, dt);
     b.group.position.copy(b.pos); turnTo(b.group, b.yaw + (b.danceT > 0 ? G.time * 6 : 0), dt, b.danceT > 0 ? 50 : 12);
-    if (b.rig.isSoldier) { b.combat = b.state === 'hunt' && !!b.target && b.target.alive && d2(b.pos, b.target.pos) < 18; animSoldier(b.rig, b, dt, G.time, b.lodNear !== false); }
+    if (b.rig.isSoldier) { b.combat = (b.state === 'hunt' || b.state === 'escort' || b.state === 'assist') && !!b.target && b.target.alive && d2(b.pos, b.target.pos) < 18; animSoldier(b.rig, b, dt, G.time, b.lodNear !== false); }
     else animHumanoid(b.rig, b.move, G.time + b.name.length, b.atk, b.danceT);
   }
 }
@@ -2306,7 +2575,7 @@ function renderVendor() {
 function nearestInteract() {
   const P = G.P; let best = null, bd = 5;
   for (const n of G.npcs) { const d = d2(P.pos, n.pos); if (d < bd) { bd = d; best = n; } }
-  for (const b of G.bots) if (b.legend && b.alive) { const d = d2(P.pos, b.pos); if (d < 4 && d < bd) { bd = d; best = b; } }
+  for (const b of G.bots) if (b.ally && b.alive) { const d = d2(P.pos, b.pos); if (d < (b.party ? 2.6 : 4) && d < bd && !(b.party && best)) { bd = d; best = b; } }   // companions at your heel don't crowd out the NPCs
   for (const p of G.props) { const d = d2(P.pos, p.pos); if (d < 2.2 && d < bd) { bd = d; best = p; } }
   for (const s of G.shards) { if (!s.active) continue; const d = d2(P.pos, s.pos); if (d < 3 && d < bd) { bd = d; best = s; } }
   return best;
@@ -2319,6 +2588,7 @@ function interact(ent = nearestInteract()) {
   else if (ent.id === 'plaque') readPlaque();
   else if (ent.id === 'orion') talkOrion(ent);
   else if (ent.id === 'malia') talkMalia(ent);
+  else if (ent.resident) talkResident(ent);
   else if (ent.kind === 'shard') {
     const D = G.D;
     if (D.q.i === 2 && D.q.st === 'active') { ent.active = false; ent.group.visible = false; ent.respawnT = 25; Sound.sfx('pickup'); addChat('loot', null, 'You recover: [Beacon Shard]'); burst(ent.pos.clone().setY(1), 0xff2b4a, 20, 2); questEvent('shard'); }
@@ -2329,7 +2599,7 @@ function interact(ent = nearestInteract()) {
 function updateInteract() {
   const n = nearestInteract(), pr = $('prompt');
   if (n && !G.ui && !G.P.dead) {
-    const label = n.kind === 'shard' ? 'Recover Beacon Shard' : n.id === 'mascar' ? 'Speak with Governor Mascar' : n.id === 'zuri' ? 'Talk to Zuri Adeyemi' : n.id === 'plaque' ? 'Read the memorial plaque' : n.id === 'orion' ? 'Speak with Orion Mascar' : n.id === 'malia' ? 'Speak with Malia Mascar' : 'Trade with Ilse Varn';
+    const label = n.kind === 'shard' ? 'Recover Beacon Shard' : n.id === 'mascar' ? 'Speak with Governor Mascar' : n.id === 'zuri' ? 'Talk to Zuri Adeyemi' : n.id === 'plaque' ? 'Read the memorial plaque' : n.id === 'orion' ? 'Speak with Orion Mascar' : n.id === 'malia' ? 'Speak with Malia Mascar' : n.resident ? `Speak with ${n.name}` : 'Trade with Ilse Varn';
     pr.innerHTML = `<b>${TOUCH ? '▶' : '[E]'}</b> ${label}`; pr.classList.remove('hidden');
   } else pr.classList.add('hidden');
 }
@@ -2375,8 +2645,29 @@ function updateHUD() {
     const tx = cd > 1 ? Math.ceil(cd) : ''; if (s._t !== tx) { s._t = tx; s.children[3].textContent = tx; }
     const noen = P.en < cost || (i === 4 && D.medkits <= 0); if (s._n !== noen) { s._n = noen; s.classList.toggle('noen', noen); }
   }
-  updateTargetFrame();
+  updateTargetFrame(); updateParty();
   if (G.boss && !$('bossbar').classList.contains('hidden')) setW('boss-hp', G.boss.hp / G.boss.maxHp);
+}
+// Party frames, under your own: who is fighting at your side, their health, and where they are.
+function renderParty() {
+  const box = $('party'); box.innerHTML = '';
+  for (const b of partyList()) {
+    const d = document.createElement('div'); d.className = 'pm panel cut pe';
+    d.innerHTML = `<div class="fn"><span>${esc(b.name)}</span><em>LV ${b.level}</em></div><div class="bar2 hp"><i></i></div><div class="st"></div>`;
+    d._bar = d.querySelector('.bar2 i'); d._st = d.querySelector('.st'); d._b = b;
+    d.onclick = () => { setTarget(b); Sound.sfx('click'); };
+    box.appendChild(d);
+  }
+}
+function updateParty() {
+  const P = G.P;
+  for (const d of $('party').children) {
+    const b = d._b, w = (b.alive ? b.hp / b.maxHp * 100 : 0).toFixed(0) + '%';
+    if (d._w !== w) { d._w = w; d._bar.style.width = w; }
+    const dist = d2(b.pos, P.pos);
+    const st = !b.alive ? `FALLEN · BACK IN CONCORDIA IN ${Math.max(0, Math.ceil((b.respawnT || 12) - b.deadT))}S` : dist > 35 ? `ON THE WAY · ${Math.round(dist)}M` : b.target && b.target.alive ? 'FIGHTING' : b.talkT > 0 ? 'TALKING' : 'WITH YOU';
+    if (d._s !== st) { d._s = st; d._st.textContent = st; d.classList.toggle('dead', !b.alive); }
+  }
 }
 function updateTargetFrame(force) {
   const t = G.P?.target, tf = $('tframe');
@@ -2385,10 +2676,14 @@ function updateTargetFrame(force) {
   if (t.kind === 'enemy') {
     setT('t-name', t.name); setT('t-lvl', 'LV ' + t.level); setT('t-sub', t.isBoss ? 'ELITE · REMNANT' : t.type === 'drone' ? 'MECHANICAL · REMNANT' : 'HOLLOWED · REMNANT');
     $('t-bar').style.display = ''; setW('t-hp', t.hp / t.maxHp); setT('t-hpt', `${Math.max(0, Math.ceil(t.hp))} / ${t.maxHp}`);
-  } else if (t.kind === 'bot' && !t.legend) {
+  } else if (t.kind === 'bot' && t.ally) {
+    setT('t-name', t.name); setT('t-lvl', 'LV ' + t.level); setT('t-sub', `${t.title.toUpperCase()}${t.party ? ' · WITH YOU' : ''}`);
+    $('t-bar').style.display = ''; setW('t-hp', t.hp / t.maxHp); setT('t-hpt', t.alive ? `${Math.ceil(t.hp)} / ${t.maxHp}` : 'FALLEN · RETURNING TO CONCORDIA');
+  } else if (t.kind === 'bot') {
     setT('t-name', t.name); setT('t-lvl', 'LV ' + t.level); setT('t-sub', `${CLASSES[t.cls].name}${t.guild ? ' · ' + t.guild.toUpperCase() : ''}`);
     $('t-bar').style.display = ''; setW('t-hp', t.hp / t.maxHp); setT('t-hpt', 'ASCENDANT');
   } else { setT('t-name', t.name); setT('t-lvl', ''); setT('t-sub', t.title.toUpperCase()); $('t-bar').style.display = 'none'; }
+  const ally = t.kind === 'bot' && !!t.ally; if (_cache.get('tally') !== ally) { _cache.set('tally', ally); $('t-bar').classList.toggle('ally', ally); }
 }
 function updateTracker() {
   const D = G.D, q = curQ(), el = $('tracker');
@@ -2411,6 +2706,12 @@ function updatePlates() {
     if (el._v !== true) { el.style.display = ''; el._v = true; }
     const sc = clamp(1.25 - d / 80, 0.6, 1.1);
     el.style.transform = `translate(${s[0].toFixed(1)}px,${s[1].toFixed(1)}px) translate(-50%,-100%) scale(${sc.toFixed(2)})`;
+    if (e.ally) {
+      const hurt = e.alive && e.hp < e.maxHp - 1, w = (e.hp / e.maxHp * 100).toFixed(0) + '%';
+      if (e._ph !== hurt) { e._ph = hurt; e.plateHb.style.visibility = hurt ? 'visible' : 'hidden'; }
+      if (hurt && e._pw !== w) { e._pw = w; e.plateBar.style.width = w; }
+      if (e._pp !== e.party) { e._pp = e.party; el.classList.toggle('party', e.party); }
+    }
     if (e.kind === 'enemy') { const w = (e.hp / e.maxHp * 100).toFixed(0) + '%'; if (e._pw !== w) { e._pw = w; e.plateBar.style.width = w; } const isT = P.target === e; if (e._pt !== isT) { e._pt = isT; el.classList.toggle('tgt', isT); } }
   }
 }
@@ -2440,8 +2741,9 @@ function drawMinimap() {
   mm.strokeStyle = 'rgba(232,196,106,0.6)'; mm.lineWidth = 2; mm.beginPath(); mm.arc(X(0), Y(0), 246 * sc, 0, 7); mm.stroke();
   if (G.D.q.i === 2 && G.D.q.st === 'active') { mm.fillStyle = '#ff6b7f'; for (const s of G.shards) if (s.active) { mm.save(); mm.translate(X(s.pos.x), Y(s.pos.z)); mm.rotate(Math.PI / 4); mm.fillRect(-2.5, -2.5, 5, 5); mm.restore(); } }
   for (const e of G.enemies) { if (!e.alive) continue; mm.fillStyle = e.isBoss ? '#ff2b4a' : '#ff5a6e'; const r = e.isBoss ? 5 : 2.2; mm.beginPath(); mm.arc(X(e.pos.x), Y(e.pos.z), r, 0, 7); mm.fill(); }
-  mm.fillStyle = '#7fe3ff'; for (const b of G.bots) if (b.alive && !b.legend) { mm.beginPath(); mm.arc(X(b.pos.x), Y(b.pos.z), 2.2, 0, 7); mm.fill(); }
-  mm.fillStyle = '#e8c46a'; for (const n of [...G.npcs, ...G.bots.filter(b => b.legend)]) { mm.beginPath(); mm.arc(X(n.pos.x), Y(n.pos.z), 3.5, 0, 7); mm.fill(); }
+  for (const b of G.bots) if (b.alive && !b.legend) { mm.fillStyle = b.resident ? '#9dffb0' : '#7fe3ff'; mm.beginPath(); mm.arc(X(b.pos.x), Y(b.pos.z), b.resident ? 2.8 : 2.2, 0, 7); mm.fill(); }
+  mm.fillStyle = '#e8c46a'; for (const n of [...G.npcs, ...G.bots.filter(b => b.legend && b.alive)]) { mm.beginPath(); mm.arc(X(n.pos.x), Y(n.pos.z), 3.5, 0, 7); mm.fill(); }
+  mm.strokeStyle = '#4dff9a'; mm.lineWidth = 1.5; for (const b of G.bots) if (b.party && b.alive) { mm.beginPath(); mm.arc(X(b.pos.x), Y(b.pos.z), 5.5, 0, 7); mm.stroke(); }
   // objective pointer
   const obj = objectivePos();
   if (obj) {
@@ -2485,7 +2787,17 @@ function sendChat(text) {
   if (text[0] === '/') {
     const [cmd] = text.slice(1).toLowerCase().split(' ');
     switch (cmd) {
-      case 'help': addChat('sys', null, 'Commands: /who /played /loc /dance /wave /salute /help'); break;
+      case 'help': addChat('sys', null, 'Commands: /who /party /dismiss [name|all] /played /loc /dance /wave /salute /help'); break;
+      case 'party': {
+        const l = partyList(); if (!l.length) { addChat('sys', null, 'Nobody is fighting at your side. Talk to Orion or Malia Mascar, or to one of your Residents, and ask them to.'); break; }
+        addChat('sys', null, 'At your side: ' + l.map(b => `${b.name} (lv ${b.level}, ${b.alive ? Math.round(b.hp / b.maxHp * 100) + '% health, ' + Math.round(d2(b.pos, P.pos)) + 'm away' : 'fallen, returning to Concordia Plaza'})`).join(', ') + '.'); break;
+      }
+      case 'dismiss': {
+        const arg = text.slice(1).split(' ').slice(1).join(' ').trim().toLowerCase(), l = partyList();
+        const who = !arg || arg === 'all' ? l : l.filter(b => b.name.toLowerCase().includes(arg));
+        if (!who.length) { addChat('err', null, l.length ? 'Nobody by that name is at your side.' : 'Nobody is fighting at your side.'); break; }
+        for (const b of who) leaveParty(b); break;
+      }
       case 'who': { const l = chatBots().slice(0, 6).map(b => `${b.name} (${b.level} ${CLASSES[b.cls].name.toLowerCase()}, ${ZONES[zoneAt(b.pos.x, b.pos.z)].name.toLowerCase()})`); addChat('sys', null, `Online: ${l.join(', ')} …and ${fmtNum(onlineCount - 6)} others.`); break; }
       case 'played': { const s = D.played | 0; addChat('sys', null, `Time played: ${Math.floor(s / 3600)}h ${Math.floor(s / 60) % 60}m ${s % 60}s`); break; }
       case 'loc': addChat('sys', null, `${ZONES[G.zone].name}: ${P.pos.x.toFixed(0)}, ${(-P.pos.z).toFixed(0)}`); break;
@@ -2526,7 +2838,7 @@ function closeAllUI() { for (const id of ['dialog', 'vendor', 'sheet', 'pause'])
 function openSheet() {
   const D = G.D, P = G.P, c = CL(); closeAllUI(); G.ui = 'sheet';
   $('sh-name').textContent = D.name.toUpperCase();
-  const rows = [['Title', D.title], ['Class', c.name], ['Level', D.level], ['Health', `${Math.ceil(P.hp)} / ${maxHp()}`], ['Energy', maxEn()], ['Damage bonus', `+${Math.round((dmgScale() - 1) * 100)}%`], ['Critical chance', `${Math.round(c.crit * 100)}%`], ['Weapon tuning', `Rank ${D.wpn}`], ['Concord plating', `Rank ${D.arm}`], ['Remnants destroyed', fmtNum(D.kills)], ['Deaths', D.deaths], ['Quests completed', D.completed], ['Credits', fmtNum(D.credits)], ['Realm', $('realm').value.split(' · ')[0]]];
+  const rows = [['Title', D.title], ['Class', c.name], ['Level', D.level], ['Health', `${Math.ceil(P.hp)} / ${maxHp()}`], ['Energy', maxEn()], ['Damage bonus', `+${Math.round((dmgScale() - 1) * 100)}%`], ['Critical chance', `${Math.round(c.crit * 100)}%`], ['Weapon tuning', `Rank ${D.wpn}`], ['Concord plating', `Rank ${D.arm}`], ['Remnants destroyed', fmtNum(D.kills)], ['Deaths', D.deaths], ['Quests completed', D.completed], ['At your side', partyList().map(b => b.name).join(', ') || 'Nobody'], ['Credits', fmtNum(D.credits)], ['Realm', $('realm').value.split(' · ')[0]]];
   $('sheet-rows').innerHTML = rows.map(([a, b]) => `<div class="srow"><span>${a.toUpperCase()}</span><b>${esc(b)}</b></div>`).join('');
   $('sheet').classList.remove('hidden');
 }
@@ -2575,7 +2887,7 @@ function pick3D(x, y) {
   if (hit) {
     const ent = hit.object.userData.ent; setTarget(ent);
     if (ent.kind === 'enemy') G.P.autoOn = true;
-    if ((ent.kind === 'npc' || ent.legend) && d2(G.P.pos, ent.pos) < 6) interact(ent);
+    if ((ent.kind === 'npc' || (ent.ally && ent.alive)) && d2(G.P.pos, ent.pos) < 6) interact(ent);
     Sound.sfx('click');
   } else setTarget(null);
 }
@@ -2685,7 +2997,7 @@ $('prompt').addEventListener('click', () => { if (G.ui !== 'dialog') interact();
 let onlineCount = 4812;
 function show(id) { $(id).classList.remove('hidden'); }
 function hide(id) { $(id).classList.add('hidden'); }
-function closeModals() { hide('codex'); hide('settings'); }
+function closeModals() { hide('codex'); hide('settings'); hide('roster'); }
 
 function enterMenuFromSplash() {
   // phones: go fullscreen and hold landscape where the browser allows it (needs this tap's user gesture)
@@ -2697,14 +3009,19 @@ function enterMenuFromSplash() {
 function showMenu() {
   G.mode = 'menu'; setScene(menu.scene, menu.cam);
   hide('hud'); hide('create'); hide('loading'); show('menu');
-  const save = store.get(SAVE_KEY);
+  if (!G.roster) G.roster = loadRoster();
+  const save = lastPlayable();
   const btn = $('btn-continue');
   if (save) { btn.disabled = false; $('continue-sub').textContent = `${save.name.toUpperCase()} · LV ${save.level} ${CLASSES[save.cls].name}`; }
   else { btn.disabled = true; $('continue-sub').textContent = 'NO ASCENDANT REGISTERED'; }
+  const nRes = G.roster.filter(c => c.resident).length, nAsc = G.roster.length - nRes;
+  $('btn-roster').disabled = !G.roster.length;
+  $('roster-sub').textContent = G.roster.length ? `${nAsc} ASCENDANT${nAsc === 1 ? '' : 'S'} · ${nRes} RESIDENT${nRes === 1 ? '' : 'S'}` : 'THE CONCORD REGISTRY';
   Sound.playMusic('menu');
 }
 document.querySelectorAll('.mbtn, .btn').forEach(b => { b.addEventListener('mouseenter', () => Sound.sfx('hover')); b.addEventListener('click', () => Sound.sfx('click')); });
-$('btn-continue').onclick = () => { const s = store.get(SAVE_KEY); if (s) { G.D = s; enterWorld(); } };
+$('btn-continue').onclick = () => { const s = lastPlayable(); if (s) { G.D = s; enterWorld(); } };
+$('btn-roster').onclick = () => openRoster();
 $('btn-new').onclick = () => openCreate();
 $('btn-codex').onclick = () => openCodex();
 $('btn-settings').onclick = () => openSettings();
@@ -2712,6 +3029,33 @@ $('btn-quit').onclick = () => { try { window.close(); } catch (e) {} setTimeout(
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => hide(b.dataset.close));
 $('codex').addEventListener('mousedown', e => { if (e.target.id === 'codex') hide('codex'); });
 $('settings').addEventListener('mousedown', e => { if (e.target.id === 'settings') hide('settings'); });
+$('roster').addEventListener('mousedown', e => { if (e.target.id === 'roster') hide('roster'); });
+
+// The registry screen: play any Ascendant, retire one as a Resident of Ad-Nostra, recall a Resident, or delete.
+function openRoster() {
+  const box = $('roster-list'); box.innerHTML = '';
+  const list = [...G.roster].sort((a, b) => (!!a.resident - !!b.resident) || (b.lastPlayed || b.created || 0) - (a.lastPlayed || a.created || 0));
+  if (!list.length) box.innerHTML = '<p class="rs-empty">No Ascendants registered yet.</p>';
+  for (const c of list) {
+    const cl = CLASSES[c.cls], row = document.createElement('div'); row.className = 'rs-row' + (c.resident ? ' res' : '');
+    row.innerHTML = `<i class="rs-sig" style="--c:${esc(c.visor)}"></i>
+      <div class="rs-main"><div class="rs-name">${esc(c.name.toUpperCase())}${c.resident ? '<span class="rs-tag">RESIDENT</span>' : ''}</div>
+      <div class="rs-sub">LV ${c.level} ${cl.name} · ${esc((c.title || 'Ascendant').toUpperCase())} · ${fmtNum(c.kills | 0)} REMNANTS</div></div><div class="rs-btns"></div>`;
+    const btns = row.querySelector('.rs-btns');
+    const add = (label, cls, fn, confirm) => {
+      const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = label;
+      b.onclick = () => { if (confirm && !b._armed) { b._armed = true; b.textContent = confirm; setTimeout(() => { b._armed = false; b.textContent = label; }, 3000); return; } Sound.sfx('click'); fn(); };
+      btns.appendChild(b);
+    };
+    if (!c.resident) {
+      add('PLAY', 'gold', () => { hide('roster'); G.D = c; enterWorld(); });
+      add('MAKE RESIDENT', 'ghost', () => { c.resident = true; c.residentSince = Date.now(); saveRoster(); openRoster(); showMenu(); }, 'CONFIRM?');
+    } else add('RECALL', '', () => { c.resident = false; delete c.residentSince; c.lastPlayed = Date.now(); saveRoster(); openRoster(); showMenu(); });
+    add('✕', 'ghost', () => { G.roster = G.roster.filter(x => x !== c); if (G.D === c) G.D = null; saveRoster(); openRoster(); showMenu(); }, 'DELETE?');
+    box.appendChild(row);
+  }
+  show('roster');
+}
 
 function openCodex(i = 0) {
   const list = $('codex-list'); list.innerHTML = '';
@@ -2752,13 +3096,18 @@ function openCreate() {
   const sw = $('swatches'); sw.innerHTML = '';
   for (const v of VISORS) { const s = document.createElement('div'); s.className = 'sw' + (v === create.visor ? ' on' : ''); s.style.setProperty('--c', v); s.onclick = () => { create.visor = v; Sound.sfx('click'); openCreate(); }; sw.appendChild(s); }
   const inp = $('cname'); if (!inp.value) inp.value = pick(['Ardent', 'Talon', 'Vesper', 'Rook', 'Cassia', 'Orin', 'Lyra', 'Dain', 'Sorrel', 'Kestrel']);
-  $('overwrite').classList.toggle('hidden', !store.get(SAVE_KEY));
+  $('overwrite').classList.add('hidden');
 }
 $('create-back').onclick = () => { hide('create'); showMenu(); };
 $('create-go').onclick = () => {
   const name = $('cname').value.trim();
-  if (!/^[A-Za-z0-9_\- ]{2,16}$/.test(name)) { $('cname').style.borderColor = 'var(--crimson)'; setTimeout(() => $('cname').style.borderColor = '', 1200); return; }
-  G.D = newSave(name, create.cls, create.visor); store.set(SAVE_KEY, G.D); Sound.sfx('start'); enterWorld(true);
+  const bad = !/^[A-Za-z0-9_\- ]{2,16}$/.test(name), taken = !bad && G.roster.some(c => c.name.toLowerCase() === name.toLowerCase());
+  if (bad || taken) {
+    $('cname').style.borderColor = 'var(--crimson)'; setTimeout(() => $('cname').style.borderColor = '', 1200);
+    if (taken) { $('overwrite').textContent = 'THAT NAME IS ALREADY IN THE REGISTRY'; $('overwrite').classList.remove('hidden'); }
+    Sound.sfx('error'); return;
+  }
+  G.D = newSave(name, create.cls, create.visor); G.roster.push(G.D); saveRoster(); store.set(ACTIVE_KEY, G.D.id); Sound.sfx('start'); enterWorld(true);
 };
 
 function enterWorld(isNew = false) {
@@ -2767,7 +3116,9 @@ function enterWorld(isNew = false) {
   requestAnimationFrame(() => { bar.style.transition = 'width 1.6s ease'; bar.style.width = '70%'; });
   setTimeout(() => {
     try { if (!G.world) buildWorld(); } catch (err) { console.error(err); showError('World failed to build: ' + err.message); }
+    G.D.lastPlayed = Date.now(); if (!G.D.id) G.D.id = newId(); store.set(ACTIVE_KEY, G.D.id);
     setupPlayer();
+    syncResidents(); restoreParty();
     // reset world state
     for (const e of G.enemies) { if (e.target === G.P || (e.target && e.target.kind === 'player')) { e.target = null; e.state = 'return'; } }
     G.zone = ''; G.ui = null; closeAllUI(); hide('death');
@@ -2786,7 +3137,12 @@ function enterWorld(isNew = false) {
   }, 900);
 }
 function exitToMenu() { saveGame(); closeAllUI(); for (const f of G.floaters) f.el.remove(); G.floaters = []; showMenu(); }
-function saveGame() { if (!G.D || !G.P) return; G.D.pos = [G.P.pos.x, G.P.pos.z]; store.set(SAVE_KEY, G.D); }
+function saveGame() {
+  if (!G.D || !G.P) return;
+  G.D.pos = [G.P.pos.x, G.P.pos.z];
+  if (!G.roster.includes(G.D)) G.roster.push(G.D);
+  saveRoster(); store.set(ACTIVE_KEY, G.D.id);
+}
 window.addEventListener('beforeunload', () => { if (G.mode === 'world') saveGame(); });
 
 $('respawn').onclick = respawn;

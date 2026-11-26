@@ -22,7 +22,16 @@ export const CODEX = [
   { title: 'Orion Mascar', tag: 'BORN 2069', body: [
     'Born in 2069, Orion Mascar came of age in the Third World War and survived the whole of it. He married Talina Alvarez, and their son Croxian was born in the last winter of the war.',
     'He trained Thomas Hawthorne, and he lived to see what his apprentice became.',
-    'In Ad-Nostra his name is tied to one place above all: the Salt Lantern. It was in that cantina that Orion Mascar fought Daniel Brown.'
+    'In Ad-Nostra his name is tied to one place above all: the Salt Lantern. It was in that cantina that Orion Mascar fought Daniel Brown.',
+    'These days he walks the whole savannah with his greatsword, cutting down Remnants, and he will fight beside any Ascendant who asks. When the Remnants swarm someone, he calls them onto himself.'
+  ]},
+  { title: 'Malia Mascar', tag: 'WIFE OF THE GOVERNOR', body: [
+    'The Concord forbids the Governor to leave Ad-Nostra. His wife is under no such order. Malia Mascar goes out to the Scorched Veld, the Echo Plains and the Crater herself, with a short energy blade in one hand and a Concord mending kit within reach of the other.',
+    'Ascendants who fight beside her say she closes wounds faster than the Remnants can open them.'
+  ]},
+  { title: 'Residents of Ad-Nostra', tag: 'THE CITY', body: [
+    'Not every Ascendant keeps the oath forever. Some hang up their armour lights and simply stay: they walk the plaza, drink at the Salt Lantern, and still go out onto the plains when the Remnants come too close.',
+    'The Concord calls them Residents. They answer when an old comrade asks them to fight at their side.'
   ]},
   { title: 'Terra Imperia', tag: 'THE FACTION', body: [
     'Terra Imperia was the far-right faction built by Thomas Hawthorne after he broke from his old master. It promised order, strength and a single hand on the wheel of the world.',
@@ -72,6 +81,8 @@ export const TIPS = [
   'Thomas Hawthorne was Orion Mascar\'s apprentice before the Siege of Harbin.',
   'Carax orbits Sagittarius A*, the black hole at the heart of the galaxy.',
   'Echo Drones attack from range. Close the distance, or out-range them as an Arcwright.',
+  'Ask Orion or Malia Mascar to fight at your side. Orion draws Remnants off you; Malia heals you when you are hurt.',
+  'An Ascendant you no longer play can become a Resident of Ad-Nostra from the ASCENDANTS menu. They will live in the city and hunt the plains.',
 ];
 
 export const CLASSES = {
@@ -175,7 +186,7 @@ export const PLAQUE = {
   text: 'HERE, IN THIS ROOM,\nORION MASCAR FOUGHT DANIEL BROWN.\n\nThe Lantern still stands.\n\nRaised by the regulars of the Salt Lantern.',
 };
 
-// Orion Mascar, the Governor's father, who walks the whole map.
+// Orion Mascar, the Governor's father, who walks the whole map and hunts in every zone.
 export const ORION_LINES = {
   greet: [
     'Walk with me or step aside, Ascendant. I have a lot of ground to cover, and I like to see all of it.',
@@ -186,19 +197,52 @@ export const ORION_LINES = {
   war: 'The Third World War. 2080 to 2095. I came of age in it and I came out the other side, which is more than most can say.\n\nThomas Hawthorne was my apprentice for much of it. We fought side by side until the Siege of Harbin. After Harbin, he made his own path. I have had a long time to think about where that path led.',
   lantern: 'You have seen the plaque, then. I fought Daniel Brown in that room.\n\nAsk Zuri how it went. She tells it better than I do, and she sells ale while she tells it. The Lantern still stands. That is the part that matters.',
   son: 'Croxian was born in the winter of Kaliningrad, with the war still on. Talina and I named him in a city under siege.\n\nHe wore Terra Imperia\'s colours once, and he walked away from them. Then he went to Carax and came back. Now he governs.\n\nI fought. He builds. I know which of us the city needs more.',
+  join: 'Good. I was heading out anyway.\n\nI will take the ones that go for you. If it gets bad, stand behind me. If I fall, I will be back on my feet in Concordia Plaza before long, and I will come and find you.',
+  part: 'As you like. The grass is wide and I have ground to cover.\n\nYou know where to find me. Everywhere.',
+  full: 'You already have enough blades at your back, Ascendant. Send one of them home and ask me again.',
+  rejoin: 'I am right behind you. Try to keep up.',
+  joinSay: ['On your left.', 'Lead on. I will watch your back.', 'Right. Where are we going?'],
+  partSay: ['Go well, Ascendant.', 'Watch the horizon.'],
+  taunt: ['Over here! You want a fight? Fight me.', 'Leave the Ascendant. I am the one you want.', 'Hold the line! Get behind me!'],
+  fallen: ['...not yet.', 'Back to the plaza, then.'],
+  back: ['On my feet again. Where are you?', 'That was nothing. I am coming.'],
 };
 
-// Malia Mascar, the Governor's wife, who keeps to the plaza and the Salt Lantern.
+// Malia Mascar, the Governor's wife. She hunts the zones too, and she keeps Ascendants alive.
 export const MALIA_LINES = {
   greet: [
     'Good evening, Ascendant. If you are looking for my husband, he is on his dais. If you are looking for his father, good luck.',
-    'Ten years since Carax. The city is quieter than it was. I intend to keep it that way.',
-    'Walk with me a while, if you like. I prefer to see the streets for myself rather than read about them.',
+    'Ten years since Carax. The city is quieter than it was. I intend to keep it that way, and quiet does not keep itself.',
+    'Walk with me a while, if you like. I prefer to see the plains for myself rather than read reports about them.',
   ],
-  city: 'Ad-Nostra was ash and old roads when Croxian came home. Now there is a plaza, a statue, and a cantina that never closes.\n\nPeople think a city is built from stone. It is built from people deciding to stay.',
-  croxian: 'He stands on that dais all day and lets the whole city look at him. Then he sits in the corner of the Lantern and lets no one look at him at all.\n\nI know which of those is the Governor and which is my husband. I am fond of them both.',
-  orion: 'My father-in-law walks. The plaza, the Veld, the Plains, the Crater, and back to the Lantern to stand over that plaque.\n\nHe says he is making sure the city is still here. I think he simply cannot sit still. It runs in the family.',
-  blade: 'This? It is not for show.\n\nThe Governor has guards. The Governor\'s wife has this.',
+  city: 'Ad-Nostra was ash and old roads when Croxian came home. Now there is a plaza, a statue, and a cantina that never closes.\n\nPeople think a city is built from stone. It is built from people deciding to stay. Some of them decide to stay for good: the Ascendants who hang up their oath and simply live here. You will see them about.',
+  croxian: 'He stands on that dais all day and lets the whole city look at him. Then he sits in the corner of the Lantern and lets no one look at him at all.\n\nThe Concord will not let him leave the city. So I go out for him. I walk the Veld, the Plains and the Crater, and I tell him what I find.',
+  orion: 'My father-in-law walks. The plaza, the Veld, the Plains, the Crater, and back to the Lantern to stand over that plaque.\n\nHe says he is making sure the city is still here. I think he simply cannot sit still. It runs in the family. Apparently it runs in me too, now.',
+  blade: 'This? It is not for show.\n\nThe Governor has guards. The Governor\'s wife has this, and a Concord mending kit. I am better with the second than people expect, and better with the first than they hope.',
+  join: 'Then we go together.\n\nKeep your eyes on the Remnants and I will keep mine on you. When you are hurt, I will close the wound. If I go down, I will wake in Concordia Plaza and come straight back to you.',
+  part: 'Of course. Go carefully.\n\nI will be out on the plains. Call on me again whenever you need me.',
+  full: 'You have a full company already. Send someone home first, and I will come.',
+  rejoin: 'I am with you. Mind your footing.',
+  joinSay: ['With you.', 'Lead the way. I have you.', 'Let us go and see the plains.'],
+  partSay: ['Take care out there.', 'Until the next time.'],
+  heal: ['Hold still. There.', 'Not today. Stay with me.', 'Breathe. You are all right.', 'Closed. Back to it.'],
+  fallen: ['Croxian will never let me hear the end of this...', 'Back to the plaza...'],
+  back: ['I am up. Coming to you now.', 'Concordia again. On my way.'],
+};
+
+// Residents: the player's own retired Ascendants, who now live in Ad-Nostra. {self} is the resident, {name} the player.
+export const RESIDENT_LINES = {
+  greet: [
+    'Oh, it is you. I took the same oath you did, once. These days I just live here, and I still go out to the plains when they need me.',
+    'I hung up the oath, but I never left Ad-Nostra. The Lantern, the plaza, a bit of hunting on the Veld. It is a good life.',
+    'You remind me of myself when I was new. Do not let the Remnant in the Crater hit you twice.',
+    'They call us residents. I call it finally having time for an ale.',
+  ],
+  join: 'For old times\' sake? Gladly. Lead on, {name}.',
+  part: 'Back to the quiet life, then. You know where I live.',
+  full: 'You have a full company already. Send someone home and I will come.',
+  joinSay: ['Like the old days.', 'Right behind you.'],
+  partSay: ['Good hunting.', 'See you at the Lantern.'],
 };
 
 export const BOT_NAMES = ['Kaelith','Vex_2137','NovaRook','Seraphyn','Draxx','Ilmatar','LastLegion','Quorra','Ashwalker','Brennic','Zyra_Nyx','Holloway','Corvane','Mirelle','OrbitalOtter','Tavik','Severine','Juno_Arc','Kwame_X','Amara','Tendai'];
@@ -224,6 +268,9 @@ export const WORLD_CHAT = [
   'anyone else hear the shards humming?? creepy',
   'the sunsets here never get old',
   'there was an argument at the Lantern about Orion vs Daniel Brown again. chairs were thrown',
+  'Malia Mascar healed me in the crater mid-fight. didn\'t even stop walking',
+  'orion just took aggro off me and cut through four hollowed. at his age',
+  'saw orion get dropped by the remnant. he walked back out of the plaza like nothing happened',
   'still can\'t believe the governor used to be Terra Imperia',
 ];
 export const ZONE_CHAT = [

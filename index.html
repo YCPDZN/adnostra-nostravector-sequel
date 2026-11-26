@@ -116,6 +116,18 @@ input[type=checkbox]{accent-color:var(--cyan);width:18px;height:18px}
 .sw{width:34px;height:34px;border:2px solid transparent;cursor:pointer;background:var(--c);box-shadow:inset 0 0 0 3px #070b11}
 .sw.on{border-color:#fff}
 .oath{margin-left:auto;text-align:right}
+/* registry */
+.rs-note{font-size:14px;line-height:1.6;color:#aebdca;margin:14px 0 8px}
+.rs-note b{color:#9dffb0;font-weight:600}
+.rs-row{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+.rs-sig{flex:none;width:10px;height:34px;background:var(--c);box-shadow:0 0 10px var(--c)}
+.rs-main{flex:1;min-width:0}
+.rs-name{font-size:16px;letter-spacing:.16em;color:#fff}
+.rs-sub{font-size:10px;letter-spacing:.2em;color:var(--dim);margin-top:4px}
+.rs-tag{margin-left:10px;font-size:9px;letter-spacing:.25em;padding:2px 6px;border:1px solid #4d9a6a;color:#9dffb0;vertical-align:2px}
+.rs-btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.rs-btns .btn{padding:8px 14px;font-size:11px}
+.rs-empty{color:var(--dim);margin-top:10px}
 .oath .warn{font-size:11px;letter-spacing:.15em;color:var(--crimson);margin-bottom:8px}
 
 /* ---------- LOADING ---------- */
@@ -142,6 +154,15 @@ input[type=checkbox]{accent-color:var(--cyan);width:18px;height:18px}
 .hp .sh{background:rgba(160,230,255,.55)}
 .en i{background:linear-gradient(90deg,#1a6fa3,var(--cyan))}
 .ehp i{background:linear-gradient(90deg,#8a1023,var(--crimson))}
+#t-bar.ally i{background:linear-gradient(90deg,#1f9e6a,#4dff9a)}
+#party{position:absolute;left:18px;top:150px;width:230px;display:flex;flex-direction:column;gap:6px}
+.pm{padding:7px 12px;cursor:pointer}
+.pm .fn{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.12em}
+.pm .fn em{font-style:normal;color:var(--dim);font-size:11px}
+.pm .bar2{height:7px;margin-top:5px}
+.pm .st{font-size:9px;letter-spacing:.2em;color:var(--dim);margin-top:4px}
+.pm.dead{opacity:.55}
+.pm.dead .st{color:#ff7f8f}
 .buffs{display:flex;gap:4px;margin-top:6px;min-height:4px}
 .buff{font-size:10px;padding:2px 6px;border:1px solid var(--line);color:var(--cyan);letter-spacing:.1em}
 #bossbar{position:absolute;top:108px;left:50%;transform:translateX(-50%);width:520px;text-align:center}
@@ -198,6 +219,9 @@ input[type=checkbox]{accent-color:var(--cyan);width:18px;height:18px}
 .plate.npc .n{color:var(--gold)}
 .plate.bot .n{color:#7fe3ff}
 .plate.enemy .n{color:#ff6b7f}
+.plate.res .n{color:#9dffb0}
+.plate .hb.ally i{background:#4dff9a}
+.plate.party .n::before{content:"◆ ";color:#4dff9a}
 .plate.tgt .n{text-decoration:underline}
 .plate .qm{font-size:26px;font-weight:700;color:var(--gold);text-shadow:0 0 10px var(--gold),0 1px 2px #000;line-height:1}
 .fl{position:absolute;left:0;top:0;font-weight:700;font-size:20px;text-shadow:0 2px 3px #000,0 0 6px #000;white-space:nowrap;will-change:transform,opacity}
@@ -306,6 +330,11 @@ canvas#scene{touch-action:none}
   #pframe{left:calc(10px + var(--sl));top:calc(10px + var(--st))}
   #tframe{top:calc(10px + var(--st));width:200px}
   .frame .fn{font-size:12px}
+  #party{left:calc(10px + var(--sl));top:calc(108px + var(--st));width:170px;gap:4px}
+  .pm{padding:5px 8px}
+  .pm .fn{font-size:10px}
+  .rs-row{flex-wrap:wrap}
+  .rs-btns{width:100%;justify-content:flex-start}
   .bar2{height:12px;margin-top:5px}
   .bar2 span{line-height:11px;font-size:9px}
   #mapwrap{right:calc(10px + var(--sr));top:calc(10px + var(--st));width:128px;padding:6px}
@@ -370,6 +399,7 @@ canvas#scene{touch-action:none}
   #create-go{width:100%}
   .frame{width:180px}
   #tframe{top:calc(96px + var(--st));width:180px}
+  #party{left:auto;right:calc(10px + var(--sr));top:calc(160px + var(--st));width:128px}
   #tracker{width:170px}
   .touch #chat{width:44vw;top:calc(196px + var(--st))}
   .touch #hotbar{left:50%;right:auto;transform:translateX(-50%)}
@@ -400,6 +430,7 @@ canvas#scene{touch-action:none}
     <nav class="mainnav">
       <button class="mbtn" id="btn-continue">CONTINUE<small id="continue-sub">—</small></button>
       <button class="mbtn" id="btn-new">NEW ASCENDANT<small>TAKE THE GOVERNOR'S OATH</small></button>
+      <button class="mbtn" id="btn-roster">ASCENDANTS<small id="roster-sub">THE CONCORD REGISTRY</small></button>
       <button class="mbtn" id="btn-codex">CODEX<small>THE WORLD AFTER THE FALL</small></button>
       <button class="mbtn" id="btn-settings">SETTINGS</button>
       <button class="mbtn" id="btn-quit">QUIT</button>
@@ -433,6 +464,16 @@ canvas#scene{touch-action:none}
   </div>
 </div>
 
+<!-- REGISTRY: your Ascendants and Residents -->
+<div id="roster" class="modal hidden">
+  <div class="box panel cut" style="width:min(820px,92vw)">
+    <button class="xbtn" data-close="roster">✕</button>
+    <h2><small>CONCORD REGISTRY</small>YOUR ASCENDANTS</h2>
+    <p class="rs-note">An Ascendant you no longer play can retire as a <b>Resident of Ad-Nostra</b>. Residents live in the city: they walk the plaza, drink at the Salt Lantern and hunt Remnants on the plains, they come to your aid in a fight, and you can talk to them and ask them to fight at your side. Recall a Resident at any time to play them again.</p>
+    <div id="roster-list"></div>
+  </div>
+</div>
+
 <!-- SETTINGS -->
 <div id="settings" class="modal hidden">
   <div class="box panel cut" style="width:min(640px,92vw)">
@@ -462,7 +503,7 @@ canvas#scene{touch-action:none}
     <div class="field"><label>NAME</label><input id="cname" maxlength="16" spellcheck="false"></div>
     <div class="field"><label>VISOR SIGIL</label><div class="swatches" id="swatches"></div></div>
     <div class="oath">
-      <div class="warn hidden" id="overwrite">THIS WILL REPLACE YOUR CURRENT ASCENDANT</div>
+      <div class="warn hidden" id="overwrite">THAT NAME IS ALREADY IN THE REGISTRY</div>
       <button class="btn gold" id="create-go" style="font-size:15px;padding:15px 30px">TAKE THE GOVERNOR'S OATH ▸</button>
     </div>
   </div>
@@ -489,6 +530,8 @@ canvas#scene{touch-action:none}
     <div class="bar2 en"><i id="p-en"></i><span id="p-ent"></span></div>
     <div class="buffs" id="p-buffs"></div>
   </div>
+
+  <div id="party"></div>
 
   <div id="tframe" class="frame panel cut hidden">
     <div class="fn"><span id="t-name">—</span><em id="t-lvl"></em></div>
