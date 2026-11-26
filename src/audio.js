@@ -103,37 +103,7 @@ export const Sound = {
     const g = c.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     s.connect(f); f.connect(g); g.connect(this.sfxBus); s.start(t);
   },
-  sfx(name) {
-    if (!this.ctx) return;
-    switch (name) {
-      case 'click': this.tone(880, 0.06, 'square', 0.04); this.tone(1320, 0.05, 'sine', 0.03, null, null, 0.03); break;
-      case 'hover': this.tone(1600, 0.03, 'sine', 0.015); break;
-      case 'start': this.tone(110, 1.8, 'sawtooth', 0.12, 55); this.tone(440, 1.2, 'sine', 0.08, 880); this.noise(1.2, 0.08, 600, 0.5); break;
-      case 'slash': this.noise(0.14, 0.25, 2600, 0.8); this.tone(320, 0.1, 'triangle', 0.08, 140); break;
-      case 'heavy': this.noise(0.3, 0.35, 900, 0.6); this.tone(120, 0.35, 'sawtooth', 0.15, 50); break;
-      case 'zap': this.tone(1800, 0.18, 'sawtooth', 0.06, 300); this.noise(0.12, 0.12, 4000, 2); break;
-      case 'lance': this.tone(220, 0.6, 'sawtooth', 0.12, 1800); this.noise(0.5, 0.15, 3000, 1); break;
-      case 'hit': this.noise(0.08, 0.22, 1500, 1); break;
-      case 'hurt': this.tone(160, 0.18, 'square', 0.07, 80); this.noise(0.1, 0.15, 500, 1); break;
-      case 'heal': [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.5, 'sine', 0.06, null, null, i * 0.06)); break;
-      case 'shield': this.tone(300, 0.6, 'sine', 0.1, 600); this.tone(450, 0.6, 'triangle', 0.05, 900); break;
-      case 'blink': this.tone(1200, 0.25, 'sine', 0.08, 200); this.noise(0.2, 0.1, 6000, 3); break;
-      case 'boom': this.noise(0.9, 0.5, 200, 0.4); this.tone(70, 0.9, 'sine', 0.3, 30); break;
-      case 'die': this.tone(200, 0.6, 'sawtooth', 0.08, 40); break;
-      case 'levelup': [392, 523, 659, 784, 1047].forEach((f, i) => { this.tone(f, 0.9, 'triangle', 0.08, null, null, i * 0.09); this.tone(f * 2, 0.6, 'sine', 0.03, null, null, i * 0.09); }); break;
-      case 'quest': [659, 784, 988].forEach((f, i) => this.tone(f, 0.7, 'sine', 0.09, null, null, i * 0.12)); break;
-      case 'accept': this.tone(523, 0.3, 'sine', 0.08); this.tone(784, 0.4, 'sine', 0.08, null, null, 0.1); break;
-      case 'pickup': this.tone(1047, 0.3, 'sine', 0.07); this.tone(1568, 0.4, 'sine', 0.05, null, null, 0.07); break;
-      case 'coin': this.tone(1318, 0.12, 'square', 0.03); this.tone(1760, 0.2, 'square', 0.03, null, null, 0.06); break;
-      case 'error': this.tone(180, 0.15, 'square', 0.05); break;
-      case 'jump': this.noise(0.12, 0.08, 1800, 1.5); break;
-      case 'flip': this.noise(0.25, 0.12, 2400, 2); this.tone(500, 0.2, 'sine', 0.03, 900); break;
-      case 'bulletjump': this.noise(0.45, 0.22, 1400, 1.2); this.tone(160, 0.35, 'sawtooth', 0.08, 520); this.tone(900, 0.3, 'sine', 0.04, 2200); break;
-      case 'slide': this.noise(0.45, 0.14, 700, 0.7); break;
-      case 'roll': this.noise(0.3, 0.1, 900, 1); break;
-      case 'land': this.noise(0.35, 0.3, 300, 0.6); this.tone(90, 0.3, 'sine', 0.2, 40); break;
-      case 'chat': this.tone(1400, 0.05, 'sine', 0.02); break;
-      case 'death': [330, 262, 196, 131].forEach((f, i) => this.tone(f, 1.2, 'triangle', 0.08, null, null, i * 0.25)); break;
-    }
-  }
+  // Sound effects (clicks, hits, jumps, level-up chimes...) are switched off: every Sound.sfx() call is silent.
+  // Music is unaffected: the menu theme, the world bells and the cantina tune still play.
+  sfx() {}
 };
