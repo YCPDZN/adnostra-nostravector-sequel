@@ -297,9 +297,9 @@ function animHumanoid(r, move, t, atk = 0, dance = 0) {
   else { r.arms[0].rotation.z *= 0.8; r.arms[1].rotation.z *= 0.8; }
 }
 
-function makeDrone(level) {
+function makeDrone(level, glow = 0xff2b4a) {
   const g = new THREE.Group(); const body = new THREE.Group(); body.position.y = 2.6; g.add(body);
-  const core = new THREE.Mesh(GEO.oct, glowMat(0xff2b4a, 3)); core.scale.set(0.42, 0.55, 0.42); body.add(core);
+  const core = new THREE.Mesh(GEO.oct, glowMat(glow, 3)); core.scale.set(0.42, 0.55, 0.42); body.add(core);
   const shell = new THREE.Mesh(GEO.ico, mat('droneShell', () => new THREE.MeshStandardMaterial({ color: 0x1d2229, metalness: 0.8, roughness: 0.3, wireframe: true }))); shell.scale.setScalar(0.72); body.add(shell);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.05, 6, 32), armorMat(0x39424d)); ring.rotation.x = Math.PI / 2; body.add(ring);
   for (let i = 0; i < 3; i++) { const f = bx(0.08, 0.5, 0.35, armorMat(0x39424d), 0, 0, 0); const p = new THREE.Group(); p.rotation.y = i * 2.094; f.position.x = 0.95; p.add(f); body.add(p); }
@@ -414,10 +414,12 @@ function mergeStatic(scene, cell = 250) {
     done.push(o);
   });
   for (const o of done) o.removeFromParent();
+  const list = [];
   for (const b of buckets.values()) {
     const mesh = new THREE.Mesh(mergeGeometries(b.geos), b.m); mesh.castShadow = b.cs; mesh.receiveShadow = b.rs; scene.add(mesh);
+    mesh.geometry.computeBoundingSphere(); list.push(mesh);
   }
-  return { meshes: done.length, batches: buckets.size };
+  return { meshes: done.length, batches: buckets.size, list };
 }
 // Distant characters. Up close each character is its animated rig; past LOD_NEAR it
 // becomes one instance in a shared BatchedMesh (vertex-coloured body + glowing trim),
@@ -425,8 +427,8 @@ function mergeStatic(scene, cell = 250) {
 const LOD_NEAR = 30;
 const farChars = { body: null, glow: null, geo: new Map(), ids: new Map() };
 function initFarChars(scene) {
-  const body = new THREE.BatchedMesh(256, 160000, 0, new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.55, roughness: 0.45 }));
-  const glow = new THREE.BatchedMesh(192, 30000, 0, new THREE.MeshBasicMaterial({ vertexColors: true }));
+  const body = new THREE.BatchedMesh(512, 420000, 0, new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.55, roughness: 0.45 }));
+  const glow = new THREE.BatchedMesh(384, 90000, 0, new THREE.MeshBasicMaterial({ vertexColors: true }));
   body.castShadow = true; body.receiveShadow = true; body.perObjectFrustumCulled = glow.perObjectFrustumCulled = true; body.frustumCulled = glow.frustumCulled = false; // instances move, so cull per character, not per batch
   scene.add(body, glow); Object.assign(farChars, { body, glow });
 }
@@ -650,10 +652,11 @@ function scaleUV(geo, w, h, d) {
 function makeMountains(S) {
   const haze = new THREE.MeshBasicMaterial({ color: 0x8c6f86, fog: false });
   const snow = new THREE.MeshBasicMaterial({ color: 0xf2dcd0, fog: false });
-  const k = new THREE.Mesh(new THREE.ConeGeometry(230, 150, 28, 1), haze); k.position.set(330, 70, -440); S.add(k);   // the great mountain
-  const cap = new THREE.Mesh(new THREE.ConeGeometry(62, 42, 28, 1), snow); cap.position.set(330, 124, -440); S.add(cap);
+  const far = S === W.scene ? 1.85 : 1;   // the world is bigger than the menu: push the horizon out to match
+  const k = new THREE.Mesh(new THREE.ConeGeometry(230 * far, 150 * far, 28, 1), haze); k.position.set(330 * far, 70 * far, -440 * far); S.add(k);   // the great mountain
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(62 * far, 42 * far, 28, 1), snow); cap.position.set(330 * far, 124 * far, -440 * far); S.add(cap);
   const mesaM = new THREE.MeshBasicMaterial({ color: 0x9a6f6a, fog: false });
-  for (let i = 0; i < 9; i++) { const a = rand(0, Math.PI * 2), r = rand(470, 540); if (Math.abs(a - Math.atan2(-440, 330)) < 0.4) continue; const m = new THREE.Mesh(new THREE.CylinderGeometry(rand(30, 70), rand(50, 90), rand(25, 55), 7), mesaM); m.position.set(Math.cos(a) * r, 10, Math.sin(a) * r); S.add(m); }
+  for (let i = 0; i < 9; i++) { const a = rand(0, Math.PI * 2), r = rand(470, 540) * far; if (Math.abs(a - Math.atan2(-440, 330)) < 0.4) continue; const m = new THREE.Mesh(new THREE.CylinderGeometry(rand(30, 70) * far, rand(50, 90) * far, rand(25, 55) * far, 7), mesaM); m.position.set(Math.cos(a) * r, 10 * far, Math.sin(a) * r); S.add(m); }
 }
 
 // =====================================================================
@@ -773,16 +776,26 @@ function updateMenu(dt) {
 // =====================================================================
 //  WORLD
 // =====================================================================
-const W = { scene: new THREE.Scene(), cam: new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 900) };
+const W = { scene: new THREE.Scene(), cam: new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1500) };
+// Every zone has a power level (0–9). Enemies there share it; fight above your own and they will take you apart.
 const ZONES = {
-  plaza: { name: 'CONCORDIA PLAZA', sub: 'SANCTUARY · SEAT OF THE GOVERNOR', safe: true },
-  causeway: { name: 'CONCORD CAUSEWAY', sub: 'AD-NOSTRA' },
-  ward: { name: 'SPIRE WARD', sub: 'AD-NOSTRA' },
-  ashen: { name: 'SCORCHED VELD', sub: 'LEVEL 1–3 · CONTESTED' },
-  echo: { name: 'ECHO PLAINS', sub: 'LEVEL 2–4 · CONTESTED' },
-  crater: { name: 'THE CATHARSIS CRATER', sub: 'LEVEL 4–7 · HOSTILE' },
-  cantina: { name: 'THE SALT LANTERN', sub: 'CANTINA · SANCTUARY', safe: true },
+  plaza: { name: 'CONCORDIA PLAZA', sub: 'SANCTUARY · SEAT OF THE GOVERNOR', safe: true, pl: 0 },
+  causeway: { name: 'CONCORD CAUSEWAY', sub: 'AD-NOSTRA', pl: 0 },
+  ward: { name: 'THE SPIRE WARDS', sub: 'AD-NOSTRA', pl: 0 },
+  ashen: { name: 'SCORCHED VELD', sub: 'CONTESTED', pl: 1 },
+  echo: { name: 'ECHO PLAINS', sub: 'CONTESTED', pl: 2 },
+  crater: { name: 'THE CATHARSIS CRATER', sub: 'HOSTILE', pl: 3 },
+  cantina: { name: 'THE SALT LANTERN', sub: 'CANTINA · SANCTUARY', safe: true, pl: 0 },
+  rail: { name: 'THE SUNKEN RAIL YARDS', sub: 'OUTER WARDS · HOSTILE', pl: 4 },
+  tenements: { name: 'THE ASHFALL TENEMENTS', sub: 'OUTER WARDS · HOSTILE', pl: 5 },
+  reservoir: { name: 'THE DRY RESERVOIR', sub: 'OUTER WARDS · DEADLY', pl: 6 },
 };
+// The city now runs out to a rampart at WORLD_R metres (it used to stop at 246). The Outer Wards hold the new districts.
+const WORLD_R = 470;
+const RAIL = { x0: 236, x1: 420, z0: -78, z1: 78 }, TENE = { x0: -420, x1: -236, z0: -78, z1: 78 };
+const RESV = new V3(0, 0, 335), RESV_R = 92;
+const SOUTH_LANE = { x0: 12, x1: 30, z0: 26, z1: 92 };   // around the Salt Lantern, to the south avenue
+const inRect = (R, x, z, m = 0) => x > R.x0 - m && x < R.x1 + m && z > R.z0 - m && z < R.z1 + m;
 // The Salt Lantern, just south of Concordia Plaza. Interior footprint; the door faces the plaza (north, -z).
 const CANTINA = { x0: -11, x1: 11, z0: 46, z1: 70, h: 6.2 };
 const inCantina = (x, z) => x > CANTINA.x0 + 0.3 && x < CANTINA.x1 - 0.3 && z > CANTINA.z0 + 0.3 && z < CANTINA.z1 - 0.3;
@@ -794,6 +807,9 @@ function zoneAt(x, z) {
   if (Math.hypot(x - CRATER.x, z - CRATER.z) < 72) return 'crater';
   if (x > 34 && x < 156 && Math.abs(z) < 62) return 'ashen';
   if (x < -34 && x > -156 && Math.abs(z) < 62) return 'echo';
+  if (inRect(RAIL, x, z)) return 'rail';
+  if (inRect(TENE, x, z)) return 'tenements';
+  if (Math.hypot(x - RESV.x, z - RESV.z) < RESV_R) return 'reservoir';
   if (Math.abs(z) < 12 || (Math.abs(x) < 12 && z < 0)) return 'causeway';
   return 'ward';
 }
@@ -804,14 +820,16 @@ function isOpen(x, z, m) {
   if (x > 30 - m && x < 160 + m && Math.abs(z) < 66 + m) return true;
   if (x < -30 + m && x > -160 - m && Math.abs(z) < 66 + m) return true;
   if (Math.hypot(x - CRATER.x, z - CRATER.z) < 76 + m) return true;
-  if (Math.hypot(x, z) > 232 - m) return true;
+  if (inRect(RAIL, x, z, 4 + m) || inRect(TENE, x, z, 4 + m) || inRect(SOUTH_LANE, x, z, m)) return true;
+  if (Math.hypot(x - RESV.x, z - RESV.z) < RESV_R + 4 + m) return true;
+  if (Math.hypot(x, z) > WORLD_R - 4 - m) return true;   // the strip inside the rampart
   return false;
 }
 function addCollider(x, z, w, d, h = 60) { G.colliders.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, h }); }
 
 function buildWorld() {
   const S = W.scene;
-  S.fog = new THREE.Fog(0xd8ae82, 70, 330);
+  S.fog = new THREE.Fog(0xd8ae82, 80, 380);
   S.userData.post = { strength: 0.45, radius: 0.5, threshold: 0.95, exposure: 0.9 };
   S.add(new THREE.HemisphereLight(0xffe0b8, 0x5a3e28, 0.6));
   const sun = new THREE.DirectionalLight(0xffd6a0, 2.4);
@@ -822,13 +840,13 @@ function buildWorld() {
   S.add(sun, sun.target); W.sun = sun;
 
   // sky dome + the great mountain and mesas on the horizon
-  const sky = makeSky(SUN_DIR, 600, { zen: 0x4a78b4, mid: 0xb9b4a8, hor: 0xd8ae82, glow: 0xffc27a, clouds: 1 }); S.add(sky); W.sky = sky;
+  const sky = makeSky(SUN_DIR, 1300, { zen: 0x4a78b4, mid: 0xb9b4a8, hor: 0xd8ae82, glow: 0xffc27a, clouds: 1 }); S.add(sky); W.sky = sky;
   S.environment = envFromSky(sky); S.environmentIntensity = 0.55;
   makeMountains(S);
 
   // ground
-  const gt = grassTex('#9a7440', '#6e5028', '#c9a160', 90);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ map: gt, roughness: 1 }));
+  const gt = grassTex('#9a7440', '#6e5028', '#c9a160', 190);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1260, 1260), new THREE.MeshStandardMaterial({ map: gt, roughness: 1 }));
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; S.add(ground);
 
   const overlay = (geo, tex, x, z, y = 0.02, extra = {}) => {
@@ -838,14 +856,18 @@ function buildWorld() {
 
   // roads
   const roadE = canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#8a5a3a'; g.fillRect(0, 0, w, h); speckle(g, w, h, 2500, ['#7a4e32', '#9c6a46', '#6a4229'], 3); g.fillStyle = 'rgba(240,220,180,0.35)'; g.fillRect(40, 124, 170, 8); });
-  roadE.repeat.set(300 / 14, 1);
-  overlay(new THREE.PlaneGeometry(300, 14), roadE, 0, 0, 0.01);
+  roadE.repeat.set(WORLD_R * 2 / 14, 1);
+  overlay(new THREE.PlaneGeometry(WORLD_R * 2, 14), roadE, 0, 0, 0.01);
   const roadN = canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#8a5a3a'; g.fillRect(0, 0, w, h); speckle(g, w, h, 2500, ['#7a4e32', '#9c6a46', '#6a4229'], 3); g.fillStyle = 'rgba(240,220,180,0.35)'; g.fillRect(124, 40, 8, 170); });
   roadN.repeat.set(1, 120 / 14);
   overlay(new THREE.PlaneGeometry(14, 120), roadN, 0, -60, 0.011);
+  const roadS = roadN.clone(); roadS.repeat.set(1, 150 / 14); roadS.needsUpdate = true;   // the south avenue, out to the Dry Reservoir
+  overlay(new THREE.PlaneGeometry(14, 150), roadS, 0, 166, 0.011);
+  const roadL = roadN.clone(); roadL.repeat.set(1, 66 / 14); roadL.needsUpdate = true;    // the lane round the Salt Lantern
+  overlay(new THREE.PlaneGeometry(14, 66), roadL, 21, 59, 0.012);
   const stripM = mat('kerb', () => new THREE.MeshStandardMaterial({ color: 0xd8c09a, roughness: 0.9 }));
   for (const s of [-1, 1]) {
-    for (const side of [-1, 1]) bx(116, 0.06, 0.12, stripM, side * 92, 0.03, s * 7.2, S).castShadow = false;
+    for (const side of [-1, 1]) bx(WORLD_R - 36, 0.06, 0.12, stripM, side * (34 + (WORLD_R - 36) / 2), 0.03, s * 7.2, S).castShadow = false;
     bx(0.12, 0.06, 70, stripM, s * 7.2, 0.03, -71, S).castShadow = false;
   }
 
@@ -863,11 +885,12 @@ function buildWorld() {
     for (const [pw, pd, px, pz] of [[w, 0.35, 0, d / 2], [w, 0.35, 0, -d / 2], [0.35, d, w / 2, 0], [0.35, d, -w / 2, 0]]) bx(pw, 0.9, pd, trimM, x + px, y + 0.45, z + pz, S);
   };
   const spire = (x, y, z) => { const sh = rand(7, 13); bx(0.35, sh, 0.35, trimM, x, y + sh / 2, z, S); const l = new THREE.Mesh(GEO.sph, blink); l.scale.setScalar(0.35); l.position.set(x, y + sh, z); S.add(l); };
-  for (let gx = -230; gx <= 230; gx += 20) for (let gz = -230; gz <= 230; gz += 20) {
+  const GR = WORLD_R - 10;
+  for (let gx = -GR; gx <= GR; gx += 20) for (let gz = -GR; gz <= GR; gz += 20) {
     const w = rand(9, 15), d = rand(9, 15), x = gx + rand(-2, 2), z = gz + rand(-2, 2);
     if (isOpen(x, z, Math.max(w, d) / 2)) continue;
     const r = Math.hypot(x, z);
-    const h = rand(14, 40) + (r < 120 ? rand(0, 45) : rand(0, 20));
+    const h = rand(14, 40) + (r < 120 ? rand(0, 45) : r < 300 ? rand(0, 20) : rand(0, 34));   // a second skyline rises in the Outer Wards
     addCollider(x, z, w, d, h + 3);
     if (h > 58 && Math.random() < 0.55) {            // glass spire on a sandstone podium
       const ph = rand(7, 11); block(w, ph, d, x, 0, z, FAC.sand); parapet(w, d, x, ph, z);
@@ -888,9 +911,9 @@ function buildWorld() {
     } else if (h > 50) spire(x, y, z);
   }
   // sandstone rampart around the city
-  const wall = new THREE.Mesh(new THREE.CylinderGeometry(246, 246, 34, 128, 1, true), new THREE.MeshStandardMaterial({ color: 0xb48c62, roughness: 0.95, side: THREE.BackSide }));
-  wall.position.y = 17; S.add(wall);
-  const wallStrip = new THREE.Mesh(new THREE.TorusGeometry(245, 0.25, 6, 256), glowMat(0xe8c46a, 1.6)); wallStrip.rotation.x = Math.PI / 2; wallStrip.position.y = 33; S.add(wallStrip);
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(WORLD_R + 6, WORLD_R + 6, 40, 256, 1, true), new THREE.MeshStandardMaterial({ color: 0xb48c62, roughness: 0.95, side: THREE.BackSide }));
+  wall.position.y = 20; S.add(wall);
+  const wallStrip = new THREE.Mesh(new THREE.TorusGeometry(WORLD_R + 5, 0.3, 6, 384), glowMat(0xe8c46a, 1.6)); wallStrip.rotation.x = Math.PI / 2; wallStrip.position.y = 39; S.add(wallStrip);
 
   // hologram billboards
   const words = ['AD-NOSTRA', 'REBUILD · RENEW · REMEMBER', 'CONCORD', 'ANNO DOMINI 2137', 'THE SKY IS OURS', 'ENLIST · ASCEND'];
@@ -1011,11 +1034,14 @@ function buildWorld() {
   S.add(W.ash);
 
   // grass: gold in the city gaps, burnt on the veld, pale on the Echo Plains, none on roads or in the crater
-  W.grass = makeGrass(Q.worldGrass, 232, (x, z) => {
-    if (Math.hypot(x, z) > 236 || !isOpen(x, z, -2) || inCantinaLot(x, z)) return null;
-    if (Math.abs(z) < 8 || (Math.abs(x) < 8 && z < 0 && z > -120)) return null;
+  W.grass = makeGrass(Q.worldGrass * 3, WORLD_R, (x, z) => {
+    if (Math.hypot(x, z) > WORLD_R - 4 || !isOpen(x, z, -2) || inCantinaLot(x, z)) return null;
+    if (Math.abs(z) < 8 || (Math.abs(x) < 8 && z < 0 && z > -120) || (Math.abs(x) < 8 && z > 90 && z < 242) || inRect(SOUTH_LANE, x, z, 2)) return null;
     const zn = zoneAt(x, z);
     if (zn === 'plaza') return null;
+    if (zn === 'rail') return Math.random() < 0.25 ? 'burnt' : null;
+    if (zn === 'tenements') return Math.random() < 0.5 ? 'burnt' : null;
+    if (zn === 'reservoir') return Math.hypot(x - RESV.x, z - RESV.z) > 80 && Math.random() < 0.4 ? 'pale' : null;
     if (zn === 'crater') return Math.hypot(x - CRATER.x, z - CRATER.z) > 62 && Math.random() < 0.3 ? 'burnt' : null;
     if (zn === 'ashen') return Math.random() < 0.6 ? 'burnt' : 'gold';
     if (zn === 'echo') return 'pale';
@@ -1030,13 +1056,151 @@ function buildWorld() {
   W.targetRing.rotation.x = -Math.PI / 2; W.targetRing.visible = false; S.add(W.targetRing);
 
   buildCantina(S);
+  buildDistricts(S);
+  buildTrams(S);
   // vultures over the crater; small flocks over the plains
-  W.birds = makeBirdFlock([...birdRing(7, CRATER.x, CRATER.z, 22, 46, 30, 46, 7, 1.6), ...birdRing(10, -95, 8, 12, 24, 14, 20, 10, 0.45), ...birdRing(8, 95, -10, 12, 22, 14, 20, 10, 0.45)]);
+  W.birds = makeBirdFlock([...birdRing(7, CRATER.x, CRATER.z, 22, 46, 30, 46, 7, 1.6), ...birdRing(10, -95, 8, 12, 24, 14, 20, 10, 0.45), ...birdRing(8, 95, -10, 12, 22, 14, 20, 10, 0.45),
+    ...birdRing(6, RESV.x, RESV.z, 30, 60, 34, 50, 6, 1.6), ...birdRing(5, -330, 0, 20, 50, 30, 44, 6, 1.4)]);
   S.add(W.birds);
-  W.batch = mergeStatic(S, 250);
+  W.batch = mergeStatic(S, 300);
   initFarChars(S);
+  buildColliderGrid(); buildDistrictPoints();
   spawnNPCs(); spawnZuri(); spawnEnemies(); spawnShards(); spawnBots(); spawnOrion(); spawnMalia(); spawnAnimals();
+  buildColliderGrid();   // again, with the NPCs' counters
   G.world = true;
+}
+
+// =====================================================================
+//  THE OUTER WARDS — districts beyond the old city, each with its own power level
+// =====================================================================
+function buildDistricts(S) {
+  const groundOv = (geo, tex, x, z, extra = {}) => {
+    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial(Object.assign({ map: tex, roughness: 0.97, polygonOffset: true, polygonOffsetFactor: -1.2 }, extra)));
+    m.rotation.x = -Math.PI / 2; m.position.set(x, 0.022, z); m.receiveShadow = true; S.add(m); return m;
+  };
+  const rust = (c) => mat('rust' + c, () => new THREE.MeshStandardMaterial({ color: c, metalness: 0.45, roughness: 0.8 }));
+  const crimGlow = glowMat(0xff2b4a, 3);
+
+  // ---------- THE SUNKEN RAIL YARDS (east, power level 4): the old freight terminus, rusting into the grass
+  const rx = (RAIL.x0 + RAIL.x1) / 2, rw = RAIL.x1 - RAIL.x0, rd = RAIL.z1 - RAIL.z0;
+  groundOv(new THREE.PlaneGeometry(rw, rd), canvasTex(512, 512, (g, w, h) => { g.fillStyle = '#6a5440'; g.fillRect(0, 0, w, h); speckle(g, w, h, 9000, ['#5a4634', '#7a6048', '#4a3a2a', '#8a6a4a'], 3); cracks(g, w, h, 8, 'rgba(0,0,0,0.35)', 1.5); }, 6), rx, 0);
+  const sleeperTex = canvasTex(256, 64, (g, w, h) => { g.fillStyle = '#5a4634'; g.fillRect(0, 0, w, h); g.fillStyle = '#3a2c20'; for (let i = 0; i < 8; i++) g.fillRect(i * 32 + 4, 4, 14, 56); });
+  sleeperTex.repeat.set(rw / 8, 1);
+  const railM = mat('railSteel', () => new THREE.MeshStandardMaterial({ color: 0x8a8278, metalness: 0.85, roughness: 0.35 }));
+  const tracks = [-62, -44, -26, 26, 44, 62];
+  for (const tz of tracks) {
+    groundOv(new THREE.PlaneGeometry(rw, 3), sleeperTex, rx, tz);
+    for (const o of [-0.72, 0.72]) bx(rw, 0.14, 0.12, railM, rx, 0.07, tz + o, S).castShadow = false;
+  }
+  const carCols = [0x7a3a22, 0x3a5a5a, 0x8a6a2a, 0x4a3a52, 0x6a2a2a];
+  for (let i = 0; i < 18; i++) {   // freight cars, some still on the rails, some on their side
+    const tz = pick(tracks), len = rand(10, 14), x = rand(RAIL.x0 + 12, RAIL.x1 - 12), tipped = Math.random() < 0.3;
+    const car = bx(len, 3.2, 3, rust(pick(carCols)), x, tipped ? 1.5 : 2.1, tz + (tipped ? rand(-3, 3) : 0), S);
+    if (tipped) car.rotation.x = Math.PI / 2 * (Math.random() < 0.5 ? 1 : -1) * 0.92;
+    bx(len * 0.98, 0.15, 3.1, rust(0x2a2622), x, (tipped ? 1.5 : 2.1) + 1.65, tz, S).visible = !tipped;
+    addCollider(x, tz, len, tipped ? 3.6 : 3.2, 3.6);
+  }
+  for (const gx of [rx - 50, rx + 45]) {   // gantry cranes straddling the tracks
+    const gm = rust(0xb07a2a);
+    for (const gz of [-70, 70]) { bx(1.4, 22, 1.4, gm, gx, 11, gz, S); bx(1.4, 22, 1.4, gm, gx + 8, 11, gz, S); addCollider(gx + 4, gz, 10, 2); }
+    bx(10, 2, 146, gm, gx + 4, 22.5, 0, S); bx(6, 3, 6, rust(0x3a3a3a), gx + 4, 20, rand(-40, 40), S);
+  }
+  for (let i = 0; i < 10; i++) {   // signal posts, still blinking crimson for trains that will never come
+    const x = rand(RAIL.x0 + 8, RAIL.x1 - 8), z = pick(tracks) + 2.6;
+    bx(0.25, 5, 0.25, rust(0x2a2a2a), x, 2.5, z, S); const l = new THREE.Mesh(GEO.sph, crimGlow); l.scale.setScalar(0.3); l.position.set(x, 5, z); S.add(l); addCollider(x, z, 0.5, 0.5, 5);
+  }
+  const shed = bx(46, 12, 1, rust(0x5a4a3a), rx + 20, 6, RAIL.z0 + 3, S); addCollider(rx + 20, RAIL.z0 + 3, 46, 1.2, 12);   // the old engine shed's back wall
+  shed.castShadow = true;
+
+  // ---------- THE ASHFALL TENEMENTS (west, power level 5): burnt-out housing blocks you can walk through
+  const tx = (TENE.x0 + TENE.x1) / 2;
+  groundOv(new THREE.PlaneGeometry(TENE.x1 - TENE.x0, TENE.z1 - TENE.z0), canvasTex(512, 512, (g, w, h) => { g.fillStyle = '#3a322c'; g.fillRect(0, 0, w, h); speckle(g, w, h, 10000, ['#2a2420', '#4a3e34', '#1e1a18', '#5a4a3a'], 3); cracks(g, w, h, 16, 'rgba(0,0,0,0.55)', 2); cracks(g, w, h, 5, 'rgba(255,110,40,0.22)', 1.5); }, 6), tx, 0);
+  const shellM = mat('tenement', () => new THREE.MeshStandardMaterial({ color: 0x6a5a4c, roughness: 0.95 }));
+  const sootM = mat('soot', () => new THREE.MeshStandardMaterial({ color: 0x2a2420, roughness: 1 }));
+  const fireM = new THREE.MeshStandardMaterial({ color: 0xff7a2a, emissive: 0xff5a1a, emissiveIntensity: 3, transparent: true, opacity: 0.9 });
+  for (let gx = TENE.x0 + 16; gx < TENE.x1 - 10; gx += 30) for (let gz = TENE.z0 + 14; gz < TENE.z1 - 8; gz += 28) {
+    if (Math.abs(gz) < 18 || Math.random() < 0.2) continue;
+    const w = rand(12, 18), d = rand(10, 16), h = rand(4, 13), x = gx + rand(-3, 3), z = gz + rand(-3, 3), t = 0.7, m = Math.random() < 0.5 ? shellM : sootM;
+    const door = randi(0, 3);   // one wall has a gap you can walk through
+    const walls = [[w, t, x, z - d / 2], [w, t, x, z + d / 2], [t, d, x - w / 2, z], [t, d, x + w / 2, z]];
+    walls.forEach(([ww, dd, cx, cz], k) => {
+      const hh = h * rand(0.55, 1);
+      if (k === door) {   // two stubs either side of the gap
+        const horiz = ww > dd, L = horiz ? ww : dd, seg = (L - 4) / 2;
+        for (const sgn of [-1, 1]) { const ox = horiz ? sgn * (seg / 2 + 2) : 0, oz = horiz ? 0 : sgn * (seg / 2 + 2); bx(horiz ? seg : t, hh, horiz ? t : seg, m, cx + ox, hh / 2, cz + oz, S); addCollider(cx + ox, cz + oz, horiz ? seg : t, horiz ? t : seg, hh); }
+      } else { bx(ww, hh, dd, m, cx, hh / 2, cz, S); addCollider(cx, cz, ww, dd, hh); }
+    });
+    if (Math.random() < 0.5) { const f = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.8, 8), fireM); f.position.set(x + rand(-3, 3), 0.9, z + rand(-3, 3)); f.userData.dynamic = true; S.add(f); W.fires.push(f); }
+    for (let k = 0; k < 3; k++) { const rb = bx(rand(.6, 2), rand(.4, 1.2), rand(.6, 2), sootM, x + rand(-w / 2, w / 2), 0.3, z + rand(-d / 2, d / 2), S); rb.rotation.set(rand(0, 1), rand(0, 3), rand(0, 1)); }
+  }
+
+  // ---------- THE DRY RESERVOIR (south, power level 6): the city's drained water basin, where the Catharsis has taken root
+  groundOv(new THREE.CircleGeometry(RESV_R, 96), canvasTex(1024, 1024, (g, w, h) => {
+    g.fillStyle = '#8a7a62'; g.fillRect(0, 0, w, h); speckle(g, w, h, 12000, ['#7a6a52', '#9a8a70', '#6a5a44'], 3);
+    g.strokeStyle = 'rgba(40,28,18,0.6)'; g.lineWidth = 2; for (let i = 0; i < 260; i++) { const x = rand(0, w), y = rand(0, h); g.beginPath(); g.moveTo(x, y); for (let k = 0; k < 4; k++) g.lineTo(x + rand(-40, 40), y + rand(-40, 40)); g.stroke(); }   // mud cracks
+    g.shadowColor = '#ff2b4a'; g.shadowBlur = 8; cracks(g, w, h, 12, 'rgba(255,43,74,0.45)', 2); g.shadowBlur = 0;
+  }), RESV.x, RESV.z);
+  const concreteM = mat('concrete', () => new THREE.MeshStandardMaterial({ color: 0xa8a090, roughness: 0.9 }));
+  for (let a = 0; a < Math.PI * 2; a += 0.085) {   // the crumbling retaining wall, open to the north where the avenue comes in
+    if (Math.abs(a - Math.PI * 1.5) < 0.16 || Math.random() < 0.15) continue;
+    const x = RESV.x + Math.cos(a) * (RESV_R - 2), z = RESV.z + Math.sin(a) * (RESV_R - 2), h = rand(1.6, 3.4);
+    const seg = bx(7.6, h, 1.2, concreteM, x, h / 2, z, S); seg.rotation.y = -a + Math.PI / 2; addCollider(x, z, 4.6, 4.6, h);
+  }
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(6, 7, 28, 24), concreteM); tower.position.set(RESV.x, 14, RESV.z + 8); tower.castShadow = true; S.add(tower); addCollider(RESV.x, RESV.z + 8, 13, 13);
+  const tRing = new THREE.Mesh(new THREE.TorusGeometry(7.4, 0.25, 8, 48), crimGlow); tRing.rotation.x = Math.PI / 2; tRing.position.set(RESV.x, 22, RESV.z + 8); S.add(tRing);
+  const pipeM = rust(0x5a5248);
+  for (const [px, pz, len, along] of [[-40, 300, 50, 'x'], [38, 356, 46, 'x'], [-30, 372, 34, 'z'], [44, 300, 30, 'z']]) {   // great outfall pipes
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, len, 16), pipeM); p.position.set(px, 1.8, pz); p.rotation.set(along === 'z' ? Math.PI / 2 : 0, 0, along === 'x' ? Math.PI / 2 : 0); p.castShadow = true; S.add(p);
+    addCollider(px, pz, along === 'x' ? len : 3.6, along === 'x' ? 3.6 : len, 3.6);
+  }
+  for (let i = 0; i < 14; i++) {   // crimson growths: the Catharsis, spreading through the dry silt
+    const a = rand(0, Math.PI * 2), r = rand(14, 78), x = RESV.x + Math.cos(a) * r, z = RESV.z + Math.sin(a) * r;
+    if (z < RESV.z - 60 && Math.abs(x) < 14) continue;
+    const c = new THREE.Mesh(GEO.oct, crimGlow); const sz = rand(0.6, 1.6); c.scale.set(sz, sz * rand(2, 4), sz); c.position.set(x, sz * 1.5, z); c.rotation.z = rand(-0.4, 0.4); S.add(c); addCollider(x, z, sz * 1.6, sz * 1.6, sz * 4);
+  }
+}
+
+// Concord tram stops: fast travel between the districts. A stop works once you have walked past it.
+const TRAMS = [
+  { id: 'plaza', name: 'Concordia Plaza', pos: new V3(-21, 0, 14) },
+  { id: 'ashen', name: 'Scorched Veld', pos: new V3(46, 0, 16) },
+  { id: 'echo', name: 'Echo Plains', pos: new V3(-46, 0, 16) },
+  { id: 'crater', name: 'Crater Rim', pos: new V3(16, 0, -86) },
+  { id: 'rail', name: 'Sunken Rail Yards', pos: new V3(242, 0, 17) },
+  { id: 'tenements', name: 'Ashfall Tenements', pos: new V3(-242, 0, 17) },
+  { id: 'reservoir', name: 'Dry Reservoir', pos: new V3(16, 0, 236) },
+];
+function buildTrams(S) {
+  const postM = armorMat(0x2a313b), ringM = glowMat(0x3ee6ff, 3), padM = mat('tramPad', () => new THREE.MeshStandardMaterial({ color: 0x3a4250, metalness: 0.6, roughness: 0.4 }));
+  for (const t of TRAMS) {
+    const { x, z } = t.pos;
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.4, 0.25, 24), padM); pad.position.set(x, 0.12, z); pad.receiveShadow = true; S.add(pad);
+    bx(0.4, 4.6, 0.4, postM, x, 2.3, z - 2, S); bx(2.6, 0.8, 0.15, postM, x, 4.4, z - 2, S);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(2.25, 0.07, 6, 48), ringM); ring.rotation.x = Math.PI / 2; ring.position.set(x, 0.27, z); S.add(ring);
+    const sign = canvasTex(256, 80, (g, w, h) => { g.fillStyle = '#0b1118'; g.fillRect(0, 0, w, h); g.fillStyle = '#3ee6ff'; g.font = 'bold 34px Bahnschrift, sans-serif'; g.textAlign = 'center'; g.fillText('⇄ TRAM', w / 2, 52); });
+    sign.wrapS = sign.wrapT = THREE.ClampToEdgeWrapping;
+    for (const sd of [-1, 1]) { const pl = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.72), new THREE.MeshStandardMaterial({ map: sign, emissive: 0xffffff, emissiveMap: sign, emissiveIntensity: 0.8 })); pl.position.set(x, 4.4, z - 2 + sd * 0.09); if (sd < 0) pl.rotation.y = Math.PI; S.add(pl); }
+    addCollider(x, z - 2, 0.6, 0.6, 5);
+    G.props.push({ kind: 'tram', id: 'tram', tram: t, name: t.name + ' Tram Stop', pos: t.pos });
+  }
+}
+// Static batches far out in the fog cost GPU time for nothing: hide them.
+function cullStatic() {
+  if (!W.batch || !W.batch.list) return;
+  const cp = W.cam.position;
+  for (const m of W.batch.list) { const b = m.geometry.boundingSphere, d = Math.hypot(b.center.x - cp.x, b.center.z - cp.z) - b.radius; m.visible = d < 365; }   // the fog is all but opaque by then
+}
+// Colliders in a coarse grid, so a big city doesn't mean checking every wall for every character every frame.
+const COL_CELL = 24;
+function buildColliderGrid() {
+  const grid = new Map();
+  for (const c of G.colliders) {
+    for (let gx = Math.floor(c.minX / COL_CELL); gx <= Math.floor(c.maxX / COL_CELL); gx++)
+      for (let gz = Math.floor(c.minZ / COL_CELL); gz <= Math.floor(c.maxZ / COL_CELL); gz++) {
+        const k = gx * 10007 + gz; let l = grid.get(k); if (!l) grid.set(k, l = []); l.push(c);
+      }
+  }
+  G.colGrid = grid;
 }
 
 // =====================================================================
@@ -1488,25 +1652,40 @@ function spawnNPCs() {
   G.npcs.push(ilse);
 }
 
-function makeEnemy(type, level, x, z, temp = false) {
-  const e = { kind: 'enemy', type, level, spawn: new V3(x, 0, z), pos: new V3(x, 0, z), alive: true, state: 'idle', target: null, atkT: rand(0.5, 1.5), wanderT: rand(1, 6), wanderTo: null, dots: [], tagged: false, yaw: rand(0, 6.28), anim: rand(0, 10), temp, move: 0 };
+// Outer Ward Remnants: tougher takes on the Hollowed and the drones. base = which body and behaviour they use.
+const VARIANTS = {
+  rusthollow: { base: 'hollowed', name: 'Rail-Yard Hollowed', armor: 0x2e1e14, accent: 0xff8a2b, scale: 1.12, hp: 1.15, dmg: 1.05 },
+  scrapdrone: { base: 'drone', name: 'Scrap Drone', glow: 0xff8a2b, scale: 1.1 },
+  stalker: { base: 'hollowed', name: 'Ashfall Stalker', armor: 0x18161a, accent: 0xb07bff, scale: 1.15, hp: 1.1, dmg: 1.15, speed: 1.3, aggro: 1.3 },
+  cinderdrone: { base: 'drone', name: 'Cinder Drone', glow: 0xffb030, scale: 1.15, hp: 1.1 },
+  brute: { base: 'hollowed', name: 'Reservoir Brute', armor: 0x2a0a10, accent: 0xff2b4a, scale: 1.65, hp: 2.1, dmg: 1.5, speed: 0.8, atkCd: 2.3, radius: 0.9 },
+  sentinel: { base: 'drone', name: 'Catharsis Sentinel', glow: 0xff2b4a, scale: 1.5, hp: 1.7, dmg: 1.3, radius: 1.2 },
+};
+function makeEnemy(type, level, x, z, temp = false, variant = null) {
+  const V = variant && VARIANTS[variant]; if (V) type = V.base;
+  const e = { kind: 'enemy', type, variant, level, pl: ZONES[zoneAt(x, z)].pl, spawn: new V3(x, 0, z), pos: new V3(x, 0, z), alive: true, state: 'idle', target: null, atkT: rand(0.5, 1.5), wanderT: rand(1, 6), wanderTo: null, dots: [], tagged: false, yaw: rand(0, 6.28), anim: rand(0, 10), temp, move: 0 };
   let rig;
   if (type === 'hollowed') {
     Object.assign(e, { name: level >= 4 ? 'Beacon-Bound Hollowed' : 'Hollowed', maxHp: 70 + 30 * level, dmg: 5 + 2.6 * level, atkCd: 1.7, atkR: 2.1, speed: 3.4 + 0.25 * level, aggroR: 13, xp: 36 + 16 * level, height: 2.15, radius: 0.55, respawn: 16 });
-    rig = makeHumanoid({ armor: 0x1b1517, accent: 0xff2b4a, visor: 0xff2b4a, weapon: 'none', hollow: true });
-    rig.group.scale.setScalar(1 + level * 0.03);
+    rig = makeHumanoid({ armor: V ? V.armor : 0x1b1517, accent: V ? V.accent : 0xff2b4a, visor: V ? V.accent : 0xff2b4a, weapon: 'none', hollow: true });
+    rig.group.scale.setScalar(V ? V.scale : 1 + level * 0.03);
   } else if (type === 'drone') {
     Object.assign(e, { name: 'Echo Drone', maxHp: 55 + 22 * level, dmg: 5 + 2.3 * level, atkCd: 2.2, atkR: 13, speed: 4.6, aggroR: 16, xp: 42 + 17 * level, height: 3.5, radius: 0.85, respawn: 18 });
-    rig = makeDrone(level);
+    rig = makeDrone(level, V ? V.glow : undefined); if (V) rig.group.scale.setScalar(V.scale);
   } else {
     Object.assign(e, { name: 'Remnant of the Catharsis', isBoss: true, maxHp: 2600, dmg: 24, atkCd: 2.3, atkR: 4.8, speed: 3.3, aggroR: 20, xp: 950, height: 8.4, radius: 2.2, respawn: 120, slamT: 7, phase: 0 });
-    rig = makeBoss();
+    rig = makeBoss(); e.pl = 4;
+  }
+  if (V) {
+    e.name = V.name; e.maxHp = Math.round(e.maxHp * (V.hp || 1)); e.dmg *= V.dmg || 1; e.speed *= V.speed || 1; e.aggroR *= V.aggro || 1;
+    if (V.atkCd) e.atkCd = V.atkCd; if (V.radius) e.radius = V.radius; e.height = V.base === 'hollowed' ? 2 * V.scale : 3.3 * V.scale;
+    e.xp = Math.round(e.xp * 1.15); e.respawn += 6;
   }
   e.rig = rig; e.group = rig.group; e.hp = e.maxHp;
   e.group.position.copy(e.pos); W.scene.add(e.group);
   const s = e.group.scale.x;
   addHitbox(e, (e.radius * 2) / s, e.height / s, (e.radius * 2) / s, e.height / 2 / s);
-  e.plate = makePlate('enemy', `<div class="n">${esc(e.name)} <span style="color:#aaa">${e.level}</span></div><div class="hb"><i></i></div>`);
+  e.plate = makePlate('enemy', `<div class="n"><b class="pld">◆${e.pl}</b> ${esc(e.name)} <span style="color:#aaa">${e.level}</span></div><div class="hb"><i></i></div>`);
   e.plateBar = e.plate.querySelector('.hb i');
   G.enemies.push(e);
   return e;
@@ -1517,6 +1696,15 @@ function spawnEnemies() {
   for (let i = 0; i < 9; i++) { const a = rand(0, Math.PI * 2), r = rand(22, 56); makeEnemy('hollowed', randi(4, 5), CRATER.x + Math.cos(a) * r, CRATER.z + Math.sin(a) * r); }
   for (let i = 0; i < 4; i++) { const a = rand(0, Math.PI * 2), r = rand(20, 50); makeEnemy('drone', 5, CRATER.x + Math.cos(a) * r, CRATER.z + Math.sin(a) * r); }
   G.boss = makeEnemy('boss', 7, CRATER.x, CRATER.z + 2);
+  // the Outer Wards
+  const inR = R => [rand(R.x0 + 10, R.x1 - 10), rand(R.z0 + 8, R.z1 - 8)];
+  for (let i = 0; i < 15; i++) makeEnemy('hollowed', randi(9, 12), ...inR(RAIL), false, 'rusthollow');
+  for (let i = 0; i < 6; i++) makeEnemy('drone', randi(10, 12), ...inR(RAIL), false, 'scrapdrone');
+  for (let i = 0; i < 15; i++) makeEnemy('hollowed', randi(13, 16), ...inR(TENE), false, 'stalker');
+  for (let i = 0; i < 7; i++) makeEnemy('drone', randi(13, 16), ...inR(TENE), false, 'cinderdrone');
+  const inResv = () => { const a = rand(0, Math.PI * 2), r = rand(12, RESV_R - 12); return [RESV.x + Math.cos(a) * r, RESV.z + Math.sin(a) * r]; };
+  for (let i = 0; i < 9; i++) makeEnemy('hollowed', randi(17, 21), ...inResv(), false, 'brute');
+  for (let i = 0; i < 9; i++) makeEnemy('drone', randi(17, 21), ...inResv(), false, 'sentinel');
 }
 function spawnShards() {
   const sm = new THREE.MeshStandardMaterial({ color: 0x3a0610, emissive: 0xff2b4a, emissiveIntensity: 3, flatShading: true });
@@ -1532,14 +1720,52 @@ function spawnShards() {
 }
 
 // ---------------------------------------------------------------- bots
-const GATES = { ashen: [new V3(36, 0, 0)], echo: [new V3(-36, 0, 0)], crater: [new V3(0, 0, -38), new V3(0, 0, -106)], plaza: [], cantina: [new V3(0, 0, 40), new V3(0, 0, 49)] };
+const GATES = { ashen: [new V3(36, 0, 0)], echo: [new V3(-36, 0, 0)], crater: [new V3(0, 0, -38), new V3(0, 0, -106)], plaza: [], cantina: [new V3(0, 0, 40), new V3(0, 0, 49)],
+  rail: [new V3(36, 0, 0), new V3(232, 0, 0)], tenements: [new V3(-36, 0, 0), new V3(-232, 0, 0)], reservoir: [new V3(21, 0, 30), new V3(21, 0, 88), new V3(0, 0, 98), new V3(0, 0, 240)] };
+// Reachable spots in each Outer Ward district: clear of scenery, with a clear straight walk from the district's entry.
+const DPOINTS = {};
+const districtEntry = (zone, p) => zone === 'reservoir' ? new V3(0, 0, RESV.z - RESV_R + 10) : new V3(p.x, 0, 0);
+function buildDistrictPoints() {
+  const blocked = pointBlocked;
+  const clear = (a, b) => { const n = Math.ceil(d2(a, b) / 1.5); for (let i = 0; i <= n; i++) if (blocked(a.x + (b.x - a.x) * i / n, a.z + (b.z - a.z) * i / n, 0.8)) return false; return true; };
+  for (const zone of ['rail', 'tenements', 'reservoir']) {
+    const list = DPOINTS[zone] = [];
+    for (let tries = 0; tries < 900 && list.length < 40; tries++) {
+      const q = zone === 'reservoir' ? (() => { const a = rand(0, Math.PI * 2), r = rand(6, RESV_R - 12); return new V3(RESV.x + Math.cos(a) * r, 0, RESV.z + Math.sin(a) * r); })()
+        : (() => { const R = zone === 'rail' ? RAIL : TENE; return new V3(rand(R.x0 + 8, R.x1 - 8), 0, rand(R.z0 + 8, R.z1 - 8)); })();
+      if (zoneAt(q.x, q.z) !== zone || blocked(q.x, q.z)) continue;
+      const entry = districtEntry(zone, q);
+      if (zone === 'reservoir' ? !clear(entry, q) : (blocked(entry.x, entry.z) || !clear(entry, q))) continue;
+      list.push(q);
+    }
+  }
+}
+function pointBlocked(x, z, m = 1.2) {
+  if (!G.colGrid) return false;
+  for (let gx = Math.floor((x - m) / COL_CELL); gx <= Math.floor((x + m) / COL_CELL); gx++) for (let gz = Math.floor((z - m) / COL_CELL); gz <= Math.floor((z + m) / COL_CELL); gz++)
+    for (const c of G.colGrid.get(gx * 10007 + gz) || []) if (x > c.minX - m && x < c.maxX + m && z > c.minZ - m && z < c.maxZ + m) return true;
+  return false;
+}
+// a random spot in a zone that isn't inside a wreck, a rock or a wall
 function zonePoint(z) {
+  let p = zonePoint0(z);
+  for (let i = 0; i < 12 && z !== 'cantina' && pointBlocked(p.x, p.z); i++) p = zonePoint0(z);
+  return p;
+}
+function zonePoint0(z) {
   if (z === 'cantina') return cantinaSpot();
   if (z === 'ashen') return new V3(rand(46, 145), 0, rand(-50, 50));
   if (z === 'echo') return new V3(rand(-145, -46), 0, rand(-50, 50));
   if (z === 'crater') { const a = rand(0, Math.PI * 2), r = rand(12, 50); return new V3(CRATER.x + Math.cos(a) * r, 0, CRATER.z + Math.sin(a) * r); }
+  if (DPOINTS[z] && DPOINTS[z].length) { const p = pick(DPOINTS[z]); return new V3(p.x + rand(-1, 1), 0, p.z + rand(-1, 1)); }
+  if (z === 'rail') return new V3(rand(RAIL.x0 + 10, RAIL.x1 - 10), 0, rand(-10, 10));
+  if (z === 'tenements') return new V3(rand(TENE.x0 + 10, TENE.x1 - 10), 0, rand(-10, 10));
+  if (z === 'reservoir') return new V3(rand(-10, 10), 0, RESV.z - 60);
   const a = rand(0, Math.PI * 2), r = rand(6, 26); const p = new V3(Math.cos(a) * r, 0, Math.sin(a) * r); if (p.z < -6 && Math.abs(p.x) < 7) p.z = 4; return p;
 }
+// Where an Ascendant of a given power level goes hunting: zones at or a little below their own power.
+const HUNT_ZONES = ['ashen', 'echo', 'crater', 'rail', 'tenements', 'reservoir'];
+function botZones(b) { const l = HUNT_ZONES.filter(z => ZONES[z].pl <= (b.pl | 0) && ZONES[z].pl >= (b.pl | 0) - 2); return l.length ? l : ['ashen']; }
 function spawnBots() {
   const names = BOT_NAMES.slice().sort(() => Math.random() - 0.5).slice(0, 14);
   for (const name of names) {
@@ -1549,10 +1775,11 @@ function spawnBots() {
       : makeHumanoid({ armor: pick([0x2b323c, 0x3a3f4a, 0x2a2f2a, 0x3b2f36, 0x262c38]), accent: c.hex, visor, weapon: c.weapon });
     const b = { kind: 'bot', name, cls: ck, level: randi(3, 18), guild: pick(GUILDS), rig, group: rig.group, pos: zonePoint('plaza'), alive: true, hp: 260, maxHp: 260, state: 'idle', path: [], idleT: rand(2, 20), actT: 0, act: 'plaza', target: null, atkT: 0, yaw: 0, move: 0, atk: 0, danceT: 0, height: 2.1, radius: 0.5,
       vy: 0, slideT: -1, rollT: 0, bjT: 0, flipT: 0, landT: 0, landHard: false, boost: 1, canFlip: false };
+    b.pl = clamp(1 + Math.floor(b.level / 4), 1, 5);
     b.group.position.copy(b.pos); W.scene.add(b.group);
     b.plate = makePlate('bot', `<div class="n">${esc(name)}</div>${b.guild ? `<div class="g">&lt;${esc(b.guild)}&gt;</div>` : ''}`);
     addHitbox(b, 0.9, 2, 0.9, 1);
-    if (Math.random() < 0.6) { b.act = pick(['ashen', 'ashen', 'echo', 'echo', 'crater']); b.pos.copy(zonePoint(b.act)); b.state = 'hunt'; b.actT = rand(40, 160); b.group.position.copy(b.pos); }
+    if (Math.random() < 0.6) { b.act = pick(botZones(b)); b.pos.copy(zonePoint(b.act)); b.state = 'hunt'; b.actT = rand(40, 160); b.group.position.copy(b.pos); }
     G.bots.push(b);
   }
 }
@@ -1580,7 +1807,7 @@ function spawnOrion() {
   const rig = makeSoldier({ model: 'orion', accent: 0x8fe6ff, weapon: 'greatsword', mats: SOLDIER_MATS });
   const o = allyBase({ legend: true, id: 'orion', name: 'Orion Mascar', title: 'Father of the Governor', cls: 'vanguard', level: 15, rig, group: rig.group,
     pos: zonePoint('plaza'), hp: 950, maxHp: 950, dmg: 38, atkCd: [1.3, 1.7], reach: 2.7, glow: 0x8fe6ff, pron: 'He', poss: 'his', lines: ORION_LINES,
-    zones: ['ashen', 'echo', 'crater', 'crater'], respawnT: 20, loungeSpot: ORION_PLAQUE_SPOT, loungeLook: new V3(0.6, 0, 56) });
+    pl: 6, zones: ['ashen', 'echo', 'crater', 'crater', 'rail', 'tenements', 'reservoir'], respawnT: 20, loungeSpot: ORION_PLAQUE_SPOT, loungeLook: new V3(0.6, 0, 56) });
   o.group.position.copy(o.pos); W.scene.add(o.group);
   allyPlate(o, 'npc'); addHitbox(o, 0.9, 2, 0.9, 1);
   G.bots.push(o);
@@ -1591,7 +1818,7 @@ function spawnMalia() {
   const rig = makeSoldier({ model: 'malia', accent: 0x8fe6ff, weapon: 'sabre', mats: SOLDIER_MATS, hold: ['clavL', 'uarmL', 'farmL', 'handL'] });
   const m = allyBase({ legend: true, id: 'malia', name: 'Malia Mascar', title: 'Wife of the Governor', cls: 'vanguard', level: 15, rig, group: rig.group,
     pos: new V3(rand(-6, 6), 0, rand(-4, 2)), hp: 760, maxHp: 760, dmg: 27, atkCd: [0.9, 1.25], reach: 2.4, glow: 0x8fe6ff, pron: 'She', poss: 'her', lines: MALIA_LINES,
-    zones: ['ashen', 'ashen', 'echo', 'echo', 'crater'], respawnT: 20, height: 2.0, idleT: rand(10, 25), loungeSpot: new V3(-7.0, 0, 65.6), loungeLook: new V3(-8.6, 0, 67.4) });
+    pl: 6, zones: ['ashen', 'echo', 'crater', 'rail', 'tenements', 'reservoir'], respawnT: 20, height: 2.0, idleT: rand(10, 25), loungeSpot: new V3(-7.0, 0, 65.6), loungeLook: new V3(-8.6, 0, 67.4) });
   m.group.position.copy(m.pos); W.scene.add(m.group);
   allyPlate(m, 'npc'); addHitbox(m, 0.9, 2, 0.9, 1);
   G.bots.push(m);
@@ -1603,8 +1830,8 @@ function spawnResident(s) {
   const rig = soldierReady() ? makeSoldier({ energy: visor, accent: c.hex, weapon: c.weapon, mats: SOLDIER_MATS })
     : makeHumanoid({ armor: 0x2f3742, accent: c.hex, visor, weapon: c.weapon });
   const b = allyBase({ resident: true, id: 'res:' + s.id, save: s, name: s.name, title: 'Resident of Ad-Nostra', cls: s.cls, level: st.level, rig, group: rig.group,
-    pos: zonePoint('plaza'), hp: st.maxHp, maxHp: st.maxHp, dmg: st.dmg, pron: 'They', poss: 'their', lines: RESIDENT_LINES, respawnT: 15, idleT: rand(3, 15) });
-  if (Math.random() < 0.6) { b.act = pick(['ashen', 'echo', 'crater']); b.pos.copy(zonePoint(b.act)); b.state = 'hunt'; b.actT = rand(40, 160); }
+    pos: zonePoint('plaza'), hp: st.maxHp, maxHp: st.maxHp, dmg: st.dmg, pl: s.armour == null ? 1 : s.armour, pron: 'They', poss: 'their', lines: RESIDENT_LINES, respawnT: 15, idleT: rand(3, 15) });
+  if (Math.random() < 0.6) { b.act = pick(botZones(b)); b.pos.copy(zonePoint(b.act)); b.state = 'hunt'; b.actT = rand(40, 160); }
   b.group.position.copy(b.pos); W.scene.add(b.group);
   allyPlate(b, 'bot res'); addHitbox(b, 0.9, 2, 0.9, 1);
   G.bots.push(b);
@@ -1625,12 +1852,13 @@ function syncResidents() {
     const b = G.bots.find(x => x.id === 'res:' + s.id);
     if (!b) { spawnResident(s); continue; }
     const st = residentStats(s); b.save = s;
+    b.pl = s.armour == null ? 1 : s.armour;
     if (b.level !== st.level) { Object.assign(b, { level: st.level, maxHp: st.maxHp, dmg: st.dmg }); b.hp = Math.min(b.hp, b.maxHp); b.plate.querySelector('.n span').textContent = st.level; }
   }
 }
 // ---- the party: allies who fight at your side
 const partyList = () => G.bots.filter(b => b.party);
-const ZONE_IN = { plaza: 'Concordia Plaza', causeway: 'the Concord Causeway', ward: 'the Spire Ward', ashen: 'the Scorched Veld', echo: 'the Echo Plains', crater: 'the Catharsis Crater', cantina: 'the Salt Lantern' };
+const ZONE_IN = { plaza: 'Concordia Plaza', causeway: 'the Concord Causeway', ward: 'the Spire Wards', ashen: 'the Scorched Veld', echo: 'the Echo Plains', crater: 'the Catharsis Crater', cantina: 'the Salt Lantern', rail: 'the Sunken Rail Yards', tenements: 'the Ashfall Tenements', reservoir: 'the Dry Reservoir' };
 const PARTY_SLOTS = [[-1.9, -2.2], [1.9, -2.2], [0, -3.9]];   // [right, forward] from the player, in metres
 function partyOffset(b) {
   const i = Math.max(0, partyList().indexOf(b)), [sx, fz] = PARTY_SLOTS[i % PARTY_SLOTS.length];
@@ -1640,7 +1868,10 @@ function partyOffset(b) {
 function routeTo(from, to) {   // waypoints through the zone gates, so nobody walks into the city walls
   const zf = zoneAt(from.x, from.z), zt = zoneAt(to.x, to.z);
   const path = (zf === zt ? [] : [...(GATES[zf] || [])].reverse().concat(GATES[zt] || [])).map(p => p.clone());
+  if (zt !== zf && (zt === 'rail' || zt === 'tenements' || zt === 'reservoir')) path.push(districtEntry(zt, to));
+  if (zf !== zt && (zf === 'rail' || zf === 'tenements' || zf === 'reservoir')) path.unshift(districtEntry(zf, from));
   path.push(new V3(to.x, 0, to.z));
+  for (let i = path.length - 1; i > 0; i--) if (d2(path[i], path[i - 1]) < 1) path.splice(i, 1);   // shared gates
   while (path.length > 1 && d2(from, path[1]) < d2(path[0], path[1])) path.shift();   // gates already behind us
   return path;
 }
@@ -1853,16 +2084,45 @@ const chatBots = () => G.bots.filter(b => !b.ally);   // the simulated players (
 // =====================================================================
 const SPAWN = new V3(0, 0, 8);
 function newSave(name, cls, visor) {
-  return { v: 1, id: newId(), name, cls, visor, party: [], level: 1, xp: 0, credits: 30, medkits: 3, wpn: 0, arm: 0, q: { i: 0, st: 'available', p: 0 }, aleT: 0, kills: 0, deaths: 0, title: 'Ascendant', played: 0, completed: 0, pos: null, created: Date.now() };
+  return { v: 1, id: newId(), name, cls, visor, party: [], armour: 1, trams: ['plaza'], level: 1, xp: 0, credits: 30, medkits: 3, wpn: 0, arm: 0, q: { i: 0, st: 'available', p: 0 }, aleT: 0, kills: 0, deaths: 0, title: 'Ascendant', played: 0, completed: 0, pos: null, created: Date.now() };
 }
 const xpNext = l => Math.round(140 * Math.pow(l, 1.55));
+// ---- power level (0–9), as in RuneScape: Dragonwilds. Yours comes from your armour; zones and enemies have their own.
+// Fighting something above your power level is brutal: it hits you far harder and shrugs off your blows.
+const ARMOUR = [
+  { name: 'No armour', cost: 0, lvl: 1 },
+  { name: 'Recruit Weave', cost: 0, lvl: 1 },
+  { name: 'Salvage Plate', cost: 150, lvl: 3 },
+  { name: 'Ceramite Shell', cost: 400, lvl: 6 },
+  { name: 'Titan Lattice', cost: 900, lvl: 9 },
+  { name: 'Carbide Mail', cost: 1600, lvl: 12 },
+  { name: 'Graphene Weave', cost: 2600, lvl: 15 },
+  { name: 'Aegis Plate', cost: 4000, lvl: 18 },
+  { name: 'Concord Warplate', cost: 6000, lvl: 22 },
+  { name: 'Carax Plate', cost: 9000, lvl: 26 },
+];
+const playerPL = () => clamp(G.D.armour | 0, 0, 9);
+const entPL = e => e === G.P ? playerPL() : (e.pl | 0);
+// damage multiplier for src hitting tgt (only between Remnants and Ascendants)
+function plScale(src, tgt) {
+  const gap = entPL(src) - entPL(tgt); if (!gap) return 1;
+  const remnant = src.kind === 'enemy';
+  if (gap > 0) return remnant ? Math.pow(1.55, gap) : Math.min(1.6, 1 + 0.15 * gap);
+  return remnant ? Math.max(0.4, 1 + 0.12 * gap) : Math.pow(0.6, -gap);
+}
+// how something's power level looks to you: green below you, yellow level, orange one above, red with a skull two or more above
+const plTag = pl => { const d = pl - playerPL(); return d >= 2 ? 'pl-r' : d === 1 ? 'pl-o' : d === 0 ? 'pl-y' : 'pl-g'; };
+const PL_COL = { 'pl-r': '#ff4a5e', 'pl-o': '#ff9a3c', 'pl-y': '#ffd84a', 'pl-g': '#4dff9a' };
+const plText = pl => `◆${pl}${pl - playerPL() >= 2 ? ' ☠' : ''}`;
 const CL = () => CLASSES[G.D.cls];
-const maxHp = () => Math.round(CL().hp * (1 + 0.1 * (G.D.level - 1)) + 18 * G.D.arm);
+const maxHp = () => Math.round(CL().hp * (1 + 0.1 * (G.D.level - 1)) + 18 * G.D.arm + 20 * playerPL());
 const maxEn = () => CL().en;
 const dmgScale = () => (1 + 0.12 * (G.D.level - 1)) * (1 + 0.1 * G.D.wpn);
 
 function setupPlayer() {
   const D = G.D, c = CL();
+  if (D.armour == null) D.armour = Math.min(3, 1 + Math.floor((D.level - 1) / 6));   // saves from before power levels
+  if (!Array.isArray(D.trams)) D.trams = ['plaza'];
   if (G.P && G.P.group) { W.scene.remove(G.P.group); G.P.plate?.remove(); }
   const visor = new THREE.Color(D.visor).getHex();
   const rig = soldierReady() ? makeSoldier({ energy: visor, accent: c.hex, weapon: c.weapon, mats: SOLDIER_MATS })
@@ -1899,6 +2159,7 @@ function flashHurt() { const v = $('vignette'); v.style.boxShadow = 'inset 0 0 1
 
 function damage(tgt, amt, src, opt = {}) {
   if (!tgt.alive) return;
+  if (src && src.kind && (src.kind === 'enemy') !== (tgt.kind === 'enemy')) amt *= plScale(src, tgt);
   amt = Math.max(1, Math.round(amt));
   const P = G.P;
   if (tgt === P) {
@@ -1936,7 +2197,7 @@ function killEnemy(e, src) {
     gainXp(xp);
     const cr = e.isBoss ? 300 : randi(2 + e.level, 6 + e.level * 3); D.credits += cr; addChat('loot', null, `You loot ${cr} credits.`); Sound.sfx('coin');
     D.kills++;
-    questEvent(e.isBoss ? 'boss' : e.type, e);
+    questEvent(e.isBoss ? 'boss' : e.variant ? 'remnant' : e.type, e);
     if (zoneAt(e.pos.x, e.pos.z) === 'crater' && !e.isBoss && D.q.i === 2 && D.q.st === 'active' && Math.random() < 0.4) { addChat('loot', null, 'You loot: [Beacon Shard]'); questEvent('shard'); }
     if (Math.random() < 0.06 && !e.isBoss) { D.medkits++; addChat('loot', null, 'You loot: [Concord Medkit]'); }
     if (e.isBoss) { addChat('world', null, `${D.name} has destroyed the Remnant of the Catharsis!`, 'sys'); setTimeout(() => botSay(pick(chatBots()), pick(['GG ' + D.name + '!!', 'legend', 'WOW', 'grats ' + D.name, 'o7 hero'])), 1500); }
@@ -2101,14 +2362,21 @@ function telegraph(pos, r, delay, onDone) {
 }
 
 // ---------------------------------------------------------------- collisions
+const _colSeen = new Set();
 function resolveCollision(p, r) {
-  for (const c of G.colliders) {
+  let list = G.colliders;
+  if (G.colGrid) {   // only the colliders in the grid cells this circle touches
+    const x0 = Math.floor((p.x - r) / COL_CELL), x1 = Math.floor((p.x + r) / COL_CELL), z0 = Math.floor((p.z - r) / COL_CELL), z1 = Math.floor((p.z + r) / COL_CELL);
+    if (x0 === x1 && z0 === z1) list = G.colGrid.get(x0 * 10007 + z0) || [];
+    else { _colSeen.clear(); for (let gx = x0; gx <= x1; gx++) for (let gz = z0; gz <= z1; gz++) for (const c of G.colGrid.get(gx * 10007 + gz) || []) _colSeen.add(c); list = _colSeen; }
+  }
+  for (const c of list) {
     if (p.x + r < c.minX || p.x - r > c.maxX || p.z + r < c.minZ || p.z - r > c.maxZ) continue;
     const dl = p.x + r - c.minX, dr = c.maxX - (p.x - r), dt = p.z + r - c.minZ, db = c.maxZ - (p.z - r);
     const m = Math.min(dl, dr, dt, db);
     if (m === dl) p.x -= dl; else if (m === dr) p.x += dr; else if (m === dt) p.z -= dt; else p.z += db;
   }
-  const R = Math.hypot(p.x, p.z); if (R > 238) { p.x *= 238 / R; p.z *= 238 / R; }
+  const R = Math.hypot(p.x, p.z), RM = WORLD_R - 2; if (R > RM) { p.x *= RM / R; p.z *= RM / R; }
 }
 function moveToward(ent, dest, speed, dt, stopAt = 0.2) {
   const dx = dest.x - ent.pos.x, dz = dest.z - ent.pos.z, d = Math.hypot(dx, dz);
@@ -2265,12 +2533,17 @@ function updatePlayer(dt) {
   if (P.rig.group.userData.orb) P.rig.group.userData.orb.rotation.y += dt * 3;
   W.shieldMesh.visible = P.shield > 0; W.shieldMesh.position.copy(P.pos).setY(1); W.shieldMesh.material.opacity = 0.12 + Math.sin(G.time * 6) * 0.05;
 
+  // tram stops: walking past one adds it to your network
+  for (const t of TRAMS) if (!D.trams.includes(t.id) && d2(P.pos, t.pos) < 12) { D.trams.push(t.id); addChat('sys', null, `Tram stop discovered: ${t.name}. You can now ride the tram here from any stop.`); banner('TRAM STOP', t.name.toUpperCase(), 'ADDED TO YOUR NETWORK'); }
   // zone change
   const z = zoneAt(P.pos.x, P.pos.z);
   if (z !== G.zone) {
     const prev = G.zone; G.zone = z; const Z = ZONES[z];
-    $('zone-name').textContent = Z.name; $('zone-sub').textContent = Z.sub;
-    if (!(prev === 'causeway' && z === 'ward') && !(prev === 'ward' && z === 'causeway')) banner(Z.safe ? 'SANCTUARY' : 'ENTERING', Z.name, Z.sub);
+    const gap = Z.pl - playerPL(), warn = gap >= 2 ? ' · ☠ FAR ABOVE YOUR POWER' : gap === 1 ? ' · ABOVE YOUR POWER' : '';
+    $('zone-name').textContent = Z.name; $('zone-sub').textContent = Z.safe || !Z.pl ? Z.sub : `${Z.sub} · ◆${Z.pl}`;
+    $('zone-sub').style.color = Z.safe || !Z.pl ? '' : PL_COL[plTag(Z.pl)];
+    if (!(prev === 'causeway' && z === 'ward') && !(prev === 'ward' && z === 'causeway')) banner(Z.safe ? 'SANCTUARY' : 'ENTERING', Z.name, Z.safe || !Z.pl ? Z.sub : `◆ POWER LEVEL ${Z.pl}${warn}`);
+    if (gap >= 2 && !Z.safe) addChat('err', null, `Warning: ${ZONE_IN[z]} is power level ${Z.pl} and you are power level ${playerPL()}. The Remnants here will kill you quickly. Ilse Varn in Concordia Plaza sells stronger armour.`);
     if (z === 'cantina') Sound.playMusic('cantina'); else if (prev === 'cantina') Sound.playMusic('world');
   }
 }
@@ -2387,7 +2660,7 @@ function updateBots(dt) {
       if (Math.random() < 0.0008 && !b.legend) b.danceT = 4;
       if (!b.ally) b.hp = Math.min(b.maxHp, b.hp + 20 * dt);
       if (b.ally && G.P && d2(b.pos, G.P.pos) < 7 && (!b.wp || d2(b.pos, b.wp) < 0.5)) faceTo(b, G.P.pos);
-      if (b.idleT <= 0) { b.act = Math.random() < (b.legend ? 0.3 : 0.25) ? 'cantina' : pick(b.zones || ['ashen', 'ashen', 'echo', 'echo', 'crater', 'crater']); b.path = [...GATES[b.act], b.loungeSpot && b.act === 'cantina' ? b.loungeSpot.clone() : zonePoint(b.act)]; b.state = 'travel'; b.actT = b.act === 'cantina' ? rand(40, 110) : rand(60, 180); b.wp = null; }
+      if (b.idleT <= 0) { b.act = Math.random() < (b.legend ? 0.3 : 0.25) ? 'cantina' : pick(b.zones || botZones(b)); b.path = b.act === 'cantina' ? [...GATES.cantina, b.loungeSpot ? b.loungeSpot.clone() : zonePoint('cantina')] : routeTo(b.pos, zonePoint(b.act)); b.state = 'travel'; b.actT = b.act === 'cantina' ? rand(40, 110) : rand(60, 180); b.wp = null; }
     } else if (b.state === 'travel') {
       if (!b.path.length) { b.state = b.act === 'plaza' ? 'idle' : b.act === 'cantina' ? 'lounge' : 'hunt'; b.idleT = rand(15, 50); continue; }
       if (b.rig.isSoldier && !b.legend && b.pos.y === 0 && b.slideT < 0 && b.act !== 'cantina' && d2(b.pos, b.path[0]) > 24) {
@@ -2404,7 +2677,7 @@ function updateBots(dt) {
       if (b.actT <= 0) { b.act = 'plaza'; b.path = [...GATES.cantina].reverse().concat([zonePoint('plaza')]); b.state = 'travel'; }
     } else if (b.state === 'hunt') {
       b.actT -= dt;
-      if (b.actT <= 0) { b.act = 'plaza'; b.path = [...GATES[zoneAt(b.pos.x, b.pos.z) === 'crater' ? 'crater' : (b.pos.x > 0 ? 'ashen' : 'echo')]].reverse().concat([zonePoint('plaza')]); b.state = 'travel'; b.target = null; b.wp = null; continue; }
+      if (b.actT <= 0) { b.act = 'plaza'; b.path = routeTo(b.pos, zonePoint('plaza')); b.state = 'travel'; b.target = null; b.wp = null; continue; }
       if (!b.target || !b.target.alive) {
         b.target = null; let bd = 30;
         for (const e of G.enemies) { if (!e.alive || (e.isBoss && Math.random() < 0.995)) continue; const d = d2(b.pos, e.pos); if (d < bd && zoneAt(e.pos.x, e.pos.z) === zoneAt(b.pos.x, b.pos.z)) { bd = d; b.target = e; } }
@@ -2417,8 +2690,11 @@ function updateBots(dt) {
     // walk around scenery instead of grinding into it: if a wall ate most of this step, sidestep along it
     const ix = b.pos.x - px, iz = b.pos.z - pz, want = Math.hypot(ix, iz);
     resolveCollision(b.pos, 0.4);
-    if (want > 0.01 && Math.hypot(b.pos.x - px, b.pos.z - pz) < want * 0.35) {
-      const sd = b.side || (b.side = Math.random() < 0.5 ? 1 : -1), qx = b.pos.x, qz = b.pos.z;
+    const ax = b.pos.x - px, az = b.pos.z - pz;
+    if (want > 0.01 && (ax * ix + az * iz) / want < want * 0.5) {   // less than half the step went where we meant to go
+      const slide = ax * -iz + az * ix;                            // which way the wall is already letting us slide
+      if (!b.side) b.side = Math.abs(slide) > want * want * 0.15 ? Math.sign(slide) : Math.random() < 0.5 ? 1 : -1;   // pick a way round once, then stick to it
+      const sd = b.side, qx = b.pos.x, qz = b.pos.z;
       b.pos.x -= iz * sd; b.pos.z += ix * sd; resolveCollision(b.pos, 0.4); b.blockT = 0;
       if (Math.hypot(b.pos.x - qx, b.pos.z - qz) < want * 0.3) b.side = -sd;   // a corner: try the other way
     } else if (want > 0.01 && (b.blockT = (b.blockT || 0) + dt) > 1.5) b.side = 0;
@@ -2457,7 +2733,7 @@ function updateAmbient(dt) {
   const t = G.time, P = G.P;
   W.sky.material.uniforms.t.value = t; grassTime.value = t;
   updateAnimals(dt); updateBirds(W.birds, t);
-  updateGrass(W.grass, W.cam); updateLOD();
+  updateGrass(W.grass, W.cam); updateLOD(); cullStatic();
   // the Salt Lantern: crystal turns and breathes; inside, the roof steps aside and the room warms up
   W.lanternCrystal.rotation.y += dt * 0.4; W.lanternCrystal.material.emissiveIntensity = 2.0 + Math.sin(t * 1.7) * 0.4;
   const inside = G.zone === 'cantina', CR = W.cantinaRoof;
@@ -2519,7 +2795,7 @@ const curQ = () => QUESTS[Math.min(G.D.q.i, QUESTS.length - 1)];
 function questEvent(type) {
   const D = G.D, q = curQ();
   if (D.q.st !== 'active') return;
-  if (q.type === type || (q.type === 'any' && (type === 'hollowed' || type === 'drone'))) {
+  if (q.type === type || (q.type === 'any' && (type === 'hollowed' || type === 'drone' || type === 'remnant'))) {
     D.q.p = Math.min(q.count, D.q.p + 1);
     addChat('sys', null, `${q.obj}: ${D.q.p}/${q.count}`);
     if (D.q.p >= q.count) { D.q.st = 'ready'; Sound.sfx('quest'); banner('OBJECTIVE COMPLETE', q.title.toUpperCase(), 'RETURN TO GOVERNOR MASCAR'); }
@@ -2560,23 +2836,25 @@ function renderVendor() {
   const items = [
     { name: 'Concord Medkit', desc: 'Restores 50% health. Press 5 to use.', cost: 25, buy: () => { D.medkits++; buildHotbarCounts(); } },
     { name: `Weapon Tuning · Rank ${D.wpn + 1}`, desc: '+10% damage with all attacks.', cost: 120 * (D.wpn + 1), buy: () => { D.wpn++; } },
-    { name: `Concord Plating · Rank ${D.arm + 1}`, desc: '+18 maximum health.', cost: 100 * (D.arm + 1), buy: () => { D.arm++; } },
   ];
+  const pl = playerPL(), nx = ARMOUR[pl + 1];
+  if (nx) items.push({ name: `${nx.name} · Power Level ${pl + 1}`, desc: `Armour. Raises your power level from ${pl} to ${pl + 1} and gives +20 maximum health.${D.level < nx.lvl ? ` Requires level ${nx.lvl}.` : ''}`, cost: nx.cost, req: nx.lvl,
+    buy: () => { D.armour = pl + 1; G.P.hp = Math.min(maxHp(), G.P.hp + 20); banner('POWER LEVEL ' + (pl + 1), nx.name.toUpperCase(), 'YOUR ARMOUR GROWS STRONGER', 'lv'); } });
   const box = $('vendor-items'); box.innerHTML = '';
   for (const it of items) {
     const row = document.createElement('div'); row.className = 'vitem';
     row.innerHTML = `<div><b>${esc(it.name)}</b><p>${esc(it.desc)}</p></div>`;
-    const btn = document.createElement('button'); btn.className = 'btn gold'; btn.textContent = `⬡ ${it.cost}`; btn.disabled = D.credits < it.cost;
-    btn.onclick = () => { if (D.credits < it.cost) return; D.credits -= it.cost; it.buy(); Sound.sfx('coin'); addChat('loot', null, `Purchased: ${it.name}`); renderVendor(); saveGame(); };
+    const btn = document.createElement('button'); btn.className = 'btn gold'; btn.textContent = `⬡ ${fmtNum(it.cost)}`; btn.disabled = D.credits < it.cost || (it.req && D.level < it.req);
+    btn.onclick = () => { if (D.credits < it.cost || (it.req && D.level < it.req)) return; D.credits -= it.cost; it.buy(); Sound.sfx('coin'); addChat('loot', null, `Purchased: ${it.name}`); renderVendor(); saveGame(); };
     row.appendChild(btn); box.appendChild(row);
   }
-  $('vendor-wallet').textContent = `YOUR CREDITS: ⬡ ${fmtNum(D.credits)} · MEDKITS: ${D.medkits}`;
+  $('vendor-wallet').textContent = `YOUR CREDITS: ⬡ ${fmtNum(D.credits)} · MEDKITS: ${D.medkits} · ARMOUR: ${ARMOUR[playerPL()].name.toUpperCase()} (◆${playerPL()})`;
 }
 function nearestInteract() {
   const P = G.P; let best = null, bd = 5;
   for (const n of G.npcs) { const d = d2(P.pos, n.pos); if (d < bd) { bd = d; best = n; } }
   for (const b of G.bots) if (b.ally && b.alive) { const d = d2(P.pos, b.pos); if (d < (b.party ? 2.6 : 4) && d < bd && !(b.party && best)) { bd = d; best = b; } }   // companions at your heel don't crowd out the NPCs
-  for (const p of G.props) { const d = d2(P.pos, p.pos); if (d < 2.2 && d < bd) { bd = d; best = p; } }
+  for (const p of G.props) { const d = d2(P.pos, p.pos); if (d < (p.kind === 'tram' ? 3.5 : 2.2) && d < bd) { bd = d; best = p; } }
   for (const s of G.shards) { if (!s.active) continue; const d = d2(P.pos, s.pos); if (d < 3 && d < bd) { bd = d; best = s; } }
   return best;
 }
@@ -2589,6 +2867,7 @@ function interact(ent = nearestInteract()) {
   else if (ent.id === 'orion') talkOrion(ent);
   else if (ent.id === 'malia') talkMalia(ent);
   else if (ent.resident) talkResident(ent);
+  else if (ent.kind === 'tram') openTram(ent.tram);
   else if (ent.kind === 'shard') {
     const D = G.D;
     if (D.q.i === 2 && D.q.st === 'active') { ent.active = false; ent.group.visible = false; ent.respawnT = 25; Sound.sfx('pickup'); addChat('loot', null, 'You recover: [Beacon Shard]'); burst(ent.pos.clone().setY(1), 0xff2b4a, 20, 2); questEvent('shard'); }
@@ -2599,7 +2878,7 @@ function interact(ent = nearestInteract()) {
 function updateInteract() {
   const n = nearestInteract(), pr = $('prompt');
   if (n && !G.ui && !G.P.dead) {
-    const label = n.kind === 'shard' ? 'Recover Beacon Shard' : n.id === 'mascar' ? 'Speak with Governor Mascar' : n.id === 'zuri' ? 'Talk to Zuri Adeyemi' : n.id === 'plaque' ? 'Read the memorial plaque' : n.id === 'orion' ? 'Speak with Orion Mascar' : n.id === 'malia' ? 'Speak with Malia Mascar' : n.resident ? `Speak with ${n.name}` : 'Trade with Ilse Varn';
+    const label = n.kind === 'shard' ? 'Recover Beacon Shard' : n.id === 'mascar' ? 'Speak with Governor Mascar' : n.id === 'zuri' ? 'Talk to Zuri Adeyemi' : n.id === 'plaque' ? 'Read the memorial plaque' : n.id === 'orion' ? 'Speak with Orion Mascar' : n.id === 'malia' ? 'Speak with Malia Mascar' : n.resident ? `Speak with ${n.name}` : n.kind === 'tram' ? 'Ride the Concord tram' : 'Trade with Ilse Varn';
     pr.innerHTML = `<b>${TOUCH ? '▶' : '[E]'}</b> ${label}`; pr.classList.remove('hidden');
   } else pr.classList.add('hidden');
 }
@@ -2627,7 +2906,7 @@ function buildHotbar() {
 function buildHotbarCounts() { const s = $('hotbar').children[4]; if (s) s.querySelector('.c').textContent = G.D.medkits; }
 function updateHUD() {
   const P = G.P, D = G.D, c = CL();
-  setT('p-name', D.name); setT('p-lvl', 'LV ' + D.level); setT('p-title', `${D.title.toUpperCase()} · ${c.name}`);
+  setT('p-name', D.name); setT('p-lvl', `LV ${D.level} · ◆${playerPL()}`); setT('p-title', `${D.title.toUpperCase()} · ${c.name}`);
   const mh = maxHp(); setW('p-hp', P.hp / mh); setT('p-hpt', `${Math.ceil(P.hp)} / ${mh}`); setW('p-sh', P.shield / mh);
   setW('p-en', P.en / maxEn()); setT('p-ent', `${Math.floor(P.en)} / ${maxEn()}`);
   const buffs = []; if (P.shield > 0) buffs.push(`⛨ ${P.shield}`); if (P.critNext) buffs.push('◐ CRIT'); if (P.combatT > 0) buffs.push('⚔ COMBAT'); if (ZONES[G.zone]?.safe) buffs.push('✦ SANCTUARY'); if (D.aleT > 0) buffs.push(`◈ ALE ${fmtTime(D.aleT)}`);
@@ -2674,7 +2953,7 @@ function updateTargetFrame(force) {
   if (!t) { tf.classList.add('hidden'); return; }
   tf.classList.remove('hidden');
   if (t.kind === 'enemy') {
-    setT('t-name', t.name); setT('t-lvl', 'LV ' + t.level); setT('t-sub', t.isBoss ? 'ELITE · REMNANT' : t.type === 'drone' ? 'MECHANICAL · REMNANT' : 'HOLLOWED · REMNANT');
+    setT('t-name', t.name); setT('t-lvl', `${plText(t.pl)} · LV ${t.level}`); setT('t-sub', t.isBoss ? 'ELITE · REMNANT' : t.type === 'drone' ? 'MECHANICAL · REMNANT' : 'HOLLOWED · REMNANT');
     $('t-bar').style.display = ''; setW('t-hp', t.hp / t.maxHp); setT('t-hpt', `${Math.max(0, Math.ceil(t.hp))} / ${t.maxHp}`);
   } else if (t.kind === 'bot' && t.ally) {
     setT('t-name', t.name); setT('t-lvl', 'LV ' + t.level); setT('t-sub', `${t.title.toUpperCase()}${t.party ? ' · WITH YOU' : ''}`);
@@ -2683,6 +2962,7 @@ function updateTargetFrame(force) {
     setT('t-name', t.name); setT('t-lvl', 'LV ' + t.level); setT('t-sub', `${CLASSES[t.cls].name}${t.guild ? ' · ' + t.guild.toUpperCase() : ''}`);
     $('t-bar').style.display = ''; setW('t-hp', t.hp / t.maxHp); setT('t-hpt', 'ASCENDANT');
   } else { setT('t-name', t.name); setT('t-lvl', ''); setT('t-sub', t.title.toUpperCase()); $('t-bar').style.display = 'none'; }
+  const tc = t.kind === 'enemy' ? PL_COL[plTag(t.pl)] : ''; if (_cache.get('tcol') !== tc) { _cache.set('tcol', tc); $('t-lvl').style.color = tc; }
   const ally = t.kind === 'bot' && !!t.ally; if (_cache.get('tally') !== ally) { _cache.set('tally', ally); $('t-bar').classList.toggle('ally', ally); }
 }
 function updateTracker() {
@@ -2712,6 +2992,7 @@ function updatePlates() {
       if (hurt && e._pw !== w) { e._pw = w; e.plateBar.style.width = w; }
       if (e._pp !== e.party) { e._pp = e.party; el.classList.toggle('party', e.party); }
     }
+    if (e.kind === 'enemy') { const tag = plTag(e.pl); if (e._pl !== tag) { if (e._pl) el.classList.remove(e._pl); el.classList.add(tag); e._pl = tag; } }
     if (e.kind === 'enemy') { const w = (e.hp / e.maxHp * 100).toFixed(0) + '%'; if (e._pw !== w) { e._pw = w; e.plateBar.style.width = w; } const isT = P.target === e; if (e._pt !== isT) { e._pt = isT; el.classList.toggle('tgt', isT); } }
   }
 }
@@ -2732,13 +3013,19 @@ function drawMinimap() {
   mm.fillStyle = 'rgba(30,20,12,0.45)'; mm.fillRect(X(34), Y(-62), 122 * sc, 124 * sc);
   mm.fillStyle = 'rgba(220,205,160,0.22)'; mm.fillRect(X(-156), Y(-62), 122 * sc, 124 * sc);
   mm.fillStyle = 'rgba(140,40,30,0.45)'; mm.beginPath(); mm.arc(X(CRATER.x), Y(CRATER.z), 72 * sc, 0, 7); mm.fill();
+  if (Math.abs(P.pos.x) > 120 || Math.abs(P.pos.z) > 120) {   // the Outer Wards, tinted by how dangerous they are for you
+    for (const [id, R] of [['rail', RAIL], ['tenements', TENE]]) { mm.fillStyle = hexA(PL_COL[plTag(ZONES[id].pl)], 0.16); mm.fillRect(X(R.x0), Y(R.z0), (R.x1 - R.x0) * sc, (R.z1 - R.z0) * sc); }
+    mm.fillStyle = hexA(PL_COL[plTag(ZONES.reservoir.pl)], 0.16); mm.beginPath(); mm.arc(X(RESV.x), Y(RESV.z), RESV_R * sc, 0, 7); mm.fill();
+    mm.fillStyle = 'rgba(140,90,58,0.6)'; mm.fillRect(X(-7), Y(91), 14 * sc, 150 * sc);
+  }
+  mm.fillStyle = '#3ee6ff'; for (const t of TRAMS) if (G.D.trams.includes(t.id)) { mm.save(); mm.translate(X(t.pos.x), Y(t.pos.z)); mm.rotate(Math.PI / 4); mm.fillRect(-3, -3, 6, 6); mm.restore(); }
   mm.fillStyle = 'rgba(62,230,255,0.12)'; mm.beginPath(); mm.arc(X(0), Y(0), 34 * sc, 0, 7); mm.fill();
   mm.fillStyle = 'rgba(255,179,71,0.35)'; mm.fillRect(X(CANTINA.x0), Y(CANTINA.z0), (CANTINA.x1 - CANTINA.x0) * sc, (CANTINA.z1 - CANTINA.z0) * sc);
   mm.strokeStyle = 'rgba(255,179,71,0.9)'; mm.lineWidth = 1; mm.strokeRect(X(CANTINA.x0), Y(CANTINA.z0), (CANTINA.x1 - CANTINA.x0) * sc, (CANTINA.z1 - CANTINA.z0) * sc);
-  mm.fillStyle = 'rgba(140,90,58,0.6)'; mm.fillRect(X(-150), Y(-7), 300 * sc, 14 * sc); mm.fillRect(X(-7), Y(-110), 14 * sc, 110 * sc);
+  mm.fillStyle = 'rgba(140,90,58,0.6)'; mm.fillRect(X(-WORLD_R), Y(-7), WORLD_R * 2 * sc, 14 * sc); mm.fillRect(X(-7), Y(-110), 14 * sc, 110 * sc);
   mm.fillStyle = 'rgba(220,190,150,0.3)';
   for (const c of G.colliders) { if (Math.abs(c.minX - P.pos.x) > 140 || Math.abs(c.minZ - P.pos.z) > 140) continue; const w = (c.maxX - c.minX) * sc; if (w < 2) continue; mm.fillRect(X(c.minX), Y(c.minZ), w, (c.maxZ - c.minZ) * sc); }
-  mm.strokeStyle = 'rgba(232,196,106,0.6)'; mm.lineWidth = 2; mm.beginPath(); mm.arc(X(0), Y(0), 246 * sc, 0, 7); mm.stroke();
+  mm.strokeStyle = 'rgba(232,196,106,0.6)'; mm.lineWidth = 2; mm.beginPath(); mm.arc(X(0), Y(0), (WORLD_R + 6) * sc, 0, 7); mm.stroke();
   if (G.D.q.i === 2 && G.D.q.st === 'active') { mm.fillStyle = '#ff6b7f'; for (const s of G.shards) if (s.active) { mm.save(); mm.translate(X(s.pos.x), Y(s.pos.z)); mm.rotate(Math.PI / 4); mm.fillRect(-2.5, -2.5, 5, 5); mm.restore(); } }
   for (const e of G.enemies) { if (!e.alive) continue; mm.fillStyle = e.isBoss ? '#ff2b4a' : '#ff5a6e'; const r = e.isBoss ? 5 : 2.2; mm.beginPath(); mm.arc(X(e.pos.x), Y(e.pos.z), r, 0, 7); mm.fill(); }
   for (const b of G.bots) if (b.alive && !b.legend) { mm.fillStyle = b.resident ? '#9dffb0' : '#7fe3ff'; mm.beginPath(); mm.arc(X(b.pos.x), Y(b.pos.z), b.resident ? 2.8 : 2.2, 0, 7); mm.fill(); }
@@ -2834,11 +3121,78 @@ function dialog(who, name, qtitle, text, rew, opts) {
   for (const op of opts) { const b = document.createElement('button'); b.className = 'btn' + (op.gold ? ' gold' : ' ghost'); b.textContent = op.label; b.onclick = op.fn; o.appendChild(b); }
   $('dialog').classList.remove('hidden');
 }
-function closeAllUI() { for (const id of ['dialog', 'vendor', 'sheet', 'pause']) $(id).classList.add('hidden'); G.ui = null; $('tooltip').classList.add('hidden'); }
+// ---- the Concord tram network
+function openTram(t) {
+  const D = G.D, dests = TRAMS.filter(x => x !== t && D.trams.includes(x.id)), unknown = TRAMS.filter(x => !D.trams.includes(x.id)).length;
+  const more = unknown ? `\n\n${unknown} more stop${unknown === 1 ? ' is' : 's are'} out in the city that you have not found yet. Walk past a stop to add it to your network.` : '';
+  const text = dests.length ? `The Concord tram runs the length of the city, from the Plaza out to the Outer Wards.\n\nWhere to?${more}` : `This is the only stop on your network so far.${more}`;
+  dialog('CONCORD TRAM', t.name.toUpperCase(), '', text, '', [
+    ...dests.map(x => { const pl = ZONES[x.id] ? ZONES[x.id].pl : 0; return { label: `${x.name.toUpperCase()}${pl ? ' · ' + plText(pl) : ''}`, gold: true, fn: () => rideTram(x) }; }),
+    { label: 'CANCEL', fn: closeAllUI },
+  ]);
+}
+function rideTram(t) {
+  const P = G.P; closeAllUI();
+  if (P.combatT > 0) { msg('You cannot board the tram while in combat'); return; }
+  for (const e of G.enemies) if (e.target === P) { e.target = null; e.state = 'return'; }
+  resetMotion(P); P.pos.set(t.pos.x, 0, t.pos.z + 3.6); P.group.position.copy(P.pos); setTarget(null);
+  for (const b of partyList()) if (b.alive) { const o = partyOffset(b); b.pos.set(P.pos.x + o.x, 0, P.pos.z + o.z); resolveCollision(b.pos, 0.4); b.group.position.copy(b.pos); b.path = []; b.target = null; }
+  W.cam.position.copy(P.pos).add(new V3(Math.sin(G.cam.yaw) * 9, 4, Math.cos(G.cam.yaw) * 9));
+  burst(P.pos.clone().setY(1), 0x3ee6ff, 40, 3);
+  const pl = ZONES[t.id] ? ZONES[t.id].pl : 0;
+  banner('CONCORD TRAM', t.name.toUpperCase(), pl ? `◆ POWER LEVEL ${pl}` : 'ARRIVED');
+  saveGame();
+}
+// ---- the world map (M)
+const hexA = (hex, a) => `rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
+function toggleMap() {
+  if (G.ui === 'map') { closeAllUI(); return; }
+  closeAllUI(); G.ui = 'map'; $('worldmap').classList.remove('hidden'); drawWorldMap();
+}
+function drawWorldMap() {
+  const cv = $('wm-canvas'), g = cv.getContext('2d'), S = cv.width, sc = S / (WORLD_R * 2 + 40), C = S / 2, P = G.P;
+  const X = x => C + x * sc, Y = z => C + z * sc;
+  g.clearRect(0, 0, S, S);
+  g.fillStyle = '#241d16'; g.beginPath(); g.arc(C, C, (WORLD_R + 6) * sc, 0, 7); g.fill();
+  g.fillStyle = 'rgba(205,175,135,0.16)';
+  for (const c of G.colliders) { const w = (c.maxX - c.minX) * sc, h = (c.maxZ - c.minZ) * sc; if (w < 1.2 || h < 1.2) continue; g.fillRect(X(c.minX), Y(c.minZ), w, h); }
+  g.fillStyle = 'rgba(150,98,62,0.95)';
+  g.fillRect(X(-WORLD_R), Y(-7), WORLD_R * 2 * sc, 14 * sc); g.fillRect(X(-7), Y(-120), 14 * sc, 120 * sc); g.fillRect(X(-7), Y(91), 14 * sc, 150 * sc); g.fillRect(X(14), Y(26), 14 * sc, 66 * sc);
+  const zone = (id, draw) => {
+    const Z = ZONES[id], col = Z.safe || !Z.pl ? '#3ee6ff' : PL_COL[plTag(Z.pl)];
+    g.fillStyle = hexA(col, 0.2); g.strokeStyle = col; g.lineWidth = 1.5; g.beginPath(); draw(); g.fill(); g.stroke();
+  };
+  const rect = R => () => g.rect(X(R.x0), Y(R.z0), (R.x1 - R.x0) * sc, (R.z1 - R.z0) * sc);
+  zone('plaza', () => g.arc(X(0), Y(0), 34 * sc, 0, 7));
+  zone('cantina', rect(CANTINA));
+  zone('ashen', rect({ x0: 34, x1: 156, z0: -62, z1: 62 }));
+  zone('echo', rect({ x0: -156, x1: -34, z0: -62, z1: 62 }));
+  zone('crater', () => g.arc(X(CRATER.x), Y(CRATER.z), 72 * sc, 0, 7));
+  zone('rail', rect(RAIL)); zone('tenements', rect(TENE));
+  zone('reservoir', () => g.arc(X(RESV.x), Y(RESV.z), RESV_R * sc, 0, 7));
+  g.strokeStyle = 'rgba(232,196,106,0.9)'; g.lineWidth = 3; g.beginPath(); g.arc(C, C, (WORLD_R + 6) * sc, 0, 7); g.stroke();
+  // tram stops
+  for (const t of TRAMS) { const k = G.D.trams.includes(t.id); g.fillStyle = k ? '#3ee6ff' : '#5a6470'; g.save(); g.translate(X(t.pos.x), Y(t.pos.z)); g.rotate(Math.PI / 4); g.fillRect(-4, -4, 8, 8); g.restore(); }
+  // labels
+  g.textAlign = 'center'; g.shadowColor = '#000'; g.shadowBlur = 5;
+  for (const [id, x, z] of [['plaza', 0, -2], ['cantina', 0, 96], ['ashen', 95, -30], ['echo', -95, -30], ['crater', 0, -165], ['rail', 328, -30], ['tenements', -328, -30], ['reservoir', 0, 330], ['ward', 200, -220]]) {
+    const Z = ZONES[id], col = Z.safe ? '#9fe9ff' : !Z.pl ? '#c9b89a' : PL_COL[plTag(Z.pl)];
+    g.font = 'bold 12px Bahnschrift, Segoe UI, sans-serif'; g.fillStyle = '#fff'; g.fillText(Z.name, X(x), Y(z));
+    g.font = '11px Bahnschrift, Segoe UI, sans-serif'; g.fillStyle = col; g.fillText(Z.safe ? 'SANCTUARY' : !Z.pl ? 'THE CITY' : `◆ POWER LEVEL ${Z.pl}${Z.pl - playerPL() >= 2 ? ' ☠' : ''}`, X(x), Y(z) + 14);
+  }
+  g.shadowBlur = 0;
+  // the Mascars and your companions
+  for (const b of G.bots) if (b.alive && (b.legend || b.party)) { g.fillStyle = b.legend ? '#e8c46a' : '#4dff9a'; g.beginPath(); g.arc(X(b.pos.x), Y(b.pos.z), 3.5, 0, 7); g.fill(); if (b.party) { g.strokeStyle = '#4dff9a'; g.lineWidth = 1.5; g.beginPath(); g.arc(X(b.pos.x), Y(b.pos.z), 6, 0, 7); g.stroke(); } }
+  const obj = objectivePos();
+  if (obj) { g.fillStyle = '#e8c46a'; g.save(); g.translate(X(obj.x), Y(obj.z)); g.rotate(Math.PI / 4); g.fillRect(-5, -5, 10, 10); g.restore(); }
+  g.save(); g.translate(X(P.pos.x), Y(P.pos.z)); g.rotate(-P.group.rotation.y + Math.PI); g.fillStyle = '#fff'; g.beginPath(); g.moveTo(0, -9); g.lineTo(6, 6); g.lineTo(0, 2); g.lineTo(-6, 6); g.closePath(); g.fill(); g.restore();
+  $('wm-pl').textContent = `YOUR POWER LEVEL: ◆${playerPL()} · ${ARMOUR[playerPL()].name.toUpperCase()}`;
+}
+function closeAllUI() { for (const id of ['dialog', 'vendor', 'sheet', 'pause', 'worldmap']) $(id).classList.add('hidden'); G.ui = null; $('tooltip').classList.add('hidden'); }
 function openSheet() {
   const D = G.D, P = G.P, c = CL(); closeAllUI(); G.ui = 'sheet';
   $('sh-name').textContent = D.name.toUpperCase();
-  const rows = [['Title', D.title], ['Class', c.name], ['Level', D.level], ['Health', `${Math.ceil(P.hp)} / ${maxHp()}`], ['Energy', maxEn()], ['Damage bonus', `+${Math.round((dmgScale() - 1) * 100)}%`], ['Critical chance', `${Math.round(c.crit * 100)}%`], ['Weapon tuning', `Rank ${D.wpn}`], ['Concord plating', `Rank ${D.arm}`], ['Remnants destroyed', fmtNum(D.kills)], ['Deaths', D.deaths], ['Quests completed', D.completed], ['At your side', partyList().map(b => b.name).join(', ') || 'Nobody'], ['Credits', fmtNum(D.credits)], ['Realm', $('realm').value.split(' · ')[0]]];
+  const rows = [['Title', D.title], ['Class', c.name], ['Level', D.level], ['Power level', `◆${playerPL()} · ${ARMOUR[playerPL()].name}`], ['Health', `${Math.ceil(P.hp)} / ${maxHp()}`], ['Energy', maxEn()], ['Damage bonus', `+${Math.round((dmgScale() - 1) * 100)}%`], ['Critical chance', `${Math.round(c.crit * 100)}%`], ['Weapon tuning', `Rank ${D.wpn}`], ['Concord plating', `Rank ${D.arm}`], ['Remnants destroyed', fmtNum(D.kills)], ['Deaths', D.deaths], ['Quests completed', D.completed], ['At your side', partyList().map(b => b.name).join(', ') || 'Nobody'], ['Credits', fmtNum(D.credits)], ['Realm', $('realm').value.split(' · ')[0]]];
   $('sheet-rows').innerHTML = rows.map(([a, b]) => `<div class="srow"><span>${a.toUpperCase()}</span><b>${esc(b)}</b></div>`).join('');
   $('sheet').classList.remove('hidden');
 }
@@ -2912,6 +3266,7 @@ window.addEventListener('keydown', e => {
     case 'Digit1': useAbility(0); break; case 'Digit2': useAbility(1); break; case 'Digit3': useAbility(2); break; case 'Digit4': useAbility(3); break; case 'Digit5': useAbility(4); break;
     case 'KeyE': case 'KeyF': if (G.ui === 'dialog') break; interact(); break;
     case 'KeyC': if (G.ui === 'sheet') closeAllUI(); else openSheet(); break;
+    case 'KeyM': toggleMap(); break;
     case 'Space': e.preventDefault(); if (!e.repeat) playerJump(); break;
     case 'KeyQ': if (!e.repeat) playerCrouch(true); break;
   }
@@ -2987,6 +3342,7 @@ for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
 tap('tb-target', () => cycleTarget());
 tap('tb-menu', () => { if (G.ui && G.ui !== 'pause') closeAllUI(); else togglePause(); });
 tap('tb-sheet', () => { if (G.ui === 'sheet') closeAllUI(); else openSheet(); });
+tap('tb-map', () => toggleMap());
 tap('tb-chat', () => { const c = $('chat-input'); c.classList.add('open'); c.focus(); });
 $('chat-input').addEventListener('blur', () => $('chat-input').classList.remove('open'));
 $('prompt').addEventListener('click', () => { if (G.ui !== 'dialog') interact(); });
@@ -3040,7 +3396,7 @@ function openRoster() {
     const cl = CLASSES[c.cls], row = document.createElement('div'); row.className = 'rs-row' + (c.resident ? ' res' : '');
     row.innerHTML = `<i class="rs-sig" style="--c:${esc(c.visor)}"></i>
       <div class="rs-main"><div class="rs-name">${esc(c.name.toUpperCase())}${c.resident ? '<span class="rs-tag">RESIDENT</span>' : ''}</div>
-      <div class="rs-sub">LV ${c.level} ${cl.name} · ${esc((c.title || 'Ascendant').toUpperCase())} · ${fmtNum(c.kills | 0)} REMNANTS</div></div><div class="rs-btns"></div>`;
+      <div class="rs-sub">LV ${c.level} ${cl.name} · ◆${c.armour == null ? 1 : c.armour} · ${esc((c.title || 'Ascendant').toUpperCase())} · ${fmtNum(c.kills | 0)} REMNANTS</div></div><div class="rs-btns"></div>`;
     const btns = row.querySelector('.rs-btns');
     const add = (label, cls, fn, confirm) => {
       const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = label;
@@ -3146,7 +3502,7 @@ function saveGame() {
 window.addEventListener('beforeunload', () => { if (G.mode === 'world') saveGame(); });
 
 $('respawn').onclick = respawn;
-$('vendor-x').onclick = closeAllUI; $('sheet-x').onclick = closeAllUI;
+$('vendor-x').onclick = closeAllUI; $('wm-x').onclick = closeAllUI; $('sheet-x').onclick = closeAllUI;
 $('pz-resume').onclick = closeAllUI; $('pz-sheet').onclick = openSheet;
 $('pz-codex').onclick = () => { closeAllUI(); openCodex(); };
 $('pz-settings').onclick = () => { closeAllUI(); openSettings(); };

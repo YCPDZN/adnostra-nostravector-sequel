@@ -29,6 +29,16 @@ export const CODEX = [
     'The Concord forbids the Governor to leave Ad-Nostra. His wife is under no such order. Malia Mascar goes out to the Scorched Veld, the Echo Plains and the Crater herself, with a short energy blade in one hand and a Concord mending kit within reach of the other.',
     'Ascendants who fight beside her say she closes wounds faster than the Remnants can open them.'
   ]},
+  { title: 'The Outer Wards', tag: 'THE CITY', body: [
+    'Ad-Nostra did not stop at the old rampart. The city grew outward in every direction until a new wall had to be raised nearly twice as far out, and the districts in between were never properly reclaimed.',
+    'East, past the Scorched Veld, the Sunken Rail Yards rust in the grass. West, past the Echo Plains, the Ashfall Tenements still smoulder. South of the Salt Lantern lies the Dry Reservoir, drained in the war, where the Catharsis has taken root in the silt.',
+    'The Concord tram runs out to all of them. Walk past a stop once and you can ride to it from anywhere.'
+  ]},
+  { title: 'Power Levels', tag: 'SURVIVAL', body: [
+    'Every Ascendant has a power level from 0 to 9, set by the armour they wear. Every district and every Remnant has one too.',
+    'Meet a Remnant at or below your power level and it is a fair fight. Meet one a level above you and it hits harder and shrugs off your blows. Two or more levels above, marked with a skull, and it will kill you in a few hits while your blade barely scratches it.',
+    'Quartermaster Ilse Varn sells Concord armour, one tier at a time, from Recruit Weave up to Carax Plate, forged from the alloy of the planet where Lord Zark fell.'
+  ]},
   { title: 'Residents of Ad-Nostra', tag: 'THE CITY', body: [
     'Not every Ascendant keeps the oath forever. Some hang up their armour lights and simply stay: they walk the plaza, drink at the Salt Lantern, and still go out onto the plains when the Remnants come too close.',
     'The Concord calls them Residents. They answer when an old comrade asks them to fight at their side.'
@@ -81,6 +91,9 @@ export const TIPS = [
   'Thomas Hawthorne was Orion Mascar\'s apprentice before the Siege of Harbin.',
   'Carax orbits Sagittarius A*, the black hole at the heart of the galaxy.',
   'Echo Drones attack from range. Close the distance, or out-range them as an Arcwright.',
+  'Your power level comes from your armour. Remnants two levels above you are marked with a skull: they will kill you in a few hits.',
+  'Press M for the map of Ad-Nostra. Districts are coloured by how dangerous they are for your power level.',
+  'Walk past a Concord tram stop to add it to your network, then ride to it from any other stop.',
   'Ask Orion or Malia Mascar to fight at your side. Orion draws Remnants off you; Malia heals you when you are hurt.',
   'An Ascendant you no longer play can become a Resident of Ad-Nostra from the ASCENDANTS menu. They will live in the city and hunt the plains.',
 ];
