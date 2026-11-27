@@ -3361,7 +3361,7 @@ function setupPlayer() {
   if (D.pos && Math.hypot(D.pos[0], D.pos[1]) < WORLD_R - 3 && !isWaterPt(D.pos[0], D.pos[1]) && !pointBlocked(D.pos[0], D.pos[1], 0.6)) P.pos.set(D.pos[0], 0, D.pos[1]);
   P.group.position.copy(P.pos); W.scene.add(P.group);
   G.P = P;
-  G.cam = { yaw: 0, pitch: 0.32, dist: 9.5 };
+  G.cam = { yaw: 0, pitch: 0.2, dist: TOUCH ? 6 : 5.2 };   // framed on the body, over the right shoulder (wheel or pinch to pull back)
   if (P.pos.distanceTo(SPAWN) > 1) G.cam.yaw = Math.atan2(P.pos.x, P.pos.z);
   buildHotbar();
 }
@@ -3990,13 +3990,17 @@ function updateAmbient(dt) {
 }
 function updateCamera(dt) {
   const P = G.P, c = G.cam;
-  const tgt = P.pos.clone().setY(P.pos.y + 1.7);
+  // Body framing: the camera looks at your chest, a little over your right shoulder; the shoulder offset eases away
+  // as you zoom out, so a wide view is still centred on you.
+  const sh = clamp((9 - c.dist) / 6, 0, 1) * 0.55, rx = Math.cos(c.yaw) * sh, rz = -Math.sin(c.yaw) * sh;
+  const head = P.pos.clone().setY(P.pos.y + 1.45);
+  const tgt = head.clone().add(new V3(rx, 0, rz));
   const cp = new V3(Math.sin(c.yaw) * Math.cos(c.pitch), Math.sin(c.pitch), Math.cos(c.yaw) * Math.cos(c.pitch)).multiplyScalar(c.dist).add(tgt);
-  cp.y = Math.max(0.6, cp.y);
+  cp.y = Math.max(0.5, cp.y);
   // keep the camera out of walls
   const near = collidersIn(Math.min(tgt.x, cp.x) - 1, Math.min(tgt.z, cp.z) - 1, Math.max(tgt.x, cp.x) + 1, Math.max(tgt.z, cp.z) + 1);
   if (near.length) {
-    const step = new V3().subVectors(cp, tgt).divideScalar(24), q = tgt.clone();
+    const step = new V3().subVectors(cp, head).divideScalar(24), q = head.clone();
     for (let i = 0; i < 24; i++) {
       q.add(step); let hit = false;
       for (const k of near) if (q.x > k.minX - 0.3 && q.x < k.maxX + 0.3 && q.z > k.minZ - 0.3 && q.z < k.maxZ + 0.3 && q.y < k.h) { hit = true; break; }
@@ -4387,7 +4391,7 @@ function rideTram(t) {
   for (const e of G.enemies) if (e.target === P) { e.target = null; e.state = 'return'; }
   resetMotion(P); P.pos.set(t.pos.x, 0, t.pos.z + 3.6); P.group.position.copy(P.pos); setTarget(null);
   for (const b of partyList()) if (b.alive) { const o = partyOffset(b); b.pos.set(P.pos.x + o.x, 0, P.pos.z + o.z); resolveCollision(b.pos, 0.4); b.group.position.copy(b.pos); b.path = []; b.target = null; }
-  W.cam.position.copy(P.pos).add(new V3(Math.sin(G.cam.yaw) * 9, 4, Math.cos(G.cam.yaw) * 9));
+  W.cam.position.copy(P.pos).add(new V3(Math.sin(G.cam.yaw) * 5, 2.5, Math.cos(G.cam.yaw) * 5));
   burst(P.pos.clone().setY(1), 0x3ee6ff, 40, 3);
   const pl = ZONES[t.id] ? ZONES[t.id].pl : 0;
   banner('CONCORD TRAM', t.name.toUpperCase(), pl ? `◆ POWER LEVEL ${pl}` : 'ARRIVED');
@@ -4601,7 +4605,7 @@ window.addEventListener('mouseup', e => {
   if (G.mode === 'world' && e.target === canvas && !mouse.dragged && mouse.down === 0) pick3D(e.clientX, e.clientY);
   mouse.down = -1; mouse.both = false;
 });
-canvas.addEventListener('wheel', e => { if (G.mode === 'world') G.cam.dist = clamp(G.cam.dist + Math.sign(e.deltaY) * 1.2, 3.5, 24); }, { passive: true });
+canvas.addEventListener('wheel', e => { if (G.mode === 'world') G.cam.dist = clamp(G.cam.dist + Math.sign(e.deltaY) * 0.8, 2.4, 18); }, { passive: true });
 const ray = new THREE.Raycaster();
 function pick3D(x, y) {
   ray.setFromCamera(new THREE.Vector2(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1), W.cam);
@@ -4680,7 +4684,7 @@ window.addEventListener('touchmove', e => {
   }
   if (tcam.size === 2 && G.mode === 'world') {
     const [a, b] = [...tcam.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
-    if (pinchD) G.cam.dist = clamp(G.cam.dist - (d - pinchD) * 0.04, 3.5, 24);
+    if (pinchD) G.cam.dist = clamp(G.cam.dist - (d - pinchD) * 0.03, 2.4, 18);
     pinchD = d;
   }
 }, { passive: true });
@@ -4852,7 +4856,7 @@ function enterWorld(isNew = false) {
     setTimeout(() => {
       hide('loading'); show('hud'); G.mode = 'world'; setScene(W.scene, W.cam);
       updateTracker(); setTarget(null);
-      W.cam.position.copy(G.P.pos).add(new V3(0, 6, 14));
+      W.cam.position.copy(G.P.pos).add(new V3(0, 2.5, 5.5));
       Sound.playMusic('world');
       addChat('sys', null, `Welcome to Ad-Nostra, ${G.D.name}. Realm: ${$('realm').value.split(' · ')[0]}.`);
       addChat('gov', null, 'Anno Domini 2137. Ten years since Carax. The Catharsis is fallen — but its Remnants endure.');
