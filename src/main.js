@@ -2866,7 +2866,7 @@ function allyBase(extra) {
     canFlip: false, talkT: 0, party: false, thinkT: 0, routeT: 0, supT: 0, medT: 0, hitT: 0, swings: 0, stuckN: 0, resume: null }, extra);
 }
 function allyPlate(b, cls) {
-  b.plate = makePlate(cls, `<div class="n">${esc(b.name)} <span style="color:#aaa">${b.level}</span></div><div class="g">&lt;${esc(b.title)}&gt;</div><div class="hb ally"><i></i></div>`);
+  b.plate = makePlate(cls, `<div class="n"><b class="pld">◆${b.pl | 0}</b> ${esc(b.name)} <span style="color:#aaa">${b.level}</span></div><div class="g">&lt;${esc(b.title)}&gt;</div><div class="hb ally"><i></i></div>`);
   b.plateBar = b.plate.querySelector('.hb i'); b.plateHb = b.plate.querySelector('.hb'); b.plateHb.style.visibility = 'hidden';
 }
 function spawnOrion() {
@@ -2874,7 +2874,7 @@ function spawnOrion() {
   const rig = makeSoldier({ model: 'orion', accent: 0x8fe6ff, weapon: 'greatsword', mats: SOLDIER_MATS });
   const o = allyBase({ legend: true, id: 'orion', name: 'Orion Mascar', title: 'Father of the Governor', cls: 'vanguard', level: 15, rig, group: rig.group,
     pos: zonePoint('plaza'), hp: 950, maxHp: 950, dmg: 38, atkCd: [1.3, 1.7], reach: 2.7, glow: 0x8fe6ff, pron: 'He', poss: 'his', lines: ORION_LINES,
-    pl: 6, zones: ['ashen', 'echo', 'crater', 'crater', 'rail', 'tenements', 'reservoir'], respawnT: 20, loungeSpot: ORION_PLAQUE_SPOT, loungeLook: new V3(0.6, 0, 56) });
+    pl: 4, zones: ['ashen', 'echo', 'crater', 'crater', 'rail'], respawnT: 20, loungeSpot: ORION_PLAQUE_SPOT, loungeLook: new V3(0.6, 0, 56) });
   o.group.position.copy(o.pos); W.scene.add(o.group);
   allyPlate(o, 'npc'); addHitbox(o, 0.9, 2, 0.9, 1);
   G.bots.push(o);
@@ -2885,7 +2885,7 @@ function spawnMalia() {
   const rig = makeSoldier({ model: 'malia', accent: 0x8fe6ff, weapon: 'sabre', mats: SOLDIER_MATS, hold: ['clavL', 'uarmL', 'farmL', 'handL'] });
   const m = allyBase({ legend: true, id: 'malia', name: 'Malia Mascar', title: 'Wife of the Governor', cls: 'vanguard', level: 15, rig, group: rig.group,
     pos: new V3(rand(-6, 6), 0, rand(-4, 2)), hp: 760, maxHp: 760, dmg: 27, atkCd: [0.9, 1.25], reach: 2.4, glow: 0x8fe6ff, pron: 'She', poss: 'her', lines: MALIA_LINES,
-    pl: 6, zones: ['ashen', 'echo', 'crater', 'rail', 'tenements', 'reservoir'], respawnT: 20, height: 2.0, idleT: rand(10, 25), loungeSpot: new V3(-7.0, 0, 65.6), loungeLook: new V3(-8.6, 0, 67.4) });
+    pl: 3, zones: ['ashen', 'echo', 'echo', 'crater'], respawnT: 20, height: 2.0, idleT: rand(10, 25), loungeSpot: new V3(-7.0, 0, 65.6), loungeLook: new V3(-8.6, 0, 67.4) });
   m.group.position.copy(m.pos); W.scene.add(m.group);
   allyPlate(m, 'npc'); addHitbox(m, 0.9, 2, 0.9, 1);
   G.bots.push(m);
@@ -4061,7 +4061,7 @@ function updatePlates() {
       if (hurt && e._pw !== w) { e._pw = w; e.plateBar.style.width = w; }
       if (e._pp !== e.party) { e._pp = e.party; el.classList.toggle('party', e.party); }
     }
-    if (e.kind === 'enemy') { const tag = plTag(e.pl); if (e._pl !== tag) { if (e._pl) el.classList.remove(e._pl); el.classList.add(tag); e._pl = tag; } }
+    if (e.kind === 'enemy' || e.ally) { const tag = plTag(e.pl | 0); if (e._pl !== tag) { if (e._pl) el.classList.remove(e._pl); el.classList.add(tag); e._pl = tag; } }
     if (e.kind === 'enemy') { const w = (e.hp / e.maxHp * 100).toFixed(0) + '%'; if (e._pw !== w) { e._pw = w; e.plateBar.style.width = w; } const isT = P.target === e; if (e._pt !== isT) { e._pt = isT; el.classList.toggle('tgt', isT); } }
   }
 }
@@ -4108,6 +4108,17 @@ function drawMinimap() {
   for (const b of G.bots) if (b.alive && !b.legend) { mm.fillStyle = b.resident ? '#9dffb0' : '#7fe3ff'; mm.beginPath(); mm.arc(X(b.pos.x), Y(b.pos.z), b.resident ? 2.8 : 2.2, 0, 7); mm.fill(); }
   mm.fillStyle = '#e8c46a'; for (const n of [...G.npcs, ...G.bots.filter(b => b.legend && b.alive)]) { mm.beginPath(); mm.arc(X(n.pos.x), Y(n.pos.z), 3.5, 0, 7); mm.fill(); }
   mm.strokeStyle = '#4dff9a'; mm.lineWidth = 1.5; for (const b of G.bots) if (b.party && b.alive) { mm.beginPath(); mm.arc(X(b.pos.x), Y(b.pos.z), 5.5, 0, 7); mm.stroke(); }
+  mm.font = 'bold 9px Bahnschrift, Segoe UI, sans-serif'; mm.textAlign = 'center'; mm.textBaseline = 'bottom';
+  const placed = [];
+  for (const b of G.bots) if (b.alive && (b.legend || b.resident)) {   // who they are, and their power level (stacked, never on top of each other)
+    const x = X(b.pos.x); let y = Y(b.pos.z) - 5; if (Math.hypot(x - C, y - C) > C - 6) continue;
+    const nm = b.legend ? b.name.split(' ')[0] : b.name, pl = `◆${b.pl | 0}`, wn = mm.measureText(nm + ' ').width, wp = mm.measureText(pl).width, x0 = x - (wn + wp) / 2;
+    for (let k = 0; k < 5 && placed.some(r => x0 < r[2] && x0 + wn + wp > r[0] && y > r[1] - 10 && y - 10 < r[1]); k++) y -= 10;
+    placed.push([x0, y, x0 + wn + wp]);
+    mm.textAlign = 'left'; mm.fillStyle = '#000'; mm.fillText(nm + ' ' + pl, x0 + 1, y + 1);
+    mm.fillStyle = b.legend ? '#e8c46a' : '#9dffb0'; mm.fillText(nm, x0, y); mm.fillStyle = PL_COL[plTag(b.pl | 0)]; mm.fillText(pl, x0 + wn, y);
+  }
+  mm.textAlign = 'center'; mm.textBaseline = 'alphabetic';
   // objective pointer
   const obj = objectivePos();
   if (obj) {
@@ -4369,7 +4380,16 @@ function drawWorldMap() {
   g.restore();
   mapText(g, zoom ? 'CLICK THE MAP FOR THE WHOLE CITY' : 'CLICK THE MAP FOR THE OLD CITY', S / 2, S - 24, `11px ${MAP_SANS}`, '#9fe9ff');
   // the Mascars, your companions, your objective and you
-  for (const b of G.bots) if (b.alive && (b.legend || b.party)) { g.fillStyle = b.legend ? '#ffd84a' : '#4dff9a'; g.strokeStyle = '#000'; g.lineWidth = 1; g.beginPath(); g.arc(X(b.pos.x), Y(b.pos.z), 3.5, 0, 7); g.fill(); g.stroke(); }
+  const placed = [];
+  for (const b of G.bots) if (b.alive && (b.legend || b.party || b.resident)) {
+    g.fillStyle = b.legend ? '#ffd84a' : b.party ? '#4dff9a' : '#9dffb0'; g.strokeStyle = '#000'; g.lineWidth = 1; g.beginPath(); g.arc(X(b.pos.x), Y(b.pos.z), 3.5, 0, 7); g.fill(); g.stroke();
+    if (b.legend || b.resident) {
+      const t = `${b.legend ? b.name.split(' ')[0] : b.name} ◆${b.pl | 0}`; g.font = `bold 11px ${MAP_SANS}`; const w = g.measureText(t).width, x = X(b.pos.x); let y = Y(b.pos.z) - 11;
+      for (let k = 0; k < 5 && placed.some(r => x - w / 2 < r[2] && x + w / 2 > r[0] && Math.abs(y - r[1]) < 12); k++) y -= 12;
+      placed.push([x - w / 2, y, x + w / 2]); mapText(g, t, x, y, `bold 11px ${MAP_SANS}`, PL_COL[plTag(b.pl | 0)]);
+    }
+  }
+  mapText(g, `You ◆${playerPL()}`, X(P.pos.x), Y(P.pos.z) + 17, `bold 11px ${MAP_SANS}`, '#ffffff');
   const obj = objectivePos();
   if (obj) { g.fillStyle = '#ffd84a'; g.strokeStyle = '#000'; g.save(); g.translate(X(obj.x), Y(obj.z)); g.rotate(Math.PI / 4); g.fillRect(-5, -5, 10, 10); g.strokeRect(-5, -5, 10, 10); g.restore(); }
   g.save(); g.translate(X(P.pos.x), Y(P.pos.z)); g.rotate(-P.group.rotation.y + Math.PI); g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(0, -10); g.lineTo(7, 7); g.lineTo(0, 3); g.lineTo(-7, 7); g.closePath(); g.fill(); g.stroke(); g.restore();
