@@ -98,7 +98,9 @@ Like RuneScape: Dragonwilds, every Ascendant, district and Remnant has a **power
 
 | District | Where | Power level |
 |---|---|---|
-| Concordia Plaza, the Salt Lantern | centre | sanctuary |
+| Concordia Plaza | on the harbour, in the south | sanctuary (you start and respawn here) |
+| The whole city: every ward, the Rampart Ring, the Harbour, the Lantern Market, the Salt Lantern | everywhere but the old districts | sanctuary (blue on the map) |
+| Ad Nostra: Frontier (the old plaza) | centre | not a sanctuary: the edge of the wilds |
 | Scorched Veld | east | 1 |
 | Echo Plains | west | 2 |
 | The Catharsis Crater (boss: 4) | north | 3 |
@@ -115,7 +117,8 @@ Like RuneScape: Dragonwilds, every Ascendant, district and Remnant has a **power
 - **M** (or ⌖ on touch) opens the map of Ad Nostra: an adventurer's map as the Concord would draw it in 2137. The ground is painted like an old map (every building outlined in stone, the glass towers rimmed in cyan, the streets, the districts in their own ground, the sea with lit waves, the rampart with its gold light strip), laid on a holographic survey slate with a lettered grid, lit corner brackets, a compass ring, hexagonal beacons for the trams, the ferry, the Salt Lantern, the market and the lighthouse, and the title on a lit plate. It also shows the streets, the sea, districts coloured by danger for your power level, tram stops, the ferry, the Mascars, your companions, your objective and you. Click (or tap) the map to zoom in on the old city.
 
 ### Places
-- **Concordia Plaza** is a sanctuary. Governor Mascar stands on his dais beneath the Statue of the Unmaking, and Quartermaster Ilse Varn sells medkits and upgrades.
+- **Concordia Plaza** stands on the waterfront at the head of the harbour, between the two ferry piers. It is where you start and where you come back to when you fall. Governor Mascar stands on his dais beneath the Statue of the Unmaking, looking out over the water, and Quartermaster Ilse Varn sells medkits and armour beside him. Orion and Malia live here too: they stroll the plaza between hunts, walk out through the city (down the Lantern's lane, through the market, round the Dry Reservoir and along the Quay Road) to the districts they hunt, and come back here. The whole city is a sanctuary now; on the map it is washed in blue.
+- **Ad Nostra: Frontier** is the old plaza in the middle of the city, marked by a lit sign. It is not a sanctuary: it is where Ascendants gather before heading out into the Scorched Veld, the Echo Plains and the Crater, and where your Residents come back to when they fall. Its tram stop is on your network from the start.
 - **Scorched Veld** (east, lv 1–3) holds the Hollowed.
 - **Echo Plains** (west, lv 2–4) holds the Echo Drones.
 - **The Catharsis Crater** (north, lv 4–7) holds a crashed Catharsis beacon-ship, its shards, and the **Remnant of the Catharsis**. Vultures circle overhead.

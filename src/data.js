@@ -71,10 +71,10 @@ export const CODEX = [
   { title: 'Croxian Mascar', tag: 'GOVERNOR OF AD-NOSTRA', body: [
     'Born 2094 in Kaliningrad, during the Third World War, to Orion Mascar and Talina Mascar (née Alvarez).',
     'Once a soldier of Terra Imperia. He walked away from it, then helped the Wanderer bring down Lord Zark and the Catharsis-turned Thomas Hawthorne at Carax in 2127.',
-    'Today he governs Ad-Nostra from Concordia Plaza, beneath a statue raised in his honour against his wishes. He still wears his Carax armour, its seams lit with cyan.'
+    'Today he governs Ad-Nostra from Concordia Plaza on the harbour, beneath a statue raised in his honour against his wishes. He still wears his Carax armour, its seams lit with cyan.'
   ]},
   { title: 'The Salt Lantern', tag: 'CANTINA · AD-NOSTRA', body: [
-    'Just south of Concordia Plaza stands the Salt Lantern: a whitewashed cantina with a great crystal lantern burning over its door, warm as the savannah at dusk.',
+    'Just south of the Frontier, the old plaza at the heart of the city, stands the Salt Lantern: a whitewashed cantina with a great crystal lantern burning over its door, warm as the savannah at dusk.',
     'It is the oldest place in the city that anyone still drinks in. It is also where Orion Mascar fought Daniel Brown. A plaque marks the spot, and the regulars will happily argue about the rest.',
     'The keeper, Zuri Adeyemi, pours Lantern Ale for any Ascendant with credits. It is said to sharpen the mind.',
     'Behind it, and spilling round to its door, is the Lantern Market: rows of stalls under striped awnings selling fruit, spice, cloth, pottery, salvaged tech and, of course, lanterns, strung on lines over the aisles.'
@@ -97,7 +97,7 @@ export const TIPS = [
   'The Salt Lantern is a sanctuary. Lantern Ale from Zuri Adeyemi grants bonus experience.',
   'Hollowed lose interest if you lead them too far from where they rose.',
   'Shades who strike from Blink deal guaranteed critical damage.',
-  'Concordia Plaza is a sanctuary. No Remnant will follow you there.',
+  'The whole city is a sanctuary, from Concordia Plaza on the harbour out to the wall. Only the old districts and the Frontier beside them are not.',
   'Quartermaster Ilse Varn sells medkits and weapon tuning. Press 5 to use a medkit.',
   'Thomas Hawthorne was Orion Mascar\'s apprentice before the Siege of Harbin.',
   'Carax orbits Sagittarius A*, the black hole at the heart of the galaxy.',
