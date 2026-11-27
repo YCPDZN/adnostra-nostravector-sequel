@@ -4226,51 +4226,126 @@ function toggleMap() {
   if (G.ui === 'map') { closeAllUI(); return; }
   closeAllUI(); G.ui = 'map'; $('worldmap').classList.remove('hidden'); drawWorldMap();
 }
-function drawWorldMap() {   // the whole city, or (click the map) the old city inside the Rampart Ring
+// The map of Ad Nostra, drawn like an old adventurer's map: parchment round the edge, the savannah and the sea,
+// every street and every building in stone with a dark outline, the districts in their own ground, painted icons
+// for the places that matter, and names in a serif hand. Click it to switch between the whole city and the old city.
+const MAP_SERIF = "'Palatino Linotype', 'Book Antiqua', Palatino, 'URW Palladio L', Georgia, serif";
+const _mapCache = {};
+function mapNoise(g, x, y, w, h, n, cols, size = 2) { for (let i = 0; i < n; i++) { g.fillStyle = cols[i % cols.length]; g.fillRect(x + Math.random() * w, y + Math.random() * h, size, size); } }
+function drawMapBase(zoom) {   // everything that doesn't move, drawn once per zoom level
+  const S = 760, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const g = cv.getContext('2d'), sc = S / ((zoom ? OLD_R + 30 : WORLD_R + 20) * 2), C = S / 2;
+  const X = x => C + x * sc, Y = z => C + z * sc, L = v => v * sc;
+  const rectP = (R, m = 0) => g.rect(X(R.x0 - m), Y(R.z0 - m), L(R.x1 - R.x0 + 2 * m), L(R.z1 - R.z0 + 2 * m));
+  // the savannah, out to the edge of the sheet
+  g.fillStyle = '#a99a5e'; g.fillRect(0, 0, S, S); mapNoise(g, 0, 0, S, S, 9000, ['#9c8c52', '#b4a66a', '#8f8148', '#bdb077']);
+  for (let i = 0; i < 260; i++) { const x = Math.random() * S, y = Math.random() * S; g.fillStyle = 'rgba(70,90,35,0.55)'; g.beginPath(); g.arc(x, y, rand(1.5, 3), 0, 7); g.fill(); }   // scrub and acacias
+  // the sea, with waves
+  const water = (draw) => { g.save(); g.beginPath(); draw(); g.clip(); g.fillStyle = '#3d6a96'; g.fillRect(0, 0, S, S); g.strokeStyle = 'rgba(190,215,235,0.35)'; g.lineWidth = 1;
+    for (let y = 4; y < S; y += 9) for (let x = (y * 7) % 23; x < S; x += 23) { g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + 3, y - 2.5, x + 6, y); g.quadraticCurveTo(x + 9, y + 2.5, x + 12, y); g.stroke(); } g.restore(); };
+  water(() => { g.rect(0, Y(COAST_Z), S, S); g.rect(X(BASIN.x0), Y(BASIN.z0), L(BASIN.x1 - BASIN.x0), L(BASIN.z1 - BASIN.z0)); });
+  g.strokeStyle = '#2a4a6e'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(0, Y(COAST_Z)); g.lineTo(X(BASIN.x0), Y(COAST_Z)); g.lineTo(X(BASIN.x0), Y(BASIN.z0)); g.lineTo(X(BASIN.x1), Y(BASIN.z0)); g.lineTo(X(BASIN.x1), Y(COAST_Z)); g.lineTo(S, Y(COAST_Z)); g.stroke();
+  // the city's paving, inside the rampart and on dry land
+  g.save(); g.beginPath(); g.arc(C, C, L(WORLD_R + 6), 0, 7); g.clip(); g.beginPath(); g.rect(0, 0, S, Y(COAST_Z)); g.clip();
+  g.fillStyle = '#bdae8a'; g.fillRect(0, 0, S, S); mapNoise(g, 0, 0, S, S, 6000, ['#b2a37e', '#c6b893', '#a99a76']);
+  g.restore();
+  g.fillStyle = '#c3b593'; for (const M of MOLES) g.fillRect(X(M.x0), Y(M.z0), L(M.x1 - M.x0), L(M.z1 - M.z0));
+  // the old districts, each in its own ground
+  const ground = (fill, specks, draw) => { g.save(); g.beginPath(); draw(); g.clip(); g.fillStyle = fill; g.fillRect(0, 0, S, S); mapNoise(g, 0, 0, S, S, 2500, specks, 2); g.restore(); };
+  ground('#5e4c34', ['#4a3b28', '#6e5a3c', '#7a3a22'], () => rectP({ x0: 34, x1: 156, z0: -62, z1: 62 }));            // Scorched Veld
+  ground('#bdb486', ['#aea474', '#cbc398', '#9a9068'], () => rectP({ x0: -156, x1: -34, z0: -62, z1: 62 }));          // Echo Plains
+  ground('#7a3b2a', ['#5e2a1e', '#9a4a32', '#c0303a'], () => g.arc(X(CRATER.x), Y(CRATER.z), L(72), 0, 7));          // the Crater
+  ground('#7a6a52', ['#6a5a44', '#8a7a60'], () => rectP(RAIL)); ground('#4c4038', ['#3a3028', '#5a4c40', '#8a4a2a'], () => rectP(TENE));
+  ground('#9a8a6c', ['#8a7a5c', '#aa9a7a', '#6a5a44'], () => g.arc(X(RESV.x), Y(RESV.z), L(RESV_R), 0, 7));
+  ground('#b0613c', ['#a35834', '#bd6c45'], () => rectP(MARKET));
+  for (const R of W.parks || []) ground('#6f8a3a', ['#5f7a2e', '#7f9a46'], () => rectP(R));
+  g.strokeStyle = 'rgba(40,25,15,0.6)'; g.lineWidth = 1;   // rails in the yards, rocks round the crater
+  for (const tz of [-62, -44, -26, 26, 44, 62]) { g.beginPath(); g.moveTo(X(RAIL.x0), Y(tz)); g.lineTo(X(RAIL.x1), Y(tz)); g.stroke(); }
+  g.fillStyle = '#5a3a2a'; for (let a = 0; a < 6.28; a += 0.16) { if (Math.abs(a - Math.PI / 2) < 0.25) continue; g.beginPath(); g.arc(X(CRATER.x + Math.cos(a) * 70), Y(CRATER.z + Math.sin(a) * 70), L(4), 0, 7); g.fill(); }
+  // Concordia Plaza
+  g.fillStyle = '#d6c49a'; g.beginPath(); g.arc(X(0), Y(0), L(34), 0, 7); g.fill(); g.strokeStyle = '#8a7250'; g.lineWidth = 1;
+  for (const r of [10, 20, 30]) { g.beginPath(); g.arc(X(0), Y(0), L(r), 0, 7); g.stroke(); }
+  // roads: a dark edge, then the road
+  const roads = (w, col) => { g.fillStyle = col; for (const r of W.streets) g.fillRect(X(r.x0) - w, Y(r.z0) - w, L(r.x1 - r.x0) + 2 * w, L(r.z1 - r.z0) + 2 * w);
+    g.strokeStyle = col; g.lineWidth = L(14) + 2 * w; g.beginPath(); g.arc(X(0), Y(0), L(OLD_R), 0, 7); g.stroke(); };
+  roads(1, '#4a4038'); roads(0, '#7d7166');
+  // buildings in stone, lit from the top left
+  const blds = G.colliders.filter(c => c.h >= 2 && c.maxX - c.minX > 1.2 && c.maxZ - c.minZ > 1.2);
+  g.fillStyle = 'rgba(40,30,20,0.35)'; for (const c of blds) g.fillRect(X(c.minX) + 1.5, Y(c.minZ) + 1.5, L(c.maxX - c.minX), L(c.maxZ - c.minZ));
+  for (const c of blds) {
+    const x = X(c.minX), y = Y(c.minZ), w = L(c.maxX - c.minX), h = L(c.maxZ - c.minZ), tall = c.h > 45;
+    g.fillStyle = tall ? '#7e8a96' : c.h > 9 ? '#968b78' : '#8c7c62'; g.fillRect(x, y, w, h);
+    if (w > 3 && h > 3) { g.fillStyle = 'rgba(255,250,235,0.28)'; g.fillRect(x, y, w, 1); g.fillRect(x, y, 1, h); }
+    g.strokeStyle = '#2e2820'; g.lineWidth = w > 2.5 ? 0.8 : 0.4; g.strokeRect(x + 0.4, y + 0.4, w - 0.8, h - 0.8);
+  }
+  // the rampart, crenellated, open to the sea
+  const ra = Math.acos((COAST_Z - 2) / (WORLD_R + 6)), a0 = Math.PI / 2 + ra, a1 = Math.PI * 2.5 - ra, rr = L(WORLD_R + 6);
+  g.strokeStyle = '#3a2e22'; g.lineWidth = 6; g.beginPath(); g.arc(C, C, rr, a0, a1); g.stroke();
+  g.strokeStyle = '#a8946e'; g.lineWidth = 3.5; g.beginPath(); g.arc(C, C, rr, a0, a1); g.stroke();
+  g.fillStyle = '#3a2e22'; for (let a = a0; a < a1; a += 0.035) g.fillRect(C + Math.cos(a) * (rr + 3) - 1.5, C + Math.sin(a) * (rr + 3) - 1.5, 3, 3);
+  // the danger of each hostile district, as a dashed border
+  g.setLineDash([5, 4]); g.lineWidth = 2;
+  for (const [id, draw] of [['ashen', () => rectP({ x0: 34, x1: 156, z0: -62, z1: 62 })], ['echo', () => rectP({ x0: -156, x1: -34, z0: -62, z1: 62 })], ['crater', () => g.arc(X(CRATER.x), Y(CRATER.z), L(72), 0, 7)], ['rail', () => rectP(RAIL)], ['tenements', () => rectP(TENE)], ['reservoir', () => g.arc(X(RESV.x), Y(RESV.z), L(RESV_R), 0, 7)]]) {
+    g.strokeStyle = PL_COL[plTag(ZONES[id].pl)]; g.beginPath(); draw(); g.stroke();
+  }
+  g.setLineDash([]);
+  // parchment round the edge of the sheet
+  const vg = g.createRadialGradient(C, C, S * 0.5, C, C, S * 0.74); vg.addColorStop(0, 'rgba(226,206,160,0)'); vg.addColorStop(0.6, 'rgba(226,206,160,0.5)'); vg.addColorStop(1, 'rgba(214,190,140,1)');
+  g.fillStyle = vg; g.fillRect(0, 0, S, S); mapNoise(g, 0, 0, S, S, 3000, ['rgba(120,90,50,0.12)', 'rgba(255,240,210,0.12)'], 2);
+  g.strokeStyle = '#6a4a28'; g.lineWidth = 3; g.strokeRect(6, 6, S - 12, S - 12); g.lineWidth = 1; g.strokeRect(11, 11, S - 22, S - 22);
+  return cv;
+}
+function mapText(g, text, x, y, font, col) {   // names in the old style: coloured, with a hard black shadow
+  g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = '#000'; g.fillText(text, x + 1, y + 1); g.fillStyle = col; g.fillText(text, x, y);
+}
+function mapIcon(g, x, y, bg, glyph, r = 8) {   // a round painted map icon
+  g.fillStyle = 'rgba(0,0,0,0.45)'; g.beginPath(); g.arc(x + 1, y + 1.5, r, 0, 7); g.fill();
+  g.fillStyle = bg; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.strokeStyle = '#1a140e'; g.lineWidth = 1.5; g.stroke();
+  g.strokeStyle = 'rgba(255,255,255,0.45)'; g.lineWidth = 1; g.beginPath(); g.arc(x, y, r - 2, Math.PI * 1.1, Math.PI * 1.6); g.stroke();
+  g.font = `bold ${Math.round(r * 1.25)}px ${MAP_SERIF}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; g.fillText(glyph, x, y + 0.5);
+}
+function drawWorldMap() {
   const cv = $('wm-canvas'), g = cv.getContext('2d'), S = cv.width, zoom = !!G.mapZoom, sc = S / ((zoom ? OLD_R + 30 : WORLD_R + 20) * 2), C = S / 2, P = G.P;
   const X = x => C + x * sc, Y = z => C + z * sc;
-  g.clearRect(0, 0, S, S);
-  g.fillStyle = '#241d16'; g.beginPath(); g.arc(C, C, (WORLD_R + 6) * sc, 0, 7); g.fill();
-  g.fillStyle = '#1d4652'; g.fillRect(0, Y(COAST_Z), S, S - Y(COAST_Z)); g.fillRect(X(BASIN.x0), Y(BASIN.z0), (BASIN.x1 - BASIN.x0) * sc, (BASIN.z1 - BASIN.z0) * sc);
-  g.fillStyle = '#241d16'; for (const M of MOLES) g.fillRect(X(M.x0), Y(M.z0), (M.x1 - M.x0) * sc, (M.z1 - M.z0) * sc);
-  g.fillStyle = 'rgba(205,175,135,0.16)';
-  for (const c of G.colliders) { const w = (c.maxX - c.minX) * sc, h = (c.maxZ - c.minZ) * sc; if (w < 1.2 || h < 1.2 || c.h < 2) continue; g.fillRect(X(c.minX), Y(c.minZ), w, h); }
-  g.fillStyle = 'rgba(150,98,62,0.95)';
-  for (const r of W.streets) g.fillRect(X(r.x0), Y(r.z0), Math.max(1, (r.x1 - r.x0) * sc), Math.max(1, (r.z1 - r.z0) * sc));
-  g.strokeStyle = 'rgba(150,98,62,0.95)'; g.lineWidth = 14 * sc; g.beginPath(); g.arc(C, C, OLD_R * sc, 0, 7); g.stroke();
-  g.fillStyle = '#3ee6ff'; g.fillRect(X(FERRY.x - FERRY.HL), Y(FERRY.z - FERRY.HW), FERRY.HL * 2 * sc, FERRY.HW * 2 * sc);
-  const zone = (id, draw) => {
-    const Z = ZONES[id], col = Z.safe || !Z.pl ? '#3ee6ff' : PL_COL[plTag(Z.pl)];
-    g.fillStyle = hexA(col, 0.2); g.strokeStyle = col; g.lineWidth = 1.5; g.beginPath(); draw(); g.fill(); g.stroke();
-  };
-  const rect = R => () => g.rect(X(R.x0), Y(R.z0), (R.x1 - R.x0) * sc, (R.z1 - R.z0) * sc);
-  zone('plaza', () => g.arc(X(0), Y(0), 34 * sc, 0, 7));
-  zone('cantina', rect(CANTINA)); zone('market', rect(MARKET));
-  zone('ashen', rect({ x0: 34, x1: 156, z0: -62, z1: 62 }));
-  zone('echo', rect({ x0: -156, x1: -34, z0: -62, z1: 62 }));
-  zone('crater', () => g.arc(X(CRATER.x), Y(CRATER.z), 72 * sc, 0, 7));
-  zone('rail', rect(RAIL)); zone('tenements', rect(TENE));
-  zone('reservoir', () => g.arc(X(RESV.x), Y(RESV.z), RESV_R * sc, 0, 7));
-  { const ra = Math.acos((COAST_Z - 2) / (WORLD_R + 6)); g.strokeStyle = 'rgba(232,196,106,0.9)'; g.lineWidth = 3; g.beginPath(); g.arc(C, C, (WORLD_R + 6) * sc, Math.PI / 2 + ra, Math.PI * 2.5 - ra); g.stroke(); }
-  // tram stops
-  for (const t of TRAMS) { const k = G.D.trams.includes(t.id); g.fillStyle = k ? '#3ee6ff' : '#5a6470'; g.save(); g.translate(X(t.pos.x), Y(t.pos.z)); g.rotate(Math.PI / 4); g.fillRect(-4, -4, 8, 8); g.restore(); }
-  // labels
-  g.textAlign = 'center'; g.shadowColor = '#000'; g.shadowBlur = 5;
-  const labels = zoom ? [['plaza', 0, -58], ['cantina', 0, 64], ['market', 0, 168], ['ashen', 108, 24], ['echo', -108, 24], ['crater', 0, -165], ['rail', 328, -30], ['tenements', -328, -30], ['reservoir', 0, 330], ['ward', 210, -230], ['ward', -230, 230], ['ring', -300, -385]]
-    : [['reservoir', 0, 336], ['harbour', 0, 690], ['northgate', 0, -700], ['sunrise', 700, -110], ['kopje', -700, -110], ['dhow', -470, 640], ['dhow', 470, 640], ['ring', -300, -385], ['crater', 0, -165]];
+  const key = zoom ? 'z' : 'w'; if (!_mapCache[key]) _mapCache[key] = drawMapBase(zoom);
+  g.drawImage(_mapCache[key], 0, 0);
+  // the ferry, where she is now
+  g.fillStyle = '#e9e5da'; g.strokeStyle = '#1a140e'; g.lineWidth = 1; g.fillRect(X(FERRY.x - FERRY.HL), Y(FERRY.z - FERRY.HW), FERRY.HL * 2 * sc, FERRY.HW * 2 * sc); g.strokeRect(X(FERRY.x - FERRY.HL), Y(FERRY.z - FERRY.HW), FERRY.HL * 2 * sc, FERRY.HW * 2 * sc);
+  // icons for the places that matter
+  const r = zoom ? 9 : 7;
+  for (const t of TRAMS) mapIcon(g, X(t.pos.x), Y(t.pos.z), G.D.trams.includes(t.id) ? '#1d8fa8' : '#5a6470', '⇄', r);
+  for (const sx of [-1, 1]) mapIcon(g, X(sx * 205), Y(FERRY.z), '#2a5aa0', '⚓', r);
+  mapIcon(g, X(0), Y(zoom ? 58 : 46), '#c87a1e', '✦', r);                           // the Salt Lantern
+  if (zoom) { mapIcon(g, X(0), Y(-14), '#8a6a1e', '♛', r); mapIcon(g, X(13), Y(4), '#6a4a8a', '⚔', r); mapIcon(g, X(-30), Y(118), '#b0802a', '¤', r); }   // Governor, Quartermaster, market
+  else mapIcon(g, X(0), Y(122), '#b0802a', '¤', r);
+  mapIcon(g, X(197), Y(872), '#b3301e', '▲', r);                                          // the lighthouse
+  mapIcon(g, X(0), Y(540), '#4a6a7a', '⚓', r - 1);                                       // the anchor on the north quay
+  // names
+  const labels = zoom ? [['plaza', 0, -48], ['cantina', 0, 80], ['market', 0, 168], ['ashen', 108, 24], ['echo', -108, 24], ['crater', 0, -165], ['rail', 328, -30], ['tenements', -328, -30], ['reservoir', 0, 330], ['ward', 210, -230], ['ward', -230, 230], ['ring', -300, -385]]
+    : [['reservoir', 0, 336], ['harbour', 0, 690], ['northgate', 0, -700], ['sunrise', 700, -110], ['kopje', -700, -110], ['dhow', -470, 640], ['dhow', 470, 640], ['ring', -300, -385], ['crater', 0, -165], ['plaza', 0, -60]];
+  const cap = s => s.toLowerCase().replace(/(^|[\s-])(\S)/g, (m, a, b) => a + b.toUpperCase()).replace(/\bOf\b/g, 'of').replace(/\bThe\b(?!^)/g, 'the').replace(/^the/, 'The');
   for (const [id, x, z] of labels) {
-    const Z = ZONES[id], col = Z.safe ? '#9fe9ff' : !Z.pl ? '#c9b89a' : PL_COL[plTag(Z.pl)];
-    g.font = 'bold 12px Bahnschrift, Segoe UI, sans-serif'; g.fillStyle = '#fff'; g.fillText(Z.name, X(x), Y(z));
-    g.font = '11px Bahnschrift, Segoe UI, sans-serif'; g.fillStyle = col; g.fillText(Z.safe ? 'SANCTUARY' : !Z.pl ? 'THE CITY' : `◆ POWER LEVEL ${Z.pl}${Z.pl - playerPL() >= 2 ? ' ☠' : ''}`, X(x), Y(z) + 14);
+    const Z = ZONES[id], danger = !Z.safe && Z.pl;
+    mapText(g, cap(Z.name), X(x), Y(z), `bold ${zoom ? 15 : 14}px ${MAP_SERIF}`, danger ? '#ff981f' : '#ffffff');
+    if (danger) mapText(g, `◆ ${Z.pl}${Z.pl - playerPL() >= 2 ? ' ☠' : ''}`, X(x), Y(z) + 15, `bold 12px ${MAP_SERIF}`, PL_COL[plTag(Z.pl)]);
+    else if (Z.safe) mapText(g, 'sanctuary', X(x), Y(z) + 14, `italic 12px ${MAP_SERIF}`, '#9fe9ff');
   }
-  g.font = '11px Bahnschrift, Segoe UI, sans-serif'; g.fillStyle = 'rgba(200,215,225,0.75)'; g.textAlign = 'left';
-  g.fillText(zoom ? 'CLICK THE MAP FOR THE WHOLE CITY' : 'CLICK THE MAP FOR THE OLD CITY', 12, S - 12);
-  g.shadowBlur = 0;
-  // the Mascars and your companions
-  for (const b of G.bots) if (b.alive && (b.legend || b.party)) { g.fillStyle = b.legend ? '#e8c46a' : '#4dff9a'; g.beginPath(); g.arc(X(b.pos.x), Y(b.pos.z), 3.5, 0, 7); g.fill(); if (b.party) { g.strokeStyle = '#4dff9a'; g.lineWidth = 1.5; g.beginPath(); g.arc(X(b.pos.x), Y(b.pos.z), 6, 0, 7); g.stroke(); } }
+  if (!zoom) mapText(g, 'the sea', X(560), Y(860), `italic 16px ${MAP_SERIF}`, '#d8e6f0');
+  // the title, on a scroll across the top
+  g.save(); g.translate(C, 42);
+  g.fillStyle = '#e8d6aa'; g.strokeStyle = '#5a3c1e'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(-120, -22); g.lineTo(120, -22); g.quadraticCurveTo(136, 0, 120, 22); g.lineTo(-120, 22); g.quadraticCurveTo(-136, 0, -120, -22); g.closePath(); g.fill(); g.stroke();
+  for (const sd of [-1, 1]) { g.fillStyle = '#cdb886'; g.beginPath(); g.ellipse(sd * 128, 0, 9, 24, 0, 0, 7); g.fill(); g.stroke(); }
+  g.font = `italic bold 34px ${MAP_SERIF}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = 'rgba(90,60,30,0.35)'; g.fillText('Ad Nostra', 1.5, 3.5); g.fillStyle = '#3a2410'; g.fillText('Ad Nostra', 0, 2);
+  g.restore();
+  mapText(g, zoom ? 'click the map for the whole city' : 'click the map for the old city', S / 2, S - 24, `italic 13px ${MAP_SERIF}`, '#f2e6c8');
+  // the Mascars, your companions, your objective and you
+  for (const b of G.bots) if (b.alive && (b.legend || b.party)) { g.fillStyle = b.legend ? '#ffd84a' : '#4dff9a'; g.strokeStyle = '#000'; g.lineWidth = 1; g.beginPath(); g.arc(X(b.pos.x), Y(b.pos.z), 3.5, 0, 7); g.fill(); g.stroke(); }
   const obj = objectivePos();
-  if (obj) { g.fillStyle = '#e8c46a'; g.save(); g.translate(X(obj.x), Y(obj.z)); g.rotate(Math.PI / 4); g.fillRect(-5, -5, 10, 10); g.restore(); }
-  g.save(); g.translate(X(P.pos.x), Y(P.pos.z)); g.rotate(-P.group.rotation.y + Math.PI); g.fillStyle = '#fff'; g.beginPath(); g.moveTo(0, -9); g.lineTo(6, 6); g.lineTo(0, 2); g.lineTo(-6, 6); g.closePath(); g.fill(); g.restore();
+  if (obj) { g.fillStyle = '#ffd84a'; g.strokeStyle = '#000'; g.save(); g.translate(X(obj.x), Y(obj.z)); g.rotate(Math.PI / 4); g.fillRect(-5, -5, 10, 10); g.strokeRect(-5, -5, 10, 10); g.restore(); }
+  g.save(); g.translate(X(P.pos.x), Y(P.pos.z)); g.rotate(-P.group.rotation.y + Math.PI); g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(0, -10); g.lineTo(7, 7); g.lineTo(0, 3); g.lineTo(-7, 7); g.closePath(); g.fill(); g.stroke(); g.restore();
   $('wm-pl').textContent = `YOUR POWER LEVEL: ◆${playerPL()} · ${ARMOUR[playerPL()].name.toUpperCase()}`;
 }
 function closeAllUI() { for (const id of ['dialog', 'vendor', 'sheet', 'pause', 'worldmap']) $(id).classList.add('hidden'); G.ui = null; $('tooltip').classList.add('hidden'); }
