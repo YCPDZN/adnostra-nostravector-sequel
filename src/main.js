@@ -2869,12 +2869,52 @@ function allyPlate(b, cls) {
   b.plate = makePlate(cls, `<div class="n"><b class="pld">◆${b.pl | 0}</b> ${esc(b.name)} <span style="color:#aaa">${b.level}</span></div><div class="g">&lt;${esc(b.title)}&gt;</div><div class="hb ally"><i></i></div>`);
   b.plateBar = b.plate.querySelector('.hb i'); b.plateHb = b.plate.querySelector('.hb'); b.plateHb.style.visibility = 'hidden';
 }
+// Orion and Malia level up from the Remnants they kill, as you and your Residents do. Every five levels past 15 their
+// power level rises by one (they have no quartermaster), and with it the districts they hunt. Their progress is kept
+// for the whole realm, not per Ascendant.
+const MASCAR_KEY = 'adnostra_mascars';
+const MASCAR_BASE = { orion: { pl: 4, hp: 950, dmg: 38 }, malia: { pl: 3, hp: 760, dmg: 27 } };
+const legendPL = b => clamp(MASCAR_BASE[b.id].pl + Math.floor((b.level - 15) / 5), 0, 9);
+const plZones = pl => { const l = HUNT_ZONES.filter(z => ZONES[z].pl <= pl); return l.length ? l : ['ashen']; };
+function applyLegendLevel(b) {
+  const B = MASCAR_BASE[b.id], k = 1 + 0.06 * (b.level - 15);
+  b.pl = legendPL(b); b.maxHp = Math.round(B.hp * k); b.dmg = B.dmg * k; b.hp = Math.min(b.hp || b.maxHp, b.maxHp);
+  b.zones = plZones(b.pl); if (b.id === 'orion') b.zones.push('crater');   // he never tires of the Crater
+}
+function loadLegend(b) {
+  const sv = (store.get(MASCAR_KEY, {}) || {})[b.id];
+  if (sv && sv.level > 15) { b.level = Math.min(30, sv.level | 0); b.xp = sv.xp | 0; } else b.xp = 0;
+  applyLegendLevel(b); b.hp = b.maxHp;
+}
+const saveLegends = () => { const o = {}; for (const b of G.bots) if (b.legend) o[b.id] = { level: b.level, xp: b.xp | 0 }; if (Object.keys(o).length) store.set(MASCAR_KEY, o); };
+// An ally's share of a kill: experience as you'd get it, scaled down for Remnants far below them.
+function allyXp(b, e) {
+  if (b.level >= 30) return;
+  let xp = e.xp; const diff = b.level - e.level; if (diff >= 4) xp = Math.round(xp * 0.2); else if (diff >= 2) xp = Math.round(xp * 0.6);
+  b.xp = (b.xp | 0) + xp;
+  const near = G.P && d2(b.pos, G.P.pos) < 40;
+  while (b.xp >= xpNext(b.level) && b.level < 30) {
+    b.xp -= xpNext(b.level); b.level++;
+    const oldPL = b.pl | 0;
+    if (b.legend) applyLegendLevel(b);
+    else if (b.resident) { const st = residentStats({ cls: b.cls, level: b.level }); Object.assign(b, { maxHp: st.maxHp, dmg: st.dmg }); }
+    b.hp = b.maxHp;
+    if (b.save) { b.save.level = b.level; b.save.xp = b.xp; }
+    b.plate.querySelector('.n span').textContent = b.level; b.plate.querySelector('.pld').textContent = `◆${b.pl | 0}`;
+    if (near) { ringFx(b.pos, 0xe8c46a, 5, 1.1); burst(b.pos.clone().setY(1), 0xe8c46a, 30, 3.5); floater(b.pos, 'LEVEL UP', '#e8c46a', 2.8, true); }
+    addChat('sys', null, `${b.name} has reached level ${b.level}${(b.pl | 0) > oldPL ? ` and power level ${b.pl}` : ''}!`);
+    if (b.party) renderParty();
+    if (b.legend) saveLegends(); else saveRoster();
+  }
+  if (b.save) b.save.xp = b.xp;
+}
 function spawnOrion() {
   if (!soldierReady('orion')) return;
   const rig = makeSoldier({ model: 'orion', accent: 0x8fe6ff, weapon: 'greatsword', mats: SOLDIER_MATS });
   const o = allyBase({ legend: true, id: 'orion', name: 'Orion Mascar', title: 'Father of the Governor', cls: 'vanguard', level: 15, rig, group: rig.group,
     pos: zonePoint('plaza'), hp: 950, maxHp: 950, dmg: 38, atkCd: [1.3, 1.7], reach: 2.7, glow: 0x8fe6ff, pron: 'He', poss: 'his', lines: ORION_LINES,
     pl: 4, zones: ['ashen', 'echo', 'crater', 'crater', 'rail'], respawnT: 20, loungeSpot: ORION_PLAQUE_SPOT, loungeLook: new V3(0.6, 0, 56) });
+  loadLegend(o);
   o.group.position.copy(o.pos); W.scene.add(o.group);
   allyPlate(o, 'npc'); addHitbox(o, 0.9, 2, 0.9, 1);
   G.bots.push(o);
@@ -2886,6 +2926,7 @@ function spawnMalia() {
   const m = allyBase({ legend: true, id: 'malia', name: 'Malia Mascar', title: 'Wife of the Governor', cls: 'vanguard', level: 15, rig, group: rig.group,
     pos: new V3(rand(-6, 6), 0, rand(-4, 2)), hp: 760, maxHp: 760, dmg: 27, atkCd: [0.9, 1.25], reach: 2.4, glow: 0x8fe6ff, pron: 'She', poss: 'her', lines: MALIA_LINES,
     pl: 3, zones: ['ashen', 'echo', 'echo', 'crater'], respawnT: 20, height: 2.0, idleT: rand(10, 25), loungeSpot: new V3(-7.0, 0, 65.6), loungeLook: new V3(-8.6, 0, 67.4) });
+  loadLegend(m);
   m.group.position.copy(m.pos); W.scene.add(m.group);
   allyPlate(m, 'npc'); addHitbox(m, 0.9, 2, 0.9, 1);
   G.bots.push(m);
@@ -2897,7 +2938,7 @@ function spawnResident(s) {
   const rig = soldierReady() ? makeSoldier({ energy: visor, accent: c.hex, weapon: c.weapon, mats: SOLDIER_MATS })
     : makeHumanoid({ armor: 0x2f3742, accent: c.hex, visor, weapon: c.weapon });
   const b = allyBase({ resident: true, id: 'res:' + s.id, save: s, name: s.name, title: 'Resident of Ad-Nostra', cls: s.cls, level: st.level, rig, group: rig.group,
-    pos: zonePoint('plaza'), hp: st.maxHp, maxHp: st.maxHp, dmg: st.dmg, pl: s.armour == null ? 1 : s.armour, pron: 'They', poss: 'their', lines: RESIDENT_LINES, respawnT: 15, idleT: rand(3, 15) });
+    pos: zonePoint('plaza'), hp: st.maxHp, maxHp: st.maxHp, dmg: st.dmg, xp: s.xp | 0, pl: s.armour == null ? 1 : s.armour, pron: 'They', poss: 'their', lines: RESIDENT_LINES, respawnT: 15, idleT: rand(3, 15) });
   if (Math.random() < 0.6) { b.act = pick(botZones(b)); b.pos.copy(zonePoint(b.act)); b.state = 'hunt'; b.actT = rand(40, 160); }
   b.group.position.copy(b.pos); W.scene.add(b.group);
   allyPlate(b, 'bot res'); addHitbox(b, 0.9, 2, 0.9, 1);
@@ -2920,6 +2961,7 @@ function syncResidents() {
     if (!b) { spawnResident(s); continue; }
     const st = residentStats(s); b.save = s;
     b.pl = s.armour == null ? 1 : s.armour;
+    b.xp = s.xp | 0;
     if (b.level !== st.level) { Object.assign(b, { level: st.level, maxHp: st.maxHp, dmg: st.dmg }); b.hp = Math.min(b.hp, b.maxHp); b.plate.querySelector('.n span').textContent = st.level; }
   }
 }
@@ -3259,6 +3301,7 @@ function killEnemy(e, src) {
   Sound.sfx(e.isBoss ? 'boom' : 'die');
   if (G.P.target === e) setTimeout(() => { if (G.P.target === e) setTarget(null); }, 600);
   if (src && src.resident && src.save) src.save.kills = (src.save.kills | 0) + 1;
+  if (src && src.ally && src.alive !== false) allyXp(src, e);
   if (e.tagged) {
     const D = G.D; let xp = e.xp; const diff = D.level - e.level;
     if (diff >= 4) xp = Math.round(xp * 0.2); else if (diff >= 2) xp = Math.round(xp * 0.6);
@@ -4703,6 +4746,7 @@ function exitToMenu() { saveGame(); closeAllUI(); for (const f of G.floaters) f.
 function saveGame() {
   if (!G.D || !G.P) return;
   G.D.pos = [G.P.pos.x, G.P.pos.z];
+  saveLegends();
   if (!G.roster.includes(G.D)) G.roster.push(G.D);
   saveRoster(); store.set(ACTIVE_KEY, G.D.id);
 }
