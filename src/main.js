@@ -397,7 +397,7 @@ function mergeStatic(scene, cell = 250) {
   scene.updateMatrixWorld(true);
   const buckets = new Map(), done = [];
   scene.traverse(o => {
-    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh) return;
+    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || o.userData.premerged) return;
     for (let p = o; p; p = p.parent) if (p.userData.dynamic) return;
     const mats = [].concat(o.material);
     if (mats.some(m => m.transparent || m.isShaderMaterial || m.visible === false)) return;
@@ -515,7 +515,7 @@ function compactRig(root) {
 }
 
 // Instanced grass tufts with wind sway. sampler(x,z) → null | 'gold' | 'pale' | 'burnt'
-function makeGrass(count, area, sampler, cx = 0, cz = 0, chunk = 0) {
+function makeGrass(count, area, sampler, cx = 0, cz = 0, chunk = 0, gen = null) {   // gen(): an [x, z] to try, instead of anywhere in the square
   const pos = [], col = [];
   for (let b = 0; b < 5; b++) {
     const a = b / 5 * Math.PI * 2 + rand(-.3, .3), h = rand(0.45, 0.95), lean = rand(0.1, 0.3), w = 0.05;
@@ -544,7 +544,7 @@ function makeGrass(count, area, sampler, cx = 0, cz = 0, chunk = 0) {
   const cells = new Map(); let n = 0, tries = 0;
   while (n < count && tries < count * 6) {
     tries++;
-    const x = cx + rand(-area, area), z = cz + rand(-area, area); const kind = sampler(x, z); if (!kind) continue;
+    const [x, z] = gen ? gen() : [cx + rand(-area, area), cz + rand(-area, area)]; const kind = sampler(x, z); if (!kind) continue;
     q.setFromAxisAngle(up, rand(0, 6.28)); const s = rand(0.7, 1.5); sc.set(s, s * rand(0.8, 1.3), s); p.set(x, 0, z);
     const key = chunk ? Math.floor(x / chunk) + ',' + Math.floor(z / chunk) : '0';
     if (!cells.has(key)) cells.set(key, []);
@@ -610,6 +610,7 @@ function makeFacade(style) {
     sand: { base: '#c9a679', band: '#b38f63', win: '#3a2c20', lit: ['#ffcf8a', '#ffdca8'], litP: 0.08, arch: true },
     white: { base: '#e2d9c6', band: '#cbbfa6', win: '#3b3631', lit: ['#ffd9a0'], litP: 0.06, arch: true },
     terra: { base: '#b56a43', band: '#9a5634', win: '#2c1a12', lit: ['#ffc070', '#ffe0b0'], litP: 0.08, arch: false },
+    coral: { base: '#d6cbb2', band: '#bfb294', win: '#4a3020', lit: ['#ffcf8a'], litP: 0.06, arch: true },
     glass: { base: '#2a3d52', band: '#1b2734', win: '#34506a', lit: ['#bfe6ff', '#7fdfff'], litP: 0.14, glass: true },
   }[style];
   const COLS = 4, ROWS = 12, lit = [];
@@ -652,11 +653,12 @@ function scaleUV(geo, w, h, d) {
 function makeMountains(S) {
   const haze = new THREE.MeshBasicMaterial({ color: 0x8c6f86, fog: false });
   const snow = new THREE.MeshBasicMaterial({ color: 0xf2dcd0, fog: false });
-  const far = S === W.scene ? 1.85 : 1;   // the world is bigger than the menu: push the horizon out to match
+  const far = S === W.scene ? 4 : 1;   // the world is bigger than the menu: push the horizon out to match
   const k = new THREE.Mesh(new THREE.ConeGeometry(230 * far, 150 * far, 28, 1), haze); k.position.set(330 * far, 70 * far, -440 * far); S.add(k);   // the great mountain
   const cap = new THREE.Mesh(new THREE.ConeGeometry(62 * far, 42 * far, 28, 1), snow); cap.position.set(330 * far, 124 * far, -440 * far); S.add(cap);
   const mesaM = new THREE.MeshBasicMaterial({ color: 0x9a6f6a, fog: false });
-  for (let i = 0; i < 9; i++) { const a = rand(0, Math.PI * 2), r = rand(470, 540) * far; if (Math.abs(a - Math.atan2(-440, 330)) < 0.4) continue; const m = new THREE.Mesh(new THREE.CylinderGeometry(rand(30, 70) * far, rand(50, 90) * far, rand(25, 55) * far, 7), mesaM); m.position.set(Math.cos(a) * r, 10 * far, Math.sin(a) * r); S.add(m); }
+  // mesas round the horizon (in the world, not out to sea in the south)
+  for (let i = 0; i < 9; i++) { const a = rand(0, Math.PI * 2), r = rand(470, 540) * far; if (Math.abs(a - Math.atan2(-440, 330)) < 0.4 || (S === W.scene && Math.sin(a) > 0.25)) continue; const m = new THREE.Mesh(new THREE.CylinderGeometry(rand(30, 70) * far, rand(50, 90) * far, rand(25, 55) * far, 7), mesaM); m.position.set(Math.cos(a) * r, 10 * far, Math.sin(a) * r); S.add(m); }
 }
 
 // =====================================================================
@@ -776,7 +778,7 @@ function updateMenu(dt) {
 // =====================================================================
 //  WORLD
 // =====================================================================
-const W = { scene: new THREE.Scene(), cam: new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1500) };
+const W = { scene: new THREE.Scene(), cam: new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 3600) };
 // Every zone has a power level (0–9). Enemies there share it; fight above your own and they will take you apart.
 const ZONES = {
   plaza: { name: 'CONCORDIA PLAZA', sub: 'SANCTUARY · SEAT OF THE GOVERNOR', safe: true, pl: 0 },
@@ -789,9 +791,19 @@ const ZONES = {
   rail: { name: 'THE SUNKEN RAIL YARDS', sub: 'OUTER WARDS · HOSTILE', pl: 4 },
   tenements: { name: 'THE ASHFALL TENEMENTS', sub: 'OUTER WARDS · HOSTILE', pl: 5 },
   reservoir: { name: 'THE DRY RESERVOIR', sub: 'OUTER WARDS · DEADLY', pl: 6 },
+  market: { name: 'THE LANTERN MARKET', sub: 'BAZAAR · SANCTUARY', safe: true, pl: 0 },
+  harbour: { name: 'THE HARBOUR', sub: 'PORT OF AD-NOSTRA', pl: 0 },
+  ring: { name: 'THE RAMPART RING', sub: 'WHERE THE OLD WALL STOOD', pl: 0 },
+  northgate: { name: 'NORTHGATE', sub: 'THE GLASS WARD · AD-NOSTRA', pl: 0 },
+  sunrise: { name: 'SUNRISE WARD', sub: 'THE NEW CITY · AD-NOSTRA', pl: 0 },
+  kopje: { name: 'KOPJE HEIGHTS', sub: 'THE NEW CITY · AD-NOSTRA', pl: 0 },
+  dhow: { name: 'THE DHOW QUARTER', sub: 'OLD TOWN BY THE SEA · AD-NOSTRA', pl: 0 },
 };
-// The city now runs out to a rampart at WORLD_R metres (it used to stop at 246). The Outer Wards hold the new districts.
-const WORLD_R = 470;
+const QUIET_ZONES = new Set(['causeway', 'ward', 'ring']);   // walking between these doesn't throw up a banner
+// The city runs out to a rampart at WORLD_R metres, four times the area inside the old wall. The old wall stood at
+// OLD_R and is now the Rampart Ring, a palm boulevard. The sea closes the city to the south, where the Harbour is cut
+// into the shore. (Before this the rampart stood at OLD_R; before that, at 246.)
+const WORLD_R = 940, OLD_R = 470;
 const RAIL = { x0: 236, x1: 420, z0: -78, z1: 78 }, TENE = { x0: -420, x1: -236, z0: -78, z1: 78 };
 const RESV = new V3(0, 0, 335), RESV_R = 92;
 const SOUTH_LANE = { x0: 12, x1: 30, z0: 26, z1: 92 };   // around the Salt Lantern, to the south avenue
@@ -800,30 +812,30 @@ const inRect = (R, x, z, m = 0) => x > R.x0 - m && x < R.x1 + m && z > R.z0 - m 
 const CANTINA = { x0: -11, x1: 11, z0: 46, z1: 70, h: 6.2 };
 const inCantina = (x, z) => x > CANTINA.x0 + 0.3 && x < CANTINA.x1 - 0.3 && z > CANTINA.z0 + 0.3 && z < CANTINA.z1 - 0.3;
 const inCantinaLot = (x, z) => Math.abs(x) < 17 && z > 28 && z < 78;
+const MARKET = { x0: -58, x1: 58, z0: 78, z1: 150 };          // the Lantern Market, behind the Salt Lantern
 const CRATER = new V3(0, 0, -165);
+// the shore: open water south of COAST_Z, and the harbour basin cut into the land, with a mole either side of its mouth
+const COAST_Z = 760;
+const BASIN = { x0: -190, x1: 190, z0: 560, z1: COAST_Z };
+const MOLES = [{ x0: -204, x1: -190, z0: COAST_Z, z1: 880 }, { x0: 190, x1: 204, z0: COAST_Z, z1: 880 }];
+const HARBOUR = { x0: -246, x1: 246, z0: 520, z1: 900 };      // the port district: quays, terminals and moles
+const isWaterPt = (x, z) => (z > COAST_Z || inRect(BASIN, x, z)) && !MOLES.some(M => inRect(M, x, z));
 function zoneAt(x, z) {
   if (inCantina(x, z)) return 'cantina';
-  if (Math.hypot(x, z) < 34) return 'plaza';
+  const r = Math.hypot(x, z);
+  if (r < 34) return 'plaza';
+  if (inRect(MARKET, x, z)) return 'market';
   if (Math.hypot(x - CRATER.x, z - CRATER.z) < 72) return 'crater';
   if (x > 34 && x < 156 && Math.abs(z) < 62) return 'ashen';
   if (x < -34 && x > -156 && Math.abs(z) < 62) return 'echo';
   if (inRect(RAIL, x, z)) return 'rail';
   if (inRect(TENE, x, z)) return 'tenements';
   if (Math.hypot(x - RESV.x, z - RESV.z) < RESV_R) return 'reservoir';
-  if (Math.abs(z) < 12 || (Math.abs(x) < 12 && z < 0)) return 'causeway';
-  return 'ward';
-}
-function isOpen(x, z, m) {
-  if (Math.abs(x) < 17 + m && z > 28 - m && z < 78 + m) return true; // the Salt Lantern's lot
-  if (Math.hypot(x, z) < 40 + m) return true;
-  if (Math.abs(z) < 12 + m || Math.abs(x) < 12 + m) return true;
-  if (x > 30 - m && x < 160 + m && Math.abs(z) < 66 + m) return true;
-  if (x < -30 + m && x > -160 - m && Math.abs(z) < 66 + m) return true;
-  if (Math.hypot(x - CRATER.x, z - CRATER.z) < 76 + m) return true;
-  if (inRect(RAIL, x, z, 4 + m) || inRect(TENE, x, z, 4 + m) || inRect(SOUTH_LANE, x, z, m)) return true;
-  if (Math.hypot(x - RESV.x, z - RESV.z) < RESV_R + 4 + m) return true;
-  if (Math.hypot(x, z) > WORLD_R - 4 - m) return true;   // the strip inside the rampart
-  return false;
+  if (inRect(HARBOUR, x, z)) return 'harbour';
+  if (r < OLD_R - 10) return (Math.abs(z) < 12 || (Math.abs(x) < 12 && z < 0)) ? 'causeway' : 'ward';
+  if (r < OLD_R + 10) return 'ring';
+  const a = Math.atan2(x, -z);   // 0 = north, +π/2 = east
+  return Math.abs(a) < Math.PI / 4 ? 'northgate' : Math.abs(a) > Math.PI * 0.75 ? 'dhow' : a > 0 ? 'sunrise' : 'kopje';
 }
 function addCollider(x, z, w, d, h = 60) { G.colliders.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, h }); }
 
@@ -840,13 +852,15 @@ function buildWorld() {
   S.add(sun, sun.target); W.sun = sun;
 
   // sky dome + the great mountain and mesas on the horizon
-  const sky = makeSky(SUN_DIR, 1300, { zen: 0x4a78b4, mid: 0xb9b4a8, hor: 0xd8ae82, glow: 0xffc27a, clouds: 1 }); S.add(sky); W.sky = sky;
+  const sky = makeSky(SUN_DIR, 3000, { zen: 0x4a78b4, mid: 0xb9b4a8, hor: 0xd8ae82, glow: 0xffc27a, clouds: 1 }); S.add(sky); W.sky = sky;
   S.environment = envFromSky(sky); S.environmentIntensity = 0.55;
   makeMountains(S);
 
   // ground
-  const gt = grassTex('#9a7440', '#6e5028', '#c9a160', 190);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1260, 1260), new THREE.MeshStandardMaterial({ map: gt, roughness: 1 }));
+  // ground: the land, out past the rampart, with the harbour basin cut out of it and the sea to the south (see buildHarbour)
+  const gt = grassTex('#9a7440', '#6e5028', '#c9a160', 1); gt.repeat.set(1 / 6.6, 1 / 6.6);
+  const land = new THREE.Shape([[-2600, -2600], [2600, -2600], [2600, COAST_Z], [BASIN.x1, COAST_Z], [BASIN.x1, BASIN.z0], [BASIN.x0, BASIN.z0], [BASIN.x0, COAST_Z], [-2600, COAST_Z]].map(([x, z]) => new THREE.Vector2(x, -z)));
+  const ground = new THREE.Mesh(new THREE.ShapeGeometry(land), new THREE.MeshStandardMaterial({ map: gt, roughness: 1 }));
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; S.add(ground);
 
   const overlay = (geo, tex, x, z, y = 0.02, extra = {}) => {
@@ -854,66 +868,21 @@ function buildWorld() {
     m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; S.add(m); return m;
   };
 
-  // roads
-  const roadE = canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#8a5a3a'; g.fillRect(0, 0, w, h); speckle(g, w, h, 2500, ['#7a4e32', '#9c6a46', '#6a4229'], 3); g.fillStyle = 'rgba(240,220,180,0.35)'; g.fillRect(40, 124, 170, 8); });
-  roadE.repeat.set(WORLD_R * 2 / 14, 1);
-  overlay(new THREE.PlaneGeometry(WORLD_R * 2, 14), roadE, 0, 0, 0.01);
-  const roadN = canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#8a5a3a'; g.fillRect(0, 0, w, h); speckle(g, w, h, 2500, ['#7a4e32', '#9c6a46', '#6a4229'], 3); g.fillStyle = 'rgba(240,220,180,0.35)'; g.fillRect(124, 40, 8, 170); });
-  roadN.repeat.set(1, 120 / 14);
-  overlay(new THREE.PlaneGeometry(14, 120), roadN, 0, -60, 0.011);
-  const roadS = roadN.clone(); roadS.repeat.set(1, 150 / 14); roadS.needsUpdate = true;   // the south avenue, out to the Dry Reservoir
-  overlay(new THREE.PlaneGeometry(14, 150), roadS, 0, 166, 0.011);
-  const roadL = roadN.clone(); roadL.repeat.set(1, 66 / 14); roadL.needsUpdate = true;    // the lane round the Salt Lantern
-  overlay(new THREE.PlaneGeometry(14, 66), roadL, 21, 59, 0.012);
-  const stripM = mat('kerb', () => new THREE.MeshStandardMaterial({ color: 0xd8c09a, roughness: 0.9 }));
-  for (const s of [-1, 1]) {
-    for (const side of [-1, 1]) bx(WORLD_R - 36, 0.06, 0.12, stripM, side * (34 + (WORLD_R - 36) / 2), 0.03, s * 7.2, S).castShadow = false;
-    bx(0.12, 0.06, 70, stripM, s * 7.2, 0.03, -71, S).castShadow = false;
-  }
-
-  // ---------- city blocks
-  const FAC = { sand: makeFacade('sand'), white: makeFacade('white'), terra: makeFacade('terra'), glass: makeFacade('glass') };
-  const roofM = new THREE.MeshStandardMaterial({ color: 0xa88a66, roughness: 0.92 });
-  const trimM = new THREE.MeshStandardMaterial({ color: 0xe3d5b8, roughness: 0.85 });
-  const domeM = new THREE.MeshStandardMaterial({ color: 0xeee4d0, roughness: 0.55 });
+  // the blinking red lights on the tallest towers (the towers themselves are built by buildCity)
   const blink = glowMat(0xff3355, 3); W.blink = blink;
-  const block = (w, h, d, x, y, z, fm) => {
-    const geo = new THREE.BoxGeometry(w, h, d); scaleUV(geo, w, h, d);
-    const b = new THREE.Mesh(geo, [fm, fm, roofM, roofM, fm, fm]); b.position.set(x, y + h / 2, z); b.castShadow = b.receiveShadow = true; S.add(b);
-  };
-  const parapet = (w, d, x, y, z) => { // low wall around a flat roof
-    for (const [pw, pd, px, pz] of [[w, 0.35, 0, d / 2], [w, 0.35, 0, -d / 2], [0.35, d, w / 2, 0], [0.35, d, -w / 2, 0]]) bx(pw, 0.9, pd, trimM, x + px, y + 0.45, z + pz, S);
-  };
-  const spire = (x, y, z) => { const sh = rand(7, 13); bx(0.35, sh, 0.35, trimM, x, y + sh / 2, z, S); const l = new THREE.Mesh(GEO.sph, blink); l.scale.setScalar(0.35); l.position.set(x, y + sh, z); S.add(l); };
-  const GR = WORLD_R - 10;
-  for (let gx = -GR; gx <= GR; gx += 20) for (let gz = -GR; gz <= GR; gz += 20) {
-    const w = rand(9, 15), d = rand(9, 15), x = gx + rand(-2, 2), z = gz + rand(-2, 2);
-    if (isOpen(x, z, Math.max(w, d) / 2)) continue;
-    const r = Math.hypot(x, z);
-    const h = rand(14, 40) + (r < 120 ? rand(0, 45) : r < 300 ? rand(0, 20) : rand(0, 34));   // a second skyline rises in the Outer Wards
-    addCollider(x, z, w, d, h + 3);
-    if (h > 58 && Math.random() < 0.55) {            // glass spire on a sandstone podium
-      const ph = rand(7, 11); block(w, ph, d, x, 0, z, FAC.sand); parapet(w, d, x, ph, z);
-      const tw = w * rand(0.55, 0.7), td = d * rand(0.55, 0.7); block(tw, h - ph, td, x, ph, z, FAC.glass);
-      spire(x, h, z); continue;
-    }
-    const fm = pick([FAC.sand, FAC.sand, FAC.white, FAC.terra]);
-    const tiers = h > 34 ? randi(2, 3) : 1; let y = 0, tw = w, td = d, rest = h;
-    for (let k = 0; k < tiers; k++) {                // stepped setbacks
-      const th = k === tiers - 1 ? rest : rest * rand(0.45, 0.62);
-      block(tw, th, td, x, y, z, fm); y += th; rest -= th;
-      if (k < tiers - 1 || fm !== FAC.white) parapet(tw, td, x, y, z);
-      if (k < tiers - 1) { tw *= rand(0.62, 0.8); td *= rand(0.62, 0.8); }
-    }
-    if (fm === FAC.white && Math.random() < 0.7) {   // whitewashed drum and dome
-      const dr = Math.min(tw, td) * 0.42; const drum = new THREE.Mesh(new THREE.CylinderGeometry(dr, dr, 1.6, 20), trimM); drum.position.set(x, y + 0.8, z); drum.castShadow = true; S.add(drum);
-      const dm = new THREE.Mesh(new THREE.SphereGeometry(dr, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), domeM); dm.position.set(x, y + 1.6, z); dm.castShadow = true; S.add(dm);
-    } else if (h > 50) spire(x, y, z);
-  }
-  // sandstone rampart around the city
-  const wall = new THREE.Mesh(new THREE.CylinderGeometry(WORLD_R + 6, WORLD_R + 6, 40, 256, 1, true), new THREE.MeshStandardMaterial({ color: 0xb48c62, roughness: 0.95, side: THREE.BackSide }));
+  // the rampart round the city, open to the sea in the south, with a bastion where it meets the shore
+  const ra = Math.acos((COAST_Z - 2) / (WORLD_R + 6));   // half the angle the sea takes out of it (three.js measures round from +z)
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(WORLD_R + 6, WORLD_R + 6, 40, 256, 1, true, ra, Math.PI * 2 - ra * 2), new THREE.MeshStandardMaterial({ color: 0xb48c62, roughness: 0.95, side: THREE.BackSide }));
   wall.position.y = 20; S.add(wall);
-  const wallStrip = new THREE.Mesh(new THREE.TorusGeometry(WORLD_R + 5, 0.3, 6, 384), glowMat(0xe8c46a, 1.6)); wallStrip.rotation.x = Math.PI / 2; wallStrip.position.y = 39; S.add(wallStrip);
+  const stripGeo = new THREE.TorusGeometry(WORLD_R + 5, 0.3, 6, 384, Math.PI * 2 - ra * 2); stripGeo.rotateZ(Math.PI / 2 + ra);
+  const wallStrip = new THREE.Mesh(stripGeo, glowMat(0xe8c46a, 1.6)); wallStrip.rotation.x = Math.PI / 2; wallStrip.position.y = 39; S.add(wallStrip);
+  const bastM = new THREE.MeshStandardMaterial({ color: 0xa8825a, roughness: 0.95, flatShading: true });
+  for (const sx of [-1, 1]) {
+    const x = sx * Math.sqrt((WORLD_R + 6) ** 2 - (COAST_Z - 6) ** 2), z = COAST_Z - 6;
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(13, 15, 46, 8), bastM); b.position.set(x, 21, z); b.castShadow = true; b.receiveShadow = true; S.add(b);
+    const cap = new THREE.Mesh(new THREE.TorusGeometry(13.2, 0.35, 6, 32), glowMat(0xe8c46a, 1.6)); cap.rotation.x = Math.PI / 2; cap.position.set(x, 44, z); S.add(cap);
+    addCollider(x, z, 26, 26, 46);
+  }
 
   // hologram billboards
   const words = ['AD-NOSTRA', 'REBUILD · RENEW · REMEMBER', 'CONCORD', 'ANNO DOMINI 2137', 'THE SKY IS OURS', 'ENLIST · ASCEND'];
@@ -1033,22 +1002,6 @@ function buildWorld() {
   W.ash = new THREE.Points(pg, new THREE.PointsMaterial({ map: dotTex(), size: 0.16, color: 0xffe0a8, transparent: true, opacity: 0.55, depthWrite: false }));
   S.add(W.ash);
 
-  // grass: gold in the city gaps, burnt on the veld, pale on the Echo Plains, none on roads or in the crater
-  W.grass = makeGrass(Q.worldGrass * 3, WORLD_R, (x, z) => {
-    if (Math.hypot(x, z) > WORLD_R - 4 || !isOpen(x, z, -2) || inCantinaLot(x, z)) return null;
-    if (Math.abs(z) < 8 || (Math.abs(x) < 8 && z < 0 && z > -120) || (Math.abs(x) < 8 && z > 90 && z < 242) || inRect(SOUTH_LANE, x, z, 2)) return null;
-    const zn = zoneAt(x, z);
-    if (zn === 'plaza') return null;
-    if (zn === 'rail') return Math.random() < 0.25 ? 'burnt' : null;
-    if (zn === 'tenements') return Math.random() < 0.5 ? 'burnt' : null;
-    if (zn === 'reservoir') return Math.hypot(x - RESV.x, z - RESV.z) > 80 && Math.random() < 0.4 ? 'pale' : null;
-    if (zn === 'crater') return Math.hypot(x - CRATER.x, z - CRATER.z) > 62 && Math.random() < 0.3 ? 'burnt' : null;
-    if (zn === 'ashen') return Math.random() < 0.6 ? 'burnt' : 'gold';
-    if (zn === 'echo') return 'pale';
-    return 'gold';
-  }, 0, 0, 64);
-  S.add(W.grass);
-
   // shared fx resources
   W.shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(1.3, 24, 16), new THREE.MeshBasicMaterial({ color: 0x9fe9ff, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false }));
   W.shieldMesh.visible = false; S.add(W.shieldMesh);
@@ -1058,11 +1011,35 @@ function buildWorld() {
   buildCantina(S);
   buildDistricts(S);
   buildTrams(S);
+  buildCity(S);
+  buildPeople(S); buildTraffic(S);
+  // grass: burnt on the veld, pale on the Echo Plains, gold in the parks, none on the streets or in the crater
+  const grassAt = (x, z) => {
+    if (Math.hypot(x, z) > WORLD_R - 4 || inCantinaLot(x, z) || isWaterPt(x, z)) return null;
+    const zn = zoneAt(x, z);
+    if (zn === 'rail') return Math.abs(z) > 8 && Math.random() < 0.25 ? 'burnt' : null;
+    if (zn === 'tenements') return Math.abs(z) > 8 && Math.random() < 0.5 ? 'burnt' : null;
+    if (zn === 'reservoir') return Math.hypot(x - RESV.x, z - RESV.z) > 80 && Math.random() < 0.4 ? 'pale' : null;
+    if (zn === 'crater') return Math.hypot(x - CRATER.x, z - CRATER.z) > 62 && Math.random() < 0.3 ? 'burnt' : null;
+    if (zn === 'ashen') return Math.abs(z) < 8 ? null : Math.random() < 0.6 ? 'burnt' : 'gold';
+    if (zn === 'echo') return Math.abs(z) < 8 ? null : 'pale';
+    return null;
+  };
+  W.grass = makeGrass(Q.worldGrass * 2, 430, grassAt, 0, 0, 64);
+  if (W.parks.length) {   // the city's parks: grass between the paths
+    const inPark = (x, z) => W.parks.some(R => inRect(R, x, z, -1) && Math.abs(x - (R.x0 + R.x1) / 2) > 2.4 && Math.abs(z - (R.z0 + R.z1) / 2) > 2.4);
+    const parks = makeGrass(Math.round(Q.worldGrass * 0.08 * W.parks.length), WORLD_R, (x, z) => inPark(x, z) ? 'gold' : null, 0, 0, 64, () => { const R = pick(W.parks); return [rand(R.x0, R.x1), rand(R.z0, R.z1)]; });
+    for (const im of parks.userData.chunks) { W.grass.add(im); W.grass.userData.chunks.push(im); }
+  }
+  S.add(W.grass);
   // vultures over the crater; small flocks over the plains
   W.birds = makeBirdFlock([...birdRing(7, CRATER.x, CRATER.z, 22, 46, 30, 46, 7, 1.6), ...birdRing(10, -95, 8, 12, 24, 14, 20, 10, 0.45), ...birdRing(8, 95, -10, 12, 22, 14, 20, 10, 0.45),
     ...birdRing(6, RESV.x, RESV.z, 30, 60, 34, 50, 6, 1.6), ...birdRing(5, -330, 0, 20, 50, 30, 44, 6, 1.4)]);
   S.add(W.birds);
-  W.batch = mergeStatic(S, 300);
+  W.gulls = makeBirdFlock([...birdRing(14, 0, 640, 30, 110, 12, 30, 9, 0.55), ...birdRing(8, -380, 770, 20, 60, 10, 24, 9, 0.5), ...birdRing(8, 380, 770, 20, 60, 10, 24, 9, 0.5)], 0xf2efe6);
+  S.add(W.gulls);
+  W.batch = mergeStatic(S, CITY_CELL);
+  W.batch.list.push(...W.city);   // the street grid was batched as it was built
   initFarChars(S);
   buildColliderGrid(); buildDistrictPoints();
   spawnNPCs(); spawnZuri(); spawnEnemies(); spawnShards(); spawnBots(); spawnOrion(); spawnMalia(); spawnAnimals();
@@ -1169,6 +1146,11 @@ const TRAMS = [
   { id: 'rail', name: 'Sunken Rail Yards', pos: new V3(242, 0, 17) },
   { id: 'tenements', name: 'Ashfall Tenements', pos: new V3(-242, 0, 17) },
   { id: 'reservoir', name: 'Dry Reservoir', pos: new V3(16, 0, 236) },
+  { id: 'harbour_w', name: 'Harbour West Pier', pos: new V3(-226, 0, 594) },
+  { id: 'harbour_e', name: 'Harbour East Pier', pos: new V3(226, 0, 594) },
+  { id: 'northgate', name: 'Northgate', pos: new V3(16, 0, -688) },
+  { id: 'sunrise', name: 'Sunrise Ward', pos: new V3(688, 0, 16) },
+  { id: 'kopje', name: 'Kopje Heights', pos: new V3(-688, 0, 16) },
 ];
 function buildTrams(S) {
   const postM = armorMat(0x2a313b), ringM = glowMat(0x3ee6ff, 3), padM = mat('tramPad', () => new THREE.MeshStandardMaterial({ color: 0x3a4250, metalness: 0.6, roughness: 0.4 }));
@@ -1202,6 +1184,1082 @@ function buildColliderGrid() {
   }
   G.colGrid = grid;
 }
+
+// =====================================================================
+//  THE CITY: a street grid, written straight into batches
+// =====================================================================
+// Ad-Nostra is laid out on a grid: a street every 64 m and an avenue every 256 m, with the old districts,
+// the Lantern Market and the Harbour cut out of it. Everything here is static, so instead of thousands of
+// meshes it is written straight into one buffer per material per map cell. The generator is seeded, so the
+// city is the same city every time you log in.
+function mulberry32(a) { return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+let _srng = mulberry32(2137);
+const sr = (a, b) => a + _srng() * (b - a), sri = (a, b) => Math.floor(sr(a, b + 1)), spick = a => a[Math.floor(_srng() * a.length)], sch = p => _srng() < p;
+
+// ---------------------------------------------------------------- the batcher
+class Grow {   // a typed array that grows as it is written to
+  constructor(T, n = 1 << 12) { this.T = T; this.a = new T(n); this.l = 0; }
+  room(k) { if (this.l + k > this.a.length) { let n = this.a.length * 2; while (n < this.l + k) n *= 2; const b = new this.T(n); b.set(this.a.subarray(0, this.l)); this.a = b; } return this.a; }
+}
+const TPL = {
+  box: new THREE.BoxGeometry(1, 1, 1),
+  cyl6: new THREE.CylinderGeometry(1, 1, 1, 6, 1, true), cyl8: new THREE.CylinderGeometry(1, 1, 1, 8), cyl16: new THREE.CylinderGeometry(1, 1, 1, 16),
+  cone6: new THREE.ConeGeometry(1, 1, 6), cone8: new THREE.ConeGeometry(1, 1, 8), dome: new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+  sph: new THREE.SphereGeometry(1, 8, 6), oct: new THREE.OctahedronGeometry(1, 0), torus: new THREE.TorusGeometry(1, 0.32, 6, 12),
+};
+const _gm = new THREE.Matrix4(), _gq = new THREE.Quaternion(), _ge = new THREE.Euler(), _gp = new V3(), _gs = new V3();
+// a transform for B.geo(): position, scale, then rotation (Euler, in the given order)
+function at(x, y, z, sx = 1, sy = sx, sz = sx, ry = 0, rx = 0, rz = 0, order = 'XYZ') { _ge.set(rx, ry, rz, order); _gq.setFromEuler(_ge); return _gm.compose(_gp.set(x, y, z), _gq, _gs.set(sx, sy, sz)); }
+const CITY_CELL = 300;
+function makeBatcher(cell = CITY_CELL) {
+  const buckets = new Map(), C = new THREE.Color(), M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), ONE = new V3(1, 1, 1), T = new V3(), N3 = new THREE.Matrix3(), vp = new V3(), vn = new V3();
+  const get = (m, x, z, cs) => {
+    cs = cs && m !== CM.glow && m !== CM.water;
+    const key = m.id + ':' + Math.floor(x / cell) + ':' + Math.floor(z / cell) + (cs ? 's' : '');
+    let b = buckets.get(key);
+    if (!b) buckets.set(key, b = { m, cs, v: 0, p: new Grow(Float32Array), n: new Grow(Float32Array), u: m.map || m.normalMap ? new Grow(Float32Array) : null, c: m.vertexColors ? new Grow(Float32Array) : null, i: new Grow(Uint32Array) });
+    return b;
+  };
+  const vert = (b, x, y, z, nx, ny, nz, u, v) => {
+    let a = b.p.room(3); a[b.p.l++] = x; a[b.p.l++] = y; a[b.p.l++] = z;
+    a = b.n.room(3); a[b.n.l++] = nx; a[b.n.l++] = ny; a[b.n.l++] = nz;
+    if (b.u) { a = b.u.room(2); a[b.u.l++] = u; a[b.u.l++] = v; }
+    if (b.c) { a = b.c.room(3); a[b.c.l++] = C.r; a[b.c.l++] = C.g; a[b.c.l++] = C.b; }
+    return b.v++;
+  };
+  const tri = (b, i0, i1, i2) => { const a = b.i.room(3); a[b.i.l++] = i0; a[b.i.l++] = i1; a[b.i.l++] = i2; };
+  const setCol = (c, k) => { if (c == null) C.setRGB(1, 1, 1); else if (typeof c === 'number') C.setHex(c); else C.copy(c); if (k) C.multiplyScalar(k); };
+  const B = {
+    // A box centred on (x, y, z). Side faces use o.uv: 'unit' | 'facade' (16 x 48 m tiles, rows follow world height) |
+    // { rep: metres per tile, v0, v1 } (repeat along the face, one atlas row) | { uv: [u0, v0, u1, v1] }.
+    // Top faces use o.top (a material, or null for none) and o.topUV ('world' by default). Bottoms are skipped.
+    // Colours (o.col, times o.glow) go to vertex-coloured materials. Everything but glow and water casts shadows.
+    box(m, w, h, d, x, y, z, o = {}) {
+      E.set(o.rx || 0, o.ry || 0, o.rz || 0, o.order || 'XYZ'); Q.setFromEuler(E); M4.compose(T.set(x, y, z), Q, ONE);
+      const P = TPL.box.attributes.position.array, Nn = TPL.box.attributes.normal.array, U = TPL.box.attributes.uv.array;
+      const fw = [d, d, w, w, w, w];
+      for (let f = 0; f < 6; f++) {
+        if (f === 3 && !o.bottom) continue;
+        const top = f === 2 || f === 3, fm = top ? (o.top === undefined ? m : o.top) : m; if (!fm) continue;
+        const b = get(fm, x, z, true);
+        setCol(top && o.topCol != null ? o.topCol : o.col, o.glow);
+        const mode = top ? (o.topUV || 'world') : (o.uv || 'unit'), base = b.v;
+        for (let k = 0; k < 4; k++) {
+          const i = f * 4 + k;
+          vp.set(P[i * 3] * w, P[i * 3 + 1] * h, P[i * 3 + 2] * d).applyMatrix4(M4);
+          vn.set(Nn[i * 3], Nn[i * 3 + 1], Nn[i * 3 + 2]).applyQuaternion(Q);
+          let u = U[i * 2], v = U[i * 2 + 1];
+          if (mode === 'facade') { u = u * fw[f] / 16 + (o.u0 || 0); v = vp.y / 48; }
+          else if (mode === 'world') { const t = o.tile || 4; u = vp.x / t; v = vp.z / t; }
+          else if (mode.rep) { u = u * fw[f] / mode.rep + (o.u0 || 0); v = mode.v0 + (mode.v1 - mode.v0) * v; }
+          else if (mode.uv) { const r = mode.uv; u = r[0] + (r[2] - r[0]) * u; v = r[1] + (r[3] - r[1]) * v; }
+          vert(b, vp.x, vp.y, vp.z, vn.x, vn.y, vn.z, u, v);
+        }
+        tri(b, base, base + 2, base + 1); tri(b, base + 2, base + 3, base + 1);
+      }
+    },
+    // any geometry, through a matrix (see at())
+    geo(m, g, mtx, o = {}) {
+      const b = get(m, mtx.elements[12], mtx.elements[14], true);
+      setCol(o.col, o.glow); N3.getNormalMatrix(mtx);
+      const P = g.attributes.position.array, Nn = g.attributes.normal.array, U = g.attributes.uv ? g.attributes.uv.array : null, n = g.attributes.position.count, base = b.v;
+      for (let i = 0; i < n; i++) {
+        vp.fromArray(P, i * 3).applyMatrix4(mtx); vn.fromArray(Nn, i * 3).applyMatrix3(N3).normalize();
+        vert(b, vp.x, vp.y, vp.z, vn.x, vn.y, vn.z, U ? U[i * 2] : 0, U ? U[i * 2 + 1] : 0);
+      }
+      if (g.index) { const I = g.index.array; for (let i = 0; i < I.length; i += 3) tri(b, base + I[i], base + I[i + 1], base + I[i + 2]); }
+      else for (let i = 0; i < n; i += 3) tri(b, base + i, base + i + 1, base + i + 2);
+    },
+    // a flat quad at height y: four [x, z] corners in order round it, and their [u, v]
+    quad(m, pts, y, uvs, o = {}) {
+      let p = pts, t = uvs;
+      const cr = (p[1][1] - p[0][1]) * (p[2][0] - p[0][0]) - (p[1][0] - p[0][0]) * (p[2][1] - p[0][1]);
+      if (cr < 0) { p = [p[0], p[3], p[2], p[1]]; t = [t[0], t[3], t[2], t[1]]; }   // keep it facing up
+      const b = get(m, (p[0][0] + p[2][0]) / 2, (p[0][1] + p[2][1]) / 2, false);   // ground never casts shadows
+      setCol(o.col, o.glow); const base = b.v;
+      for (let k = 0; k < 4; k++) vert(b, p[k][0], y, p[k][1], 0, 1, 0, t[k][0], t[k][1]);
+      tri(b, base, base + 1, base + 2); tri(b, base, base + 2, base + 3);
+    },
+    rect(m, x0, z0, x1, z1, y, o = {}) {   // world-mapped (o.tile metres per texture tile)
+      const t = o.tile || 4;
+      B.quad(m, [[x0, z0], [x0, z1], [x1, z1], [x1, z0]], y, [[x0 / t, z0 / t], [x0 / t, z1 / t], [x1 / t, z1 / t], [x1 / t, z0 / t]], o);
+    },
+    finish(scene) {
+      const out = [];
+      for (const b of buckets.values()) {
+        if (!b.v) continue;
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(b.p.a.slice(0, b.p.l), 3));
+        g.setAttribute('normal', new THREE.BufferAttribute(b.n.a.slice(0, b.n.l), 3));
+        if (b.u) g.setAttribute('uv', new THREE.BufferAttribute(b.u.a.slice(0, b.u.l), 2));
+        if (b.c) g.setAttribute('color', new THREE.BufferAttribute(b.c.a.slice(0, b.c.l), 3));
+        g.setIndex(new THREE.BufferAttribute(b.i.a.slice(0, b.i.l), 1));
+        g.computeBoundingSphere();
+        for (const a of [...Object.values(g.attributes), g.index]) a.onUpload(function () { this.array = null; });   // the GPU has it; free the copy
+        const mesh = new THREE.Mesh(g, b.m); mesh.castShadow = b.cs; mesh.receiveShadow = true; mesh.userData.premerged = true;
+        scene.add(mesh); out.push(mesh);
+      }
+      buckets.clear();
+      return out;
+    },
+  };
+  return B;
+}
+
+// ---------------------------------------------------------------- city textures and materials
+const ROADV = { street: [0.755, 0.995], avenue: [0.505, 0.745], cross: [0.255, 0.495], plain: [0.005, 0.245] };   // rows of the road atlas
+function roadAtlas() {
+  return canvasTex(512, 512, (g, w, h) => {
+    const R = h / 4;
+    g.fillStyle = '#574b41'; g.fillRect(0, 0, w, h);
+    speckle(g, w, h, 9000, ['#625448', '#4b4037', '#6a5c50', '#43392f'], 3);
+    for (let r = 0; r < 4; r++) {   // gutters: a darker edge on each side of every row
+      const g0 = g.createLinearGradient(0, r * R, 0, r * R + 14); g0.addColorStop(0, 'rgba(30,22,16,0.55)'); g0.addColorStop(1, 'rgba(30,22,16,0)'); g.fillStyle = g0; g.fillRect(0, r * R, w, 14);
+      const g1 = g.createLinearGradient(0, (r + 1) * R, 0, (r + 1) * R - 14); g1.addColorStop(0, 'rgba(30,22,16,0.55)'); g1.addColorStop(1, 'rgba(30,22,16,0)'); g.fillStyle = g1; g.fillRect(0, (r + 1) * R - 14, w, 14);
+    }
+    g.fillStyle = 'rgba(232,220,192,0.7)'; for (const x of [0, 256]) g.fillRect(x + 20, R / 2 - 2, 128, 4);   // street: dashed centre line
+    const A = R;
+    g.fillStyle = 'rgba(232,196,106,0.8)'; g.fillRect(0, A + R / 2 - 6, w, 3); g.fillRect(0, A + R / 2 + 3, w, 3);   // avenue: double amber centre line
+    g.fillStyle = 'rgba(232,220,192,0.55)'; for (const x of [0, 256]) { g.fillRect(x + 30, A + R / 4 - 2, 110, 3); g.fillRect(x + 30, A + R * 3 / 4 - 1, 110, 3); }
+    g.fillStyle = 'rgba(236,228,206,0.82)'; for (let k = 0; k < 9; k += 2) g.fillRect(0, 2 * R + 6 + k * (R - 12) / 9, w, (R - 12) / 9);   // crosswalk bars
+    speckle(g, w, h, 2500, ['rgba(60,50,40,0.5)', 'rgba(90,75,60,0.4)'], 2);   // wear over the paint
+  });
+}
+function paveTex(base, cols, joint, bw = 32, bh = 64) {
+  return canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = base; g.fillRect(0, 0, w, h); speckle(g, w, h, 5000, cols, 2);
+    for (let y = 0; y < h; y += bh) for (let x = -bw; x < w; x += bw) { g.fillStyle = pick(cols); g.globalAlpha = 0.18; g.fillRect(x + ((y / bh) % 2) * bw / 2, y, bw - 2, bh - 2); }
+    g.globalAlpha = 1; g.strokeStyle = joint; g.lineWidth = 2;
+    for (let y = 0; y <= h; y += bh) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = ((y / bh) % 2) * bw / 2; x <= w; x += bw) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + bh); g.stroke(); } }
+  });
+}
+const SHOPV = [[0.757, 0.993], [0.507, 0.743], [0.257, 0.493], [0.007, 0.243]];
+function shopfrontMat() {
+  const walls = ['#c9a679', '#e2d9c6', '#b56a43', '#3a3430'], signs = ['#1d6f7a', '#a8322a', '#e0a526', '#2b3f6e', '#4a7a3a', '#7a2a5a', '#d96a2a', '#1a1a1a'];
+  const plan = walls.map(() => [0, 1].map(() => ({ sign: pick(signs), lit: Math.random() < 0.75, door: Math.random() < 0.5 ? 0 : 1 })));
+  const draw = emi => (g, w, h) => {
+    const R = h / 4;
+    g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
+    walls.forEach((wall, r) => {
+      const y0 = r * R;
+      if (!emi) { g.fillStyle = wall; g.fillRect(0, y0, w, R); speckle(g, w, R, 300, ['rgba(0,0,0,0.06)', 'rgba(255,255,255,0.06)'], 2); }
+      for (let k = 0; k < 2; k++) {
+        const u = plan[r][k], x0 = k * 256;
+        if (!emi) { g.fillStyle = u.sign; g.fillRect(x0 + 10, y0 + 6, 236, 22); g.fillStyle = 'rgba(255,240,210,0.85)'; for (let i = 0; i < 6; i++) g.fillRect(x0 + 40 + i * 28, y0 + 12, 18, 10); }
+        else if (u.lit) { g.fillStyle = u.sign; g.globalAlpha = 0.6; g.fillRect(x0 + 10, y0 + 6, 236, 22); g.globalAlpha = 1; g.fillStyle = '#fff3d8'; for (let i = 0; i < 6; i++) g.fillRect(x0 + 40 + i * 28, y0 + 12, 18, 10); }
+        const wx = x0 + (u.door ? 18 : 78), dx = x0 + (u.door ? 186 : 18);
+        if (!emi) {
+          const gl = g.createLinearGradient(0, y0 + 36, 0, y0 + R - 4); gl.addColorStop(0, '#2a3036'); gl.addColorStop(1, u.lit ? '#6a5236' : '#1a1e22');
+          g.fillStyle = '#2a2420'; g.fillRect(wx - 4, y0 + 34, 164, R - 36); g.fillStyle = gl; g.fillRect(wx, y0 + 38, 156, R - 44);
+          g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(wx + 8, y0 + 40, 30, R - 50);
+          g.fillStyle = '#2a1c12'; g.fillRect(dx - 3, y0 + 40, 58, R - 40); g.fillStyle = '#3a4048'; g.fillRect(dx + 3, y0 + 46, 46, R - 50);
+        } else if (u.lit) {
+          const gl = g.createLinearGradient(0, y0 + 38, 0, y0 + R - 4); gl.addColorStop(0, 'rgba(255,200,130,0.25)'); gl.addColorStop(1, 'rgba(255,190,110,0.8)');
+          g.fillStyle = gl; g.fillRect(wx, y0 + 38, 156, R - 44); g.fillStyle = 'rgba(255,210,150,0.5)'; g.fillRect(dx + 3, y0 + 46, 46, R - 50);
+        }
+      }
+    });
+  };
+  const map = canvasTex(512, 512, draw(false)), emi = canvasTex(512, 512, draw(true));
+  return new THREE.MeshStandardMaterial({ map, emissive: 0xffffff, emissiveMap: emi, emissiveIntensity: 0.7, roughness: 0.6 });
+}
+// awning and stall canvas: eight rows of stripes and prints
+const FABV = Array.from({ length: 8 }, (_, r) => [1 - (r + 1) / 8 + 0.004, 1 - r / 8 - 0.004]);
+function fabricMat() {
+  const rows = [['#b4502e', '#efe2c6'], ['#1d7a84', '#f2ece0'], ['#e0a526', '#b3301e'], ['#2b3f8e', '#f0ead8'], ['#3f7a3a', '#e8c46a'], ['#7a1f30', '#7a1f30'], ['#d6862a', '#d6862a'], ['#1a1a1a', '#e0a526']];
+  const tex = canvasTex(512, 512, (g, w, h) => {
+    const R = h / 8;
+    rows.forEach(([a, b], r) => {
+      for (let x = 0; x < w; x += 32) { g.fillStyle = (x / 32) % 2 ? b : a; g.fillRect(x, r * R, 32, R); }
+      if (r === 7) { g.fillStyle = '#3a8a4a'; for (let x = 8; x < w; x += 64) g.fillRect(x, r * R + 20, 16, 24); }   // kente-style blocks
+      if (r >= 5 && r <= 6) { g.fillStyle = 'rgba(255,230,170,0.35)'; for (let x = 0; x < w; x += 24) for (let y = 4; y < R; y += 16) g.fillRect(x + (y % 32 ? 12 : 0), r * R + y, 6, 6); }   // printed dots
+      g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(0, r * R + R - 6, w, 6);
+    });
+    speckle(g, w, h, 4000, ['rgba(0,0,0,0.06)', 'rgba(255,255,255,0.06)'], 2);
+  });
+  return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, side: THREE.DoubleSide });
+}
+function waterNormals() {
+  const N = 256, c = document.createElement('canvas'); c.width = c.height = N;
+  const g = c.getContext('2d'), img = g.createImageData(N, N), H = new Float32Array(N * N);
+  const waves = Array.from({ length: 14 }, () => ({ kx: randi(-6, 6), ky: randi(1, 7), a: rand(0.4, 1), p: rand(0, 6.28) }));
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { let s = 0; for (const wv of waves) s += wv.a / Math.hypot(wv.kx, wv.ky) * Math.sin((wv.kx * x + wv.ky * y) / N * Math.PI * 2 + wv.p); H[y * N + x] = s; }
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const dx = H[y * N + (x + 1) % N] - H[y * N + (x + N - 1) % N], dy = H[((y + 1) % N) * N + x] - H[((y + N - 1) % N) * N + x];
+    const nx = -dx * 3, ny = -dy * 3, l = Math.hypot(nx, ny, 1), i = (y * N + x) * 4;
+    img.data[i] = (nx / l * 0.5 + 0.5) * 255; img.data[i + 1] = (ny / l * 0.5 + 0.5) * 255; img.data[i + 2] = (1 / l * 0.5 + 0.5) * 255; img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.NoColorSpace; t.anisotropy = 4;
+  return t;
+}
+const CM = {};   // city materials
+function cityMats() {
+  if (CM.props) return CM;
+  CM.props = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0.04 });
+  CM.metal = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.55 });
+  CM.glow = new THREE.MeshBasicMaterial({ vertexColors: true });   // vertex colours above 1, so bloom catches them
+  CM.leaf = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide });
+  CM.road = new THREE.MeshStandardMaterial({ map: roadAtlas(), roughness: 0.93, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
+  CM.pave = new THREE.MeshStandardMaterial({ map: paveTex('#b9a17f', ['#c4ad8a', '#ad9572', '#c9b393'], 'rgba(90,70,45,0.45)'), roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -1.5, polygonOffsetUnits: -3 });
+  CM.paveLow = CM.pave.clone(); CM.paveLow.polygonOffsetFactor = -0.4; CM.paveLow.polygonOffsetUnits = -1;
+  CM.tiles = new THREE.MeshStandardMaterial({ map: paveTex('#b0613c', ['#bd6c45', '#a35834', '#c47a50', '#9c5a3a'], 'rgba(60,35,20,0.5)', 64, 64), roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -1.5, polygonOffsetUnits: -3 });
+  CM.shop = shopfrontMat();
+  CM.fabric = fabricMat();
+  CM.fac = { sand: makeFacade('sand'), white: makeFacade('white'), terra: makeFacade('terra'), glass: makeFacade('glass'), coral: makeFacade('coral') };
+  const wn = waterNormals(); wn.repeat.set(1 / 14, 1 / 14);
+  CM.water = new THREE.MeshStandardMaterial({ color: 0x1f5862, roughness: 0.1, metalness: 0.15, normalMap: wn, normalScale: new THREE.Vector2(0.55, 0.55), envMapIntensity: 1.1 });
+  return CM;
+}
+
+// ---------------------------------------------------------------- the shape of the city
+const GRID = 64, GRID_N = 14, SW = 3;                      // street spacing, lines each side of the centre, pavement width
+const gridHW = i => (i % 4 === 0 ? 7 : 5);                 // half-widths: avenues every fourth line, streets between
+const RING = { r0: OLD_R - 7, r1: OLD_R + 7 };              // the Rampart Ring, where the old wall stood
+const growR = (R, m) => ({ x0: R.x0 - m, x1: R.x1 + m, z0: R.z0 - m, z1: R.z1 + m });
+// Ground the street grid leaves alone: the old districts, the Lantern Market, the Harbour and the sea.
+const WILD = [
+  { c: [0, 0], r: 36 }, { rect: { x0: -17, x1: 17, z0: 28, z1: 78 } }, { rect: MARKET },
+  { rect: { x0: 30, x1: 160, z0: -66, z1: 66 } }, { rect: { x0: -160, x1: -30, z0: -66, z1: 66 } },
+  { c: [CRATER.x, CRATER.z], r: 76 }, { rect: growR(RAIL, 4) }, { rect: growR(TENE, 4) }, { rect: SOUTH_LANE },
+  { c: [RESV.x, RESV.z], r: RESV_R + 4 }, { rect: HARBOUR }, { rect: { x0: -2000, x1: 2000, z0: COAST_Z - 29, z1: 4000 } },
+];
+function wildReason(R, m) {   // why a rectangle can't simply be built over: '' if it can
+  for (const Z of WILD) {
+    if (Z.rect) { const Q = Z.rect; if (R.x1 > Q.x0 - m && R.x0 < Q.x1 + m && R.z1 > Q.z0 - m && R.z0 < Q.z1 + m) return 'wild'; }
+    else { const nx = clamp(Z.c[0], R.x0, R.x1), nz = clamp(Z.c[1], R.z0, R.z1); if (Math.hypot(nx - Z.c[0], nz - Z.c[1]) < Z.r + m) return 'wild'; }
+  }
+  const near = Math.hypot(clamp(0, R.x0, R.x1), clamp(0, R.z0, R.z1)), far = Math.hypot(Math.max(Math.abs(R.x0), Math.abs(R.x1)), Math.max(Math.abs(R.z0), Math.abs(R.z1)));
+  if (near < RING.r1 + SW + m && far > RING.r0 - SW - m) return 'ring';   // the ring boulevard
+  if (far > WORLD_R - 12) return 'edge';                                  // the rampart
+  for (const t of TRAMS) { const nx = clamp(t.pos.x, R.x0, R.x1), nz = clamp(t.pos.z, R.z0, R.z1); if (Math.hypot(nx - t.pos.x, nz - t.pos.z) < 6 + m) return 'tram'; }
+  return '';
+}
+const rectHitsWild = (R, m) => !!wildReason(R, m);
+// a street on the line x = c (fx) or z = c, from lo to hi along it: the stretches that are clear of wild ground
+function freeSpans(fx, c, hw, lo, hi) {
+  const block = [];
+  for (const Z of WILD) {
+    if (Z.rect) { const R = Z.rect, a0 = fx ? R.x0 : R.z0, a1 = fx ? R.x1 : R.z1; if (c + hw > a0 && c - hw < a1) block.push(fx ? [R.z0, R.z1] : [R.x0, R.x1]); }
+    else { const off = Math.abs(c - (fx ? Z.c[0] : Z.c[1])) - hw; if (off < Z.r) { const hc = Math.sqrt(Z.r * Z.r - Math.max(0, off) ** 2), m = fx ? Z.c[1] : Z.c[0]; block.push([m - hc, m + hc]); } }
+  }
+  const ac = Math.abs(c), ri = RING.r0 - SW - hw, ro = RING.r1 + SW + hw;
+  if (ac < ro) { const so = Math.sqrt(ro * ro - ac * ac), si = ac < ri ? Math.sqrt(ri * ri - ac * ac) : 0; if (si > 0) block.push([si, so], [-so, -si]); else block.push([-so, so]); }
+  const er = WORLD_R - 10, ce = ac + hw, ext = ce < er ? Math.sqrt(er * er - ce * ce) : 0;
+  block.push([-1e5, -ext], [ext, 1e5]);
+  block.sort((a, b) => a[0] - b[0]);
+  const out = []; let s = lo;
+  for (const [b0, b1] of block) { if (b1 <= s) continue; if (b0 >= hi) break; if (b0 > s) out.push([s, Math.min(b0, hi)]); s = Math.max(s, b1); if (s >= hi) break; }
+  if (s < hi) out.push([s, hi]);
+  return out.filter(([a, b]) => b - a > 3);
+}
+// split a city block into building lots, now and then leaving an alley between two
+function splitLots(R, out, depth = 0) {
+  const w = R.x1 - R.x0, d = R.z1 - R.z0, lim = depth === 0 ? 30 : sr(18, 30);
+  if ((w < lim && d < lim) || depth > 4) { out.push(R); return out; }
+  const alongX = w >= d, L = alongX ? w : d, gap = sch(0.35) ? sr(2.5, 4) : 0, t = sr(0.36, 0.64) * L;
+  if (alongX) { splitLots({ x0: R.x0, x1: R.x0 + t - gap / 2, z0: R.z0, z1: R.z1 }, out, depth + 1); splitLots({ x0: R.x0 + t + gap / 2, x1: R.x1, z0: R.z0, z1: R.z1 }, out, depth + 1); }
+  else { splitLots({ x0: R.x0, x1: R.x1, z0: R.z0, z1: R.z0 + t - gap / 2 }, out, depth + 1); splitLots({ x0: R.x0, x1: R.x1, z0: R.z0 + t + gap / 2, z1: R.z1 }, out, depth + 1); }
+  return out;
+}
+
+// ---------------------------------------------------------------- street furniture
+let FROND = null;
+function frondGeo() {   // nine drooping palm leaves round a crown, as one small indexed geometry
+  if (FROND) return FROND;
+  const pos = [], idx = [], SEG = 3;
+  for (let k = 0; k < 9; k++) {
+    const a = k / 9 * Math.PI * 2 + (k % 2) * 0.2, L = k % 3 === 0 ? 2.6 : 3.4, lift = k % 3 === 0 ? 1.1 : 0.55, ca = Math.cos(a), sa = Math.sin(a), base = pos.length / 3;
+    for (let s = 0; s <= SEG; s++) {
+      const u = s / SEG, r = u * L, y = lift * u * 1.6 - 1.9 * u * u * (L / 3.4), w = 0.5 * Math.pow(Math.sin(Math.PI * clamp(u, 0.08, 0.97)), 0.7);
+      for (const side of [-1, 1]) pos.push(ca * r - sa * w * side, y, sa * r + ca * w * side);
+    }
+    for (let s = 0; s < SEG; s++) { const i = base + s * 2; idx.push(i, i + 2, i + 3, i, i + 3, i + 1); }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  return FROND = g;
+}
+function addPalm(B, x, z, s = 1, collide = true) {
+  const h = sr(6.5, 9.5) * s, segs = 3, lean = sr(0.4, 1.3) * s, la = sr(0, 6.28);
+  let px = x, pz = z, py = 0;
+  for (let k = 0; k < segs; k++) {
+    const u0 = k / segs, u1 = (k + 1) / segs, dx = Math.cos(la) * lean * (u1 * u1 - u0 * u0), dz = Math.sin(la) * lean * (u1 * u1 - u0 * u0), sh = h / segs;
+    const r = (0.24 - 0.07 * u0) * s, tilt = Math.atan2(Math.hypot(dx, dz), sh);
+    B.geo(CM.props, TPL.cyl6, at(px + dx / 2, py + sh / 2, pz + dz / 2, r, Math.hypot(sh, Math.hypot(dx, dz)), r, -la, 0, -tilt, 'YXZ'), { col: 0x7d6347 });
+    px += dx; pz += dz; py += sh;
+  }
+  B.geo(CM.leaf, frondGeo(), at(px, py, pz, s * sr(0.9, 1.1), s, s * sr(0.9, 1.1), sr(0, 6.28)), { col: sch(0.5) ? 0x5f7a2c : 0x6b8233 });
+  B.geo(CM.props, TPL.oct, at(px, py - 0.15, pz, 0.34 * s, 0.28 * s, 0.34 * s), { col: 0x6a5530 });
+  if (collide) addCollider(x, z, 0.7, 0.7, h);
+}
+function addLamp(B, x, z, ax, az, h = 6.2) {   // a street lamp at the kerb, its arm reaching along (ax, az) over the road
+  const l = Math.hypot(ax, az) || 1, ux = ax / l, uz = az / l, ry = Math.atan2(-uz, ux);
+  B.box(CM.metal, 0.16, h, 0.16, x, h / 2, z, { col: 0x2b323b });
+  B.box(CM.metal, 1.5, 0.1, 0.1, x + ux * 0.7, h - 0.1, z + uz * 0.7, { ry, col: 0x2b323b });
+  B.box(CM.glow, 0.7, 0.12, 0.3, x + ux * 1.3, h - 0.22, z + uz * 1.3, { ry, col: 0xc8f1ff, glow: 2.4 });
+  addCollider(x, z, 0.35, 0.35, h);
+}
+function addBench(B, x, z, ry) {
+  const c = Math.cos(ry), s = Math.sin(ry), P = (lx, lz) => [x + lx * c + lz * s, z - lx * s + lz * c];
+  let [a, b] = P(0, 0); B.box(CM.props, 1.9, 0.08, 0.5, a, 0.46, b, { ry, col: 0x8a5a32 });
+  [a, b] = P(0, -0.24); B.box(CM.props, 1.9, 0.45, 0.06, a, 0.75, b, { ry, col: 0x8a5a32 });
+  for (const lx of [-0.8, 0.8]) { [a, b] = P(lx, 0); B.box(CM.metal, 0.08, 0.46, 0.46, a, 0.23, b, { ry, col: 0x2b2b2b }); }
+}
+function addFountain(B, x, z, r = 5) {
+  B.geo(CM.props, TPL.cyl16, at(x, 0.35, z, r, 0.7, r), { col: 0xc9b48e });
+  B.geo(CM.water, TPL.cyl16, at(x, 0.6, z, r - 0.45, 0.06, r - 0.45));
+  B.geo(CM.props, TPL.cyl8, at(x, 1.3, z, 0.45, 2.4, 0.45), { col: 0xc9b48e });
+  B.geo(CM.props, TPL.cyl16, at(x, 2.55, z, 1.7, 0.25, 1.7), { col: 0xd9c7a2 });
+  B.geo(CM.glow, TPL.oct, at(x, 3.1, z, 0.35, 0.6, 0.35), { col: 0x9fe9ff, glow: 2.2 });
+  addCollider(x, z, r * 1.8, r * 1.8, 1.2);
+}
+// A robed townsperson, as three geometries: robe and arms, head, headwrap. Shared by the walking crowd
+// (instanced) and the merchants who stand at their stalls (baked into the city).
+let CIT = null;
+function citizenGeos() {
+  if (CIT) return CIT;
+  const prof = [[0.001, 0], [0.34, 0.02], [0.31, 0.3], [0.26, 0.8], [0.22, 1.1], [0.27, 1.3], [0.24, 1.42], [0.1, 1.5], [0.001, 1.52]].map(([r, y]) => new THREE.Vector2(r, y));
+  const robe = new THREE.LatheGeometry(prof, 8).toNonIndexed();
+  const arm = sx => { const g = new THREE.BoxGeometry(0.1, 0.62, 0.12); g.translate(0, -0.31, 0); g.rotateZ(sx * 0.12); g.translate(sx * 0.29, 1.38, 0.02); return g.toNonIndexed(); };
+  const body = mergeGeometries([robe, arm(-1), arm(1)]);
+  const head = new THREE.SphereGeometry(0.115, 8, 6); head.translate(0, 1.64, 0.01);
+  const wrap = new THREE.SphereGeometry(0.125, 8, 4, 0, Math.PI * 2, 0, Math.PI * 0.55); wrap.scale(1.1, 0.95, 1.12); wrap.translate(0, 1.66, -0.005);
+  return CIT = { body, head, wrap };
+}
+const ROBES = [0xf2efe6, 0xf2efe6, 0xe8e0cc, 0x2b3f8e, 0xb4502e, 0x1d7a84, 0xe0a526, 0x7a1f30, 0x3f7a3a, 0x2a2622, 0xd6862a, 0x6a4a8a, 0x8a8a84];
+const SKINS = [0x5a3a26, 0x6e4630, 0x7e5236, 0x4a2e1e, 0x8c5e3c, 0x3e2618, 0x9a6a46];
+const WRAPS = [0xf2efe6, 0xf2efe6, 0x1a1a1a, 0xb4502e, 0x1d7a84, 0xe0a526, 0x7a1f30, 0x2b3f8e, 0xd9cfbd];
+function addFigure(B, x, z, ry, s = 1) {   // a merchant or a dock hand who stands still
+  const g = citizenGeos();
+  B.geo(CM.props, g.body, at(x, 0, z, s, s, s, ry), { col: spick(ROBES) });
+  B.geo(CM.props, g.head, at(x, 0, z, s, s, s, ry), { col: spick(SKINS) });
+  B.geo(CM.props, g.wrap, at(x, 0, z, s, s, s, ry), { col: spick(WRAPS) });
+}
+
+// ---------------------------------------------------------------- buildings
+const ROOF = 0xa88a66, TRIM = 0xe3d5b8;
+const DSTYLE = {
+  ward: { fac: ['sand', 'sand', 'white', 'terra'], h: r => sr(14, 40) + (r < 120 ? sr(0, 45) : r < 300 ? sr(0, 20) : sr(0, 26)), glass: h => h > 58 && sch(0.55), dome: 0.7 },
+  northgate: { fac: ['sand', 'white', 'terra', 'sand'], h: () => sch(0.5) ? sr(46, 124) : sr(16, 44), glass: h => h > 44 && sch(0.8), dome: 0.3 },
+  sunrise: { fac: ['sand', 'terra', 'terra', 'white', 'coral'], h: () => sr(10, 30) + (sch(0.14) ? sr(8, 26) : 0), glass: h => h > 46 && sch(0.5), dome: 0.6 },
+  dhow: { fac: ['white', 'white', 'coral', 'coral', 'sand'], h: () => sr(6, 15) + (sch(0.1) ? sr(4, 10) : 0), glass: () => false, dome: 0.5 },
+};
+DSTYLE.kopje = DSTYLE.sunrise; DSTYLE.causeway = DSTYLE.ward; DSTYLE.ring = DSTYLE.sunrise; DSTYLE.harbour = DSTYLE.dhow;
+const NEON = [0x3ee6ff, 0xff4fa0, 0xffb347, 0x6dff9a, 0xb07bff, 0xff5a3a];
+function parapet(B, w, d, x, y, z, col = TRIM) {
+  for (const [pw, pd, px, pz] of [[w, 0.35, 0, d / 2], [w, 0.35, 0, -d / 2], [0.35, d, w / 2, 0], [0.35, d, -w / 2, 0]]) B.box(CM.props, pw, 0.9, pd, x + px, y + 0.45, z + pz, { col });
+}
+function rooftop(B, w, d, x, y, z) {
+  for (let k = sri(0, 3); k > 0; k--) {
+    const px = x + sr(-w / 2 + 1.6, w / 2 - 1.6), pz = z + sr(-d / 2 + 1.6, d / 2 - 1.6), t = sr(0, 1);
+    if (t < 0.3) { B.geo(CM.props, TPL.cyl8, at(px, y + 1.4, pz, 1.0, 2.2, 1.0), { col: sch(0.5) ? 0x9a9a92 : 0x4f7486 }); B.box(CM.metal, 2.2, 0.3, 2.2, px, y + 0.15, pz, { col: 0x3a3a3a }); }
+    else if (t < 0.55) B.box(CM.props, 1.7, 1.0, 1.3, px, y + 0.5, pz, { col: 0xb8b4aa });
+    else if (t < 0.85) { const ry = sr(0, 0.3); B.box(CM.metal, 3.4, 0.1, 2.1, px, y + 0.8, pz, { rx: -0.4, ry, order: 'YXZ', col: 0x1c2e4a }); B.box(CM.metal, 0.1, 0.8, 0.1, px, y + 0.4, pz, { col: 0x555555 }); }
+    else { B.box(CM.metal, 0.1, 4, 0.1, px, y + 2, pz, { col: 0x777777 }); B.box(CM.glow, 0.2, 0.2, 0.2, px, y + 4.1, pz, { col: 0xff3355, glow: 3 }); }
+  }
+}
+function awnings(B, x0, x1, z0, z1, faces) {
+  const row = () => FABV[sri(0, 7)];
+  for (const f of faces) {
+    const alongX = f === 'z0' || f === 'z1', L = alongX ? x1 - x0 : z1 - z0;
+    if (sch(0.3)) continue;
+    const n = L > 15 ? 2 : 1, R = row(), tilt = 0.34, dep = 1.9, ry = { z1: 0, z0: Math.PI, x1: Math.PI / 2, x0: -Math.PI / 2 }[f];
+    const nx = f === 'x1' ? 1 : f === 'x0' ? -1 : 0, nz = f === 'z1' ? 1 : f === 'z0' ? -1 : 0;
+    for (let k = 0; k < n; k++) {
+      const aw = Math.min(L - 1.2, sr(3.5, 6)), off = (k - (n - 1) / 2) * (L / n), out = 0.15 + dep / 2 * Math.cos(tilt), y = 3.75 - dep / 2 * Math.sin(tilt);
+      const cx = alongX ? (x0 + x1) / 2 + off : (nx > 0 ? x1 : x0) + nx * out, cz = alongX ? (nz > 0 ? z1 : z0) + nz * out : (z0 + z1) / 2 + off;
+      B.box(CM.fabric, aw, 0.07, dep, cx, y, cz, { order: 'YXZ', ry, rx: tilt, uv: { rep: 2.4, v0: R[0], v1: R[1] }, topUV: { rep: 2.4, v0: R[0], v1: R[1] } });
+    }
+  }
+}
+function cityBuilding(B, L, faces) {
+  const ins = sr(0, 0.3), x0 = L.x0 + ins, x1 = L.x1 - ins, z0 = L.z0 + ins, z1 = L.z1 - ins, w = x1 - x0, d = z1 - z0;
+  if (w < 5 || d < 5) return;
+  const x = (x0 + x1) / 2, z = (z0 + z1) / 2, r = Math.hypot(x, z), st = DSTYLE[zoneAt(x, z)] || DSTYLE.ward;
+  let h = st.h(r); if (Math.min(w, d) < 9) h = Math.min(h, 22);   // a narrow lot can't carry a tower
+  addCollider(x, z, w + 0.4, d + 0.4, h + 3);
+  const shop = h >= 7;
+  const sv = spick(SHOPV);
+  if (shop) B.box(CM.shop, w + 0.3, 4.4, d + 0.3, x, 2.2, z, { uv: { rep: 8, v0: sv[0], v1: sv[1] }, u0: sr(0, 1), top: CM.props, topCol: 0xcdb894 });
+  if (st.glass(h)) {   // glass tower on a sandstone podium
+    const ph = sr(7, 11); B.box(CM.fac.sand, w, ph, d, x, ph / 2, z, { uv: 'facade', u0: sr(0, 1), top: CM.props, topCol: ROOF }); parapet(B, w, d, x, ph, z);
+    const tw = w * sr(0.55, 0.72), td = d * sr(0.55, 0.72);
+    B.box(CM.fac.glass, tw, h - ph, td, x, ph + (h - ph) / 2, z, { uv: 'facade', u0: sr(0, 1), top: CM.props, topCol: 0x2a3440 });
+    const sh = sr(7, 14); B.box(CM.props, 0.35, sh, 0.35, x, h + sh / 2, z, { col: TRIM }); B.geo(W.blink, TPL.sph, at(x, h + sh, z, 0.35));
+    if (shop) awnings(B, x0, x1, z0, z1, faces);
+    return;
+  }
+  const fk = spick(st.fac), fm = CM.fac[fk], tiers = h > 34 ? sri(2, 3) : 1;
+  let y = 0, tw = w, td = d, rest = h;
+  for (let k = 0; k < tiers; k++) {   // stepped setbacks
+    const th = k === tiers - 1 ? rest : rest * sr(0.45, 0.62);
+    B.box(fm, tw, th, td, x, y + th / 2, z, { uv: 'facade', u0: sr(0, 1), top: CM.props, topCol: ROOF });
+    y += th; rest -= th;
+    if (k < tiers - 1 || (fk !== 'white' && fk !== 'coral')) parapet(B, tw, td, x, y, z, fk === 'coral' ? 0xd8ccb0 : TRIM);
+    if (k < tiers - 1) { tw *= sr(0.62, 0.8); td *= sr(0.62, 0.8); }
+  }
+  if ((fk === 'white' || fk === 'coral') && sch(st.dome)) {   // whitewashed drum and dome
+    const dr = Math.min(tw, td) * sr(0.3, 0.42);
+    B.geo(CM.props, TPL.cyl16, at(x, y + 0.8, z, dr, 1.6, dr), { col: TRIM }); B.geo(CM.props, TPL.dome, at(x, y + 1.6, z, dr), { col: fk === 'coral' ? 0x5fa3a8 : 0xeee4d0 });
+  } else {
+    if (fk === 'white' || fk === 'coral') parapet(B, tw, td, x, y, z, 0xece4d2);
+    rooftop(B, tw, td, x, y, z);
+    if (h > 50) { const sh = sr(7, 13); B.box(CM.props, 0.35, sh, 0.35, x, y + sh / 2, z, { col: TRIM }); B.geo(W.blink, TPL.sph, at(x, y + sh, z, 0.35)); }
+  }
+  if (!shop) return;
+  awnings(B, x0, x1, z0, z1, faces);
+  if (faces.length && h > 9 && sch(0.35)) {   // a neon blade sign
+    const f = spick(faces), sh = sr(2, 4), sy = sr(5.6, Math.min(h - 2, 9)), c = spick(NEON);
+    const sx = f === 'x0' ? x0 - 0.6 : f === 'x1' ? x1 + 0.6 : x + sr(-w / 3, w / 3), sz = f === 'z0' ? z0 - 0.6 : f === 'z1' ? z1 + 0.6 : z + sr(-d / 3, d / 3);
+    const along = f === 'z0' || f === 'z1';
+    B.box(CM.props, along ? 0.16 : 1.2, sh + 0.3, along ? 1.2 : 0.16, sx, sy, sz, { col: 0x1a1d22 });
+    B.box(CM.glow, along ? 0.22 : 1.0, sh, along ? 1.0 : 0.22, sx, sy, sz, { col: c, glow: 1.6 });
+  }
+}
+
+// ---------------------------------------------------------------- parks and squares
+function buildPark(B, R, trees) {
+  W.parks.push(R);
+  const cx = (R.x0 + R.x1) / 2, cz = (R.z0 + R.z1) / 2;
+  B.rect(CM.pave, R.x0, cz - 2, R.x1, cz + 2, 0.016); B.rect(CM.pave, cx - 2, R.z0, cx + 2, cz - 2, 0.016); B.rect(CM.pave, cx - 2, cz + 2, cx + 2, R.z1, 0.016);
+  if (sch(0.5)) addFountain(B, cx, cz, 4.5);
+  else { B.rect(CM.pave, cx - 6, cz - 6, cx + 6, cz + 6, 0.016); const b = makeBaobab(sr(1.1, 1.4)); b.position.set(cx, 0, cz); W.scene.add(b); addCollider(cx, cz, 4.4, 4.4, 8); }
+  for (let k = 0, tries = 0; k < 8 && tries < 40; tries++) {
+    const x = sr(R.x0 + 3, R.x1 - 3), z = sr(R.z0 + 3, R.z1 - 3);
+    if (Math.abs(x - cx) < 5 || Math.abs(z - cz) < 5) continue;
+    trees.push({ x, z, s: sr(0.8, 1.25), dead: false }); addCollider(x, z, 0.7, 0.7, 4); k++;
+  }
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { addPalm(B, cx + sx * 4.2, cz + sz * 4.2); addBench(B, cx + sx * 9, cz + sz * 3.2, sz > 0 ? Math.PI : 0); }
+  addLamp(B, cx - 2.6, R.z0 + 8, 1, 0); addLamp(B, cx + 2.6, R.z1 - 8, -1, 0);
+}
+function buildSquare(B, R) {
+  const cx = (R.x0 + R.x1) / 2, cz = (R.z0 + R.z1) / 2, rr = Math.min(R.x1 - R.x0, R.z1 - R.z0) / 2 - 4;
+  B.rect(CM.tiles, R.x0, R.z0, R.x1, R.z1, 0.016);
+  addFountain(B, cx, cz, 6);
+  for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + Math.PI / 8; addPalm(B, cx + Math.cos(a) * rr, cz + Math.sin(a) * rr); }
+  for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2; addBench(B, cx + Math.cos(a) * 10, cz + Math.sin(a) * 10, Math.PI / 2 - a + Math.PI); }
+}
+
+// ---------------------------------------------------------------- the whole grid
+function buildCity(S) {
+  _srng = mulberry32(2137);
+  cityMats();
+  const B = makeBatcher(), pieces = [], inters = new Map(), trees = [];
+  W.streets = []; W.parks = [];
+  const touch = (ix, iz, side) => {
+    const k = ix + ',' + iz; let I = inters.get(k);
+    if (!I) inters.set(k, I = { x: ix * GRID, z: iz * GRID, hx: gridHW(ix), hz: gridHW(iz) });
+    I[side] = true;
+  };
+  // streets: every grid line, cut into pieces between intersections and round the wild ground
+  for (let i = -GRID_N; i <= GRID_N; i++) for (const fx of [true, false]) {
+    const c = i * GRID, hw = gridHW(i);
+    for (let j = -GRID_N - 1; j <= GRID_N; j++) {
+      const e0 = Math.abs(j) <= GRID_N, e1 = Math.abs(j + 1) <= GRID_N;
+      const lo = j * GRID + (e0 ? gridHW(j) : 0), hi = (j + 1) * GRID - (e1 ? gridHW(j + 1) : 0);
+      for (const [s0, s1] of freeSpans(fx, c, hw, lo, hi)) {
+        const p = { fx, c, hw, s0, s1, t0: e0 && s0 === lo, t1: e1 && s1 === hi };
+        pieces.push(p);
+        if (p.t0) touch(fx ? i : j, fx ? j : i, fx ? 's' : 'e');
+        if (p.t1) touch(fx ? i : j + 1, fx ? j + 1 : i, fx ? 'n' : 'w');
+      }
+    }
+  }
+  const road = (fx, c, hw, s0, s1, R) => {
+    const u0 = s0 / 12, u1 = s1 / 12;
+    const P = fx ? [[c - hw, s0], [c - hw, s1], [c + hw, s1], [c + hw, s0]] : [[s0, c - hw], [s1, c - hw], [s1, c + hw], [s0, c + hw]];
+    B.quad(CM.road, P, 0.012, [[u0, R[0]], [u1, R[0]], [u1, R[1]], [u0, R[1]]]);
+  };
+  for (const p of pieces) {
+    let a = p.s0, b = p.s1;
+    if (p.t0 && b - a > 12) { road(p.fx, p.c, p.hw, a, a + 3, ROADV.cross); a += 3; }   // zebra crossings where it meets a junction
+    if (p.t1 && b - a > 9) { road(p.fx, p.c, p.hw, b - 3, b, ROADV.cross); b -= 3; }
+    road(p.fx, p.c, p.hw, a, b, p.hw === 7 ? ROADV.avenue : ROADV.street);
+    W.streets.push(p.fx ? { x0: p.c - p.hw, x1: p.c + p.hw, z0: p.s0, z1: p.s1 } : { x0: p.s0, x1: p.s1, z0: p.c - p.hw, z1: p.c + p.hw });
+    for (const sd of [-1, 1]) {
+      // pavement (running on round the corner at a junction), kerb, lamps, and palms in planters on the avenues
+      const e0 = p.s0 - (p.t0 ? SW : 0), e1 = p.s1 + (p.t1 ? SW : 0), o0 = p.c + sd * p.hw, o1 = p.c + sd * (p.hw + SW);
+      if (p.fx) B.rect(CM.pave, Math.min(o0, o1), e0, Math.max(o0, o1), e1, 0.016); else B.rect(CM.pave, e0, Math.min(o0, o1), e1, Math.max(o0, o1), 0.016);
+      const ko = p.c + sd * (p.hw + 0.12), km = (p.s0 + p.s1) / 2, kl = p.s1 - p.s0;
+      B.box(CM.props, p.fx ? 0.24 : kl, 0.12, p.fx ? kl : 0.24, p.fx ? ko : km, 0.06, p.fx ? km : ko, { col: 0xcbb48e });
+      const lo = p.c + sd * (p.hw + 0.55), po = p.c + sd * (p.hw + 1.6);
+      for (let s = p.s0 + 8 + (sd > 0 ? 17 : 0); s < p.s1 - 6; s += 34) {
+        if (p.fx) addLamp(B, lo, s, -sd, 0); else addLamp(B, s, lo, 0, -sd);
+        const ps = s + 17;
+        if (p.hw === 7 && ps < p.s1 - 5) {
+          const [x, z] = p.fx ? [po, ps] : [ps, po];
+          addPalm(B, x, z); B.box(CM.props, 1.3, 0.4, 1.3, x, 0.2, z, { col: 0xb8a17c });
+        }
+      }
+    }
+  }
+  for (const I of inters.values()) {   // junctions
+    const R = ROADV.plain, x0 = I.x - I.hx, x1 = I.x + I.hx, z0 = I.z - I.hz, z1 = I.z + I.hz;
+    B.quad(CM.road, [[x0, z0], [x0, z1], [x1, z1], [x1, z0]], 0.012, [[x0 / 12, R[0]], [x0 / 12, R[1]], [x1 / 12, R[1]], [x1 / 12, R[0]]]);
+    W.streets.push({ x0, x1, z0, z1 });
+  }
+  // the lane down the Salt Lantern's east side, from the plaza to the market
+  road(true, 22, 5, 31, MARKET.z0, ROADV.street); B.rect(CM.pave, 27, 31, 30, MARKET.z0, 0.016);
+  W.streets.push({ x0: 17, x1: 27, z0: 31, z1: MARKET.z0 });
+  // city blocks: paved, cut into lots, a building on each (now and then a park or a square instead)
+  for (let i = -GRID_N - 1; i <= GRID_N; i++) for (let j = -GRID_N - 1; j <= GRID_N; j++) {
+    const inner = { x0: i * GRID + gridHW(i) + SW, x1: (i + 1) * GRID - gridHW(i + 1) - SW, z0: j * GRID + gridHW(j) + SW, z1: Math.min((j + 1) * GRID - gridHW(j + 1) - SW, COAST_Z - 30) };
+    if (inner.x1 - inner.x0 < 8 || inner.z1 - inner.z0 < 8) continue;
+    const why = wildReason(inner, 0.5), clean = !why;
+    if (why === 'ring' || why === 'edge' || why === 'tram') B.rect(CM.paveLow, inner.x0, inner.z0, inner.x1, inner.z1, 0.006);   // paved under the ring road, the stop or the wall
+    if (clean) {
+      const roll = sr(0, 1);
+      if (roll < 0.045) { buildPark(B, inner, trees); continue; }
+      if (roll < 0.075) { buildSquare(B, inner); continue; }
+      B.rect(CM.pave, inner.x0, inner.z0, inner.x1, inner.z1, 0.016);
+    }
+    for (const L of splitLots(inner, [])) {
+      if (!clean && rectHitsWild(L, 2)) continue;
+      const faces = [];
+      if (L.x0 - inner.x0 < 0.01) faces.push('x0'); if (inner.x1 - L.x1 < 0.01) faces.push('x1');
+      if (L.z0 - inner.z0 < 0.01) faces.push('z0'); if (inner.z1 - L.z1 < 0.01) faces.push('z1');
+      cityBuilding(B, L, faces);
+    }
+  }
+  // the Rampart Ring: a palm boulevard where the old wall stood
+  const RN = 180, rr = [RING.r0 - SW, RING.r0, RING.r1, RING.r1 + SW], PR = (r, a) => [Math.cos(a) * r, Math.sin(a) * r];
+  for (let k = 0; k < RN; k++) {
+    const a0 = k / RN * Math.PI * 2, a1 = (k + 1) / RN * Math.PI * 2, u0 = a0 * OLD_R / 12, u1 = a1 * OLD_R / 12, R = ROADV.avenue, am = (a0 + a1) / 2;
+    B.quad(CM.road, [PR(rr[1], a0), PR(rr[1], a1), PR(rr[2], a1), PR(rr[2], a0)], 0.012, [[u0, R[0]], [u1, R[0]], [u1, R[1]], [u0, R[1]]]);
+    for (const [ra, rb] of [[rr[0], rr[1]], [rr[2], rr[3]]]) { const q = [PR(ra, a0), PR(ra, a1), PR(rb, a1), PR(rb, a0)]; B.quad(CM.pave, q, 0.016, q.map(([x, z]) => [x / 4, z / 4])); }
+    if (k % 3 === 0) { const out = k % 6 ? 1 : -1, [x, z] = PR(out > 0 ? rr[2] + 0.55 : rr[1] - 0.55, am); addLamp(B, x, z, -Math.cos(am) * out, -Math.sin(am) * out); }
+    if (k % 4 === 2) for (const r of [rr[0] + 1.4, rr[3] - 1.4]) { const [x, z] = PR(r, am); addPalm(B, x, z); }
+  }
+  // the seafront promenade, either side of the Harbour
+  for (const sx of [-1, 1]) {
+    const xa = HARBOUR.x1, xb = Math.sqrt((WORLD_R + 6) ** 2 - (COAST_Z - 30) ** 2), xe = Math.sqrt((WORLD_R - 4) ** 2 - COAST_Z ** 2);
+    B.rect(CM.pave, sx < 0 ? -xb : xa, COAST_Z - 30, sx < 0 ? -xa : xb, COAST_Z, 0.016);
+    for (let x = xa + 8, k = 0; x < xe - 6; x += 16, k++) {
+      addPalm(B, sx * x, COAST_Z - 21);
+      if (k % 2) addLamp(B, sx * (x + 8), COAST_Z - 2.5, 0, -1); else addBench(B, sx * (x + 8), COAST_Z - 5, 0);
+    }
+    for (let x = xa; x < xe; x += 2.5) B.box(CM.metal, 0.08, 1.05, 0.08, sx * x, 0.52, COAST_Z - 0.3, { col: 0x2b323b });
+    const len = xe - xa;
+    for (const y of [1.05, 0.6]) B.box(CM.metal, len, 0.07, 0.07, sx * (xa + len / 2), y, COAST_Z - 0.3, { col: 0x2b323b });
+  }
+  // a paved square round each tram stop out in the city
+  for (const t of TRAMS) if (DSTYLE[zoneAt(t.pos.x, t.pos.z)] && !inRect(HARBOUR, t.pos.x, t.pos.z)) B.rect(CM.pave, t.pos.x - 7, t.pos.z - 7, t.pos.x + 7, t.pos.z + 7, 0.016);
+  if (trees.length) S.add(makeAcacias(trees));
+  buildMarket(B);
+  buildHarbour(S, B);
+  buildWalkGraph(pieces, inters);
+  W.city = B.finish(S);
+}
+
+// =====================================================================
+//  THE LANTERN MARKET: stalls behind the Salt Lantern, and a few at its door
+// =====================================================================
+const STALL_KINDS = ['produce', 'spice', 'cloth', 'lantern', 'pottery', 'tech', 'produce', 'spice', 'cloth', 'lantern'];
+const FRUIT = [0xd84a2a, 0xe8a020, 0x6aa83a, 0x8a2a5a, 0xe8d040, 0xc8781e];
+const SPICE = [0xc8501e, 0xe0a526, 0x8a3a1a, 0x6a7a2a, 0xb8862a, 0xd8c070, 0x9a2a1a];
+const LANTERN_COLS = [0xffb347, 0xff6a3a, 0x3ee6ff, 0x9aff6a, 0xff4fa0, 0xffd890];
+function addStall(B, x, z, ry, kind, figure = true) {
+  const c = Math.cos(ry), s = Math.sin(ry), P = (lx, lz) => [x + lx * c + lz * s, z - lx * s + lz * c];
+  const put = (w, h, d, lx, y, lz, o = {}) => { const [a, b] = P(lx, lz); B.box(o.m || CM.props, w, h, d, a, y, b, Object.assign({ ry }, o)); };
+  const R = spick(FABV), R2 = spick(FABV), fab = (r) => ({ m: CM.fabric, uv: { rep: 2.4, v0: r[0], v1: r[1] }, topUV: { rep: 2.4, v0: r[0], v1: r[1] } });
+  for (const [lx, lz, h] of [[-1.6, 1.15, 2.6], [1.6, 1.15, 2.6], [-1.6, -1.15, 3.0], [1.6, -1.15, 3.0]]) put(0.1, h, 0.1, lx, h / 2, lz, { col: 0x6a4428 });
+  put(3.3, 0.95, 0.75, 0, 0.475, 0.85, { col: 0x7a5232 }); put(3.4, 0.06, 0.85, 0, 0.98, 0.85, { col: 0xa07a4e });
+  put(3.7, 0.06, 2.9, 0, 2.86, 0, Object.assign(fab(R), { rx: 0.14, order: 'YXZ' }));   // canopy, sloping to the front
+  put(3.7, 0.36, 0.04, 0, 2.5, 1.46, fab(R));                                          // valance
+  put(3.2, 2.0, 0.04, 0, 1.45, -1.2, fab(R2));                                         // back cloth
+  const row = (n, f) => { for (let k = 0; k < n; k++) f(-1.3 + k * 2.6 / (n - 1), k); };
+  if (kind === 'produce') row(5, (lx) => { put(0.55, 0.22, 0.5, lx, 1.12, 0.85, { col: 0x8a6a42 }); put(0.5, 0.07, 0.44, lx, 1.26, 0.85, { col: spick(FRUIT) }); });
+  else if (kind === 'spice') row(7, (lx, k) => { const [a, b] = P(lx, 0.68 + (k % 2) * 0.32); B.geo(CM.props, TPL.cone6, at(a, 1.14, b, 0.16, 0.26, 0.16), { col: spick(SPICE) }); });
+  else if (kind === 'cloth') { row(3, (lx) => { const r = spick(FABV); put(0.7, 0.26, 0.5, lx, 1.14, 0.85, fab(r)); put(0.6, 1.3, 0.03, lx, 1.95, 1.38, fab(spick(FABV))); }); }
+  else if (kind === 'lantern') { row(5, (lx) => { put(0.04, 0.5, 0.04, lx, 2.45, 1.2, { col: 0x222222 }); put(0.22, 0.3, 0.22, lx, 2.05, 1.2, { m: CM.glow, col: spick(LANTERN_COLS), glow: 2.4 }); }); row(3, (lx) => put(0.2, 0.28, 0.2, lx, 1.15, 0.85, { m: CM.glow, col: spick(LANTERN_COLS), glow: 2 })); }
+  else if (kind === 'pottery') row(5, (lx, k) => { const [a, b] = P(lx, 0.85); if (k % 2) B.geo(CM.props, TPL.cyl8, at(a, 1.2, b, 0.16, 0.38, 0.16), { col: 0xa4502e }); else B.geo(CM.props, TPL.sph, at(a, 1.2, b, 0.22, 0.2, 0.22), { col: 0xb8683a }); });
+  else if (kind === 'tech') row(3, (lx) => { put(0.62, 0.4, 0.04, lx, 1.28, 0.8, { m: CM.glow, col: spick([0x3ee6ff, 0x6dff9a, 0xb07bff]), glow: 1.6, rx: -0.3, order: 'YXZ' }); put(0.5, 0.08, 0.3, lx, 1.05, 1.05, { col: 0x1a1d22 }); });
+  else if (kind === 'fish') { put(3.3, 0.05, 0.8, 0, 1.03, 0.85, { col: 0xdfeef2 }); row(7, (lx, k) => { const [a, b] = P(lx, 0.7 + (k % 2) * 0.3); B.geo(CM.metal, TPL.sph, at(a, 1.09, b, 0.34, 0.07, 0.11, ry + sr(-0.4, 0.4)), { col: 0xa8b4bc }); }); }
+  if (figure) { const [a, b] = P(sr(-0.6, 0.6), -0.4); addFigure(B, a, b, ry); }
+  const turned = Math.abs(s) > 0.5;
+  addCollider(x, z, turned ? 3.0 : 3.6, turned ? 3.6 : 3.0, 3);
+}
+function lightString(B, x0, z0, x1, z1, y = 5.2, n = 9) {   // lanterns strung between two poles, sagging in the middle
+  for (let k = 1; k < n; k++) { const u = k / n; B.geo(CM.glow, TPL.oct, at(x0 + (x1 - x0) * u, y - 1.0 * 4 * u * (1 - u), z0 + (z1 - z0) * u, 0.09, 0.13, 0.09), { col: spick(LANTERN_COLS), glow: 2.2 }); }
+}
+function marketGate(B, z, title) {
+  for (const sx of [-1, 1]) { B.box(CM.props, 1.3, 6.6, 1.3, sx * 8.2, 3.3, z, { col: 0xc9a679 }); B.geo(CM.glow, TPL.oct, at(sx * 8.2, 7.9, z, 0.3, 0.45, 0.3), { col: 0xffb347, glow: 2.6 }); addCollider(sx * 8.2, z, 1.4, 1.4, 7); }
+  B.box(CM.props, 18, 1.2, 1.3, 0, 7.0, z, { col: 0xb48c62 });
+  const tex = textTex(1024, 160, '#2a1a10', [{ t: title, y: 84, c: '#f0c46a', f: 'bold 92px Georgia, serif' }]);
+  for (const sd of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(11, 1.0), new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.35, roughness: 0.6 })); m.position.set(0, 7.0, z + sd * 0.67); m.rotation.y = sd > 0 ? 0 : Math.PI; W.scene.add(m); }
+}
+function buildMarket(B) {
+  const M = MARKET;
+  B.rect(CM.tiles, M.x0, M.z0, M.x1, M.z1, 0.016, { tile: 3 });
+  // rows of stalls, every aisle lined with stall fronts; the central aisle runs on to the Lantern Road
+  const ROWS = [[89.5, 0], [104, Math.PI], [108.4, 0], [118, Math.PI], [122.4, 0], [132, Math.PI], [136.4, 0], [146, Math.PI]];
+  const XS = [10, 14, 18, 22, 26, 36, 40, 44, 48, 52];
+  for (const [z, ry] of ROWS) for (const sx of [-1, 1]) for (const ax of XS) {
+    if (z < 92 && sx > 0 && ax < 34) continue;   // the lane from the Lantern comes in here
+    if (!sch(0.88)) continue;
+    addStall(B, sx * ax, z, ry, spick(STALL_KINDS));
+  }
+  marketGate(B, M.z0 + 2.5, 'LANTERN MARKET'); marketGate(B, M.z1 - 1.5, 'LANTERN MARKET');
+  // poles and lantern strings down the central aisle
+  const PZ = [84, 106.2, 120.2, 134.2, 147.4];
+  for (const z of PZ) for (const sx of [-1, 1]) { B.box(CM.props, 0.18, 5.6, 0.18, sx * 7.4, 2.8, z, { col: 0x5a3a22 }); addCollider(sx * 7.4, z, 0.3, 0.3, 5.6); }
+  PZ.forEach((z, k) => { lightString(B, -7.4, z, 7.4, z); if (k < PZ.length - 1) { lightString(B, -7.4, z, 7.4, PZ[k + 1]); lightString(B, 7.4, z, -7.4, PZ[k + 1]); } });
+  // stalls at the Salt Lantern's door, either side of the forecourt, with lanterns strung between them
+  for (const sx of [-1, 1]) for (const z of [36.5, 40.5]) addStall(B, sx * 10.8, z, -sx * Math.PI / 2, spick(['lantern', 'spice', 'produce', 'cloth']));
+  for (const sx of [-1, 1]) { B.box(CM.props, 0.16, 5, 0.16, sx * 9.1, 2.5, 33.6, { col: 0x5a3a22 }); B.box(CM.props, 0.16, 5, 0.16, sx * 9.1, 2.5, 43.6, { col: 0x5a3a22 }); }
+  lightString(B, -9.1, 33.6, 9.1, 43.6, 4.7); lightString(B, 9.1, 33.6, -9.1, 43.6, 4.7); lightString(B, -9.1, 33.6, 9.1, 33.6, 4.7, 7);
+}
+
+// =====================================================================
+//  THE HARBOUR: the basin, the quays, the ships, and the Talina, the ferry across
+// =====================================================================
+// The Talina is a double-ended ferry: she crosses the basin between the West Pier and the East Pier and back,
+// never turning, lowering a ramp at whichever pier she is alongside. Walk aboard while she's in and ride across;
+// anyone standing on her deck moves with her, and her rails keep you aboard until she's alongside again.
+const FERRY = { z: 640, HL: 18, HW: 6, xw: BASIN.x0 + 18, xe: BASIN.x1 - 18, dock: 18, run: 40, x: BASIN.x0 + 18, aboard: new Set(), group: null, ramps: {}, lastKey: '' };
+FERRY.period = 2 * (FERRY.dock + FERRY.run);
+function ferryState(t) {
+  const F = FERRY, ease = u => u * u * (3 - 2 * u); let ph = ((t % F.period) + F.period) % F.period;
+  if (ph < F.dock) return { x: F.xw, docked: 'w', left: F.dock - ph };
+  ph -= F.dock; if (ph < F.run) return { x: F.xw + (F.xe - F.xw) * ease(ph / F.run), to: 'e', left: F.run - ph };
+  ph -= F.run; if (ph < F.dock) return { x: F.xe, docked: 'e', left: F.dock - ph };
+  ph -= F.dock; return { x: F.xe + (F.xw - F.xe) * ease(ph / F.run), to: 'w', left: F.run - ph };
+}
+function ferryWait(side, t = G.time) {   // seconds until she is boarding at this pier (0: boarding now)
+  const F = FERRY, ph = ((t % F.period) + F.period) % F.period, start = side === 'w' ? 0 : F.dock + F.run;
+  if (ph >= start && ph < start + F.dock) return 0;
+  return ((start - ph) % F.period + F.period) % F.period;
+}
+// A boat hull lofted from cross-sections: deck at y = 0, keel at -D, bow at +x. No UVs; flat-ish shading.
+function hullGeo(L, Bm, D, sheer, n = 14) {
+  const pos = [], sec = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, x = -L / 2 + t * L, hw = Bm / 2 * Math.pow(Math.sin(Math.PI * Math.min(1, 0.12 + t * 0.94)), 0.5), top = sheer * (2 * t - 1) ** 2;
+    sec.push([[-hw, top], [-hw * 0.92, -D * 0.55], [-hw * 0.4, -D * 0.95], [0, -D], [hw * 0.4, -D * 0.95], [hw * 0.92, -D * 0.55], [hw, top]].map(([z, y]) => [x, y, z]));
+  }
+  const tri = (a, b, c) => pos.push(...a, ...b, ...c);
+  for (let i = 0; i < n; i++) {
+    for (let k = 0; k < 6; k++) { const a = sec[i][k], b = sec[i + 1][k], c = sec[i + 1][k + 1], d = sec[i][k + 1]; tri(a, b, c); tri(a, c, d); }
+    const a = sec[i][6], b = sec[i + 1][6], c = sec[i + 1][0], d = sec[i][0]; tri(a, b, c); tri(a, c, d);   // deck
+  }
+  const s0 = sec[0], ctr = [s0[0][0], -D * 0.4, 0];   // transom
+  for (let k = 0; k < 6; k++) tri(ctr, s0[k], s0[k + 1]);
+  tri(ctr, s0[6], s0[0]);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+  return g;
+}
+const CONTAINER_COLS = [0xb3301e, 0x1d5a8a, 0xe0a526, 0x2f6a3a, 0x8a8a84, 0x6a2a5a, 0xd6862a, 0x1d7a84];
+function addShip(B, x, z, L, beam, ry, hullCol) {
+  const c = Math.cos(ry), s = Math.sin(ry), P = (lx, lz) => [x + lx * c + lz * s, z - lx * s + lz * c], deckY = 3.4;
+  B.geo(CM.metal, hullGeo(L, beam, 9.5, 1.6), at(x, deckY, z, 1, 1, 1, ry), { col: hullCol });
+  const put = (w, h, d, lx, y, lz, o = {}) => { const [a, b] = P(lx, lz); B.box(o.m || CM.props, w, h, d, a, y, b, Object.assign({ ry }, o)); };
+  put(L * 0.84, 0.25, beam * 0.8, 0, deckY + 0.1, 0, { col: 0x5a3026 });
+  const sx = -L / 2 + 11;   // the superstructure, aft
+  put(12, 11, beam * 0.78, sx, deckY + 5.5, 0, { col: 0xeae6dc });
+  for (const y of [deckY + 4, deckY + 7.2, deckY + 10]) put(12.1, 0.6, beam * 0.78 + 0.1, sx, y, 0, { m: CM.glow, col: 0x9fe0ff, glow: 0.9 });
+  put(4, 1.2, beam + 2, sx + 3, deckY + 10.5, 0, { col: 0xeae6dc });
+  const [fa, fb] = P(sx - 3, 0); B.geo(CM.props, TPL.cyl8, at(fa, deckY + 14, fb, 2.1, 6, 2.1), { col: 0xd6862a }); B.geo(CM.props, TPL.cyl8, at(fa, deckY + 17.4, fb, 2.15, 0.9, 2.15), { col: 0x1a1a1a });
+  const across = Math.floor(beam * 0.78 / 2.55);
+  for (let bx_ = sx + 14; bx_ < L / 2 - 10; bx_ += 12.8) for (let k = 0; k < across; k++) {
+    const lz = (k - (across - 1) / 2) * 2.55, n = sri(1, 4);
+    for (let h = 0; h < n; h++) put(12.2, 2.55, 2.42, bx_ + 6, deckY + 0.25 + 1.3 + h * 2.6, lz, { m: CM.metal, col: spick(CONTAINER_COLS) });
+  }
+}
+function addJibCrane(B, x, z, ux, uz, col = 0xd09a2a) {   // a tower crane on the quay, its jib reaching out along (ux, uz)
+  B.geo(CM.metal, TPL.cyl8, at(x, 7, z, 1.1, 14, 1.1), { col }); B.box(CM.metal, 4, 3, 3.2, x, 15.3, z, { col, ry: Math.atan2(-uz, ux) });
+  const L = 26, a = 0.33, ry = Math.atan2(-uz, ux), h = L * Math.cos(a);
+  B.box(CM.metal, L, 0.8, 0.8, x + ux * h / 2, 16 + L / 2 * Math.sin(a), z + uz * h / 2, { order: 'YXZ', ry, rz: a, col });
+  const tx = x + ux * h, tz = z + uz * h, ty = 16 + L * Math.sin(a);
+  B.box(CM.metal, 0.08, 12, 0.08, tx, ty - 6, tz, { col: 0x222222 }); B.box(CM.metal, 0.6, 0.8, 0.6, tx, ty - 12.4, tz, { col: 0x2b2b2b });
+  addCollider(x, z, 2.6, 2.6, 16);
+}
+function makeDhow(sailing) {
+  const g = new THREE.Group();
+  const wood = mat('dhowWood', () => new THREE.MeshStandardMaterial({ color: 0x6e4a2c, roughness: 0.8 }));
+  const dark = mat('dhowDark', () => new THREE.MeshStandardMaterial({ color: 0x3a2618, roughness: 0.85 }));
+  const cloth = mat('dhowSail', () => new THREE.MeshStandardMaterial({ color: 0xeadfc6, roughness: 0.95, side: THREE.DoubleSide }));
+  g.add(new THREE.Mesh(hullGeo(14, 3.8, 1.8, 0.9), wood));
+  bx(3, 1.0, 2.6, dark, -4.2, 0.5, 0, g);                                       // the raised stern cabin
+  bx(0.18, 7.5, 0.18, dark, 1.2, 3.75, 0, g);                                   // mast
+  const yard = bx(11.5, 0.12, 0.12, dark, 1.2, 6.8, 0, g); yard.rotation.z = -0.42;
+  if (sailing) {
+    const c = Math.cos(-0.42), s = Math.sin(-0.42), fore = [1.2 + 5.6 * c, 6.8 + 5.6 * s, 0], aft = [1.2 - 5.6 * c, 6.8 - 5.6 * s, 0], foot = [-3.6, 1.2, 0], belly = [0.2, 4.0, 0.9];
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute([...fore, ...aft, ...belly, ...aft, ...foot, ...belly, ...foot, ...fore, ...belly], 3)); sg.computeVertexNormals();
+    g.add(new THREE.Mesh(sg, cloth));
+  } else { const furl = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 10, 6), cloth); furl.rotation.z = Math.PI / 2 - 0.42; furl.position.set(1.2, 6.55, 0); g.add(furl); }
+  compactRig(g);
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  g.userData.dynamic = true;
+  return g;
+}
+function buildFerry(S) {
+  const F = FERRY, g = new THREE.Group(), L = F.HL * 2, Wd = F.HW * 2;
+  g.position.set(F.x, 0, F.z); g.userData.dynamic = true;
+  const hullM = mat('ferryHull', () => new THREE.MeshStandardMaterial({ color: 0x1f3047, metalness: 0.3, roughness: 0.5 }));
+  const whiteM = mat('ferryWhite', () => new THREE.MeshStandardMaterial({ color: 0xe9e5da, roughness: 0.55 }));
+  const deckM = mat('ferryDeck', () => new THREE.MeshStandardMaterial({ map: planksTex(), roughness: 0.75 }));
+  const seatM = mat('ferrySeat', () => new THREE.MeshStandardMaterial({ color: 0x8a5a32, roughness: 0.7 })), railM = armorMat(0x2b323b);
+  bx(L, 2.6, Wd, hullM, 0, -1.42, 0, g);
+  bx(L + 0.1, 0.55, Wd + 0.1, whiteM, 0, -0.4, 0, g);
+  bx(L - 0.4, 0.1, Wd - 0.4, deckM, 0, -0.04, 0, g);
+  for (const s of [-1, 1]) {
+    bx(L + 0.12, 0.12, 0.06, glowMat(0x3ee6ff, 2.6), 0, -0.95, s * (F.HW + 0.05), g);                 // Concord trim
+    bx(L - 1, 0.08, 0.08, railM, 0, 1.05, s * (F.HW - 0.25), g); bx(L - 1, 0.06, 0.06, railM, 0, 0.55, s * (F.HW - 0.25), g);
+    for (let x = -F.HL + 0.6; x <= F.HL - 0.5; x += 2) bx(0.07, 1.05, 0.07, railM, x, 0.52, s * (F.HW - 0.25), g);
+    for (const x of [-8, -2.7, 2.7, 8]) bx(0.22, 3.2, 0.22, whiteM, x, 1.6, s * (F.HW - 0.7), g);
+    for (const x of [-5.4, 0, 5.4]) { bx(3.6, 0.1, 0.5, seatM, x, 0.46, s * 2.2, g); bx(3.6, 0.45, 0.08, seatM, x, 0.72, s * 2.48, g); bx(0.1, 0.46, 0.4, railM, x - 1.6, 0.23, s * 2.2, g); bx(0.1, 0.46, 0.4, railM, x + 1.6, 0.23, s * 2.2, g); }
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.09, 6, 14), glowMat(0xff7a2a, 1.2)); ring.position.set(s * 12, 0.75, s * (F.HW - 0.2)); g.add(ring);
+  }
+  bx(17, 0.28, Wd - 0.6, whiteM, 0, 3.3, 0, g);                                                       // passenger canopy
+  bx(6, 2.3, 6.4, whiteM, 0, 4.6, 0, g); bx(6.08, 0.7, 6.48, glowMat(0x9fe0ff, 1.3), 0, 5.05, 0, g); bx(6.6, 0.2, 7, hullM, 0, 5.85, 0, g);   // wheelhouse
+  bx(0.14, 3, 0.14, railM, 0, 7.4, 0, g); bx(0.3, 0.3, 0.3, glowMat(0xff3355, 3), 0, 8.9, 0, g);
+  const nameTex = textTex(512, 96, '#1f3047', [{ t: 'TALINA', y: 52, c: '#e8c46a', f: 'bold 64px Georgia, serif' }]);
+  const nameM = new THREE.MeshStandardMaterial({ map: nameTex, emissive: 0xffffff, emissiveMap: nameTex, emissiveIntensity: 0.3 });
+  for (const s of [-1, 1]) { const nb = new THREE.Mesh(new THREE.PlaneGeometry(5, 0.95), nameM); nb.position.set(0, 2.82, s * (F.HW - 0.62)); nb.rotation.y = s > 0 ? 0 : Math.PI; g.add(nb); }
+  for (const [side, s] of [['w', -1], ['e', 1]]) {   // the ramps, lowered at whichever pier she's alongside
+    const r = new THREE.Group(); r.position.set(s * F.HL, 0.03, 0); g.add(r);
+    bx(3.6, 0.12, Wd - 2.2, railM, s * 1.8, -0.04, 0, r); bx(3.6, 0.03, 0.2, glowMat(0x3ee6ff, 2.2), s * 1.8, 0.03, (F.HW - 1.2), r); bx(3.6, 0.03, 0.2, glowMat(0x3ee6ff, 2.2), s * 1.8, 0.03, -(F.HW - 1.2), r);
+    r.rotation.z = s * 1.2; F.ramps[side] = r;
+  }
+  compactRig(g);
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  S.add(g); F.group = g;
+}
+function buildHarbour(S, B) {
+  const stone = 0x7a6c58, cope = 0xcdbb98, F = FERRY;
+  // the sea, out to the horizon, filling the basin
+  const seaGeo = new THREE.PlaneGeometry(6000, 3400), uv = seaGeo.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 6000, uv.getY(i) * 3400);   // UVs in metres, like the rest of the water
+  const sea = new THREE.Mesh(seaGeo, CM.water); sea.rotation.x = -Math.PI / 2; sea.position.set(0, -0.9, BASIN.z0 - 10 + 1700); sea.receiveShadow = true; sea.userData.dynamic = true; S.add(sea); W.sea = sea;
+  // the quays: paved aprons, stone walls down to the water, coping, bollards and fenders
+  B.rect(CM.pave, BASIN.x0, HARBOUR.z0, BASIN.x1, BASIN.z0, 0.016);
+  B.rect(CM.pave, HARBOUR.x0, HARBOUR.z0, BASIN.x0, COAST_Z, 0.016); B.rect(CM.pave, BASIN.x1, HARBOUR.z0, HARBOUR.x1, COAST_Z, 0.016);
+  const wall = (x0, z0, x1, z1) => B.box(CM.props, x1 - x0, 4, z1 - z0, (x0 + x1) / 2, -2.02, (z0 + z1) / 2, { col: stone, top: null });
+  wall(BASIN.x0, BASIN.z0 - 1, BASIN.x1, BASIN.z0); wall(BASIN.x0 - 1, BASIN.z0, BASIN.x0, COAST_Z); wall(BASIN.x1, BASIN.z0, BASIN.x1 + 1, COAST_Z);
+  for (const sx of [-1, 1]) for (let k = 0; k < 4; k++) { const a = 204 + k * 330, b = a + 330; wall(sx < 0 ? -b : a, COAST_Z - 1, sx < 0 ? -a : b, COAST_Z); }
+  for (const M of MOLES) B.box(CM.props, M.x1 - M.x0, 4, M.z1 - M.z0, (M.x0 + M.x1) / 2, -2, (M.z0 + M.z1) / 2, { col: stone, top: CM.pave });
+  const coping = (x0, z0, x1, z1) => B.box(CM.props, x1 - x0, 0.14, z1 - z0, (x0 + x1) / 2, 0.07, (z0 + z1) / 2, { col: cope });
+  coping(BASIN.x0, BASIN.z0 - 0.7, BASIN.x1, BASIN.z0); coping(BASIN.x0 - 0.7, BASIN.z0, BASIN.x0, COAST_Z); coping(BASIN.x1, BASIN.z0, BASIN.x1 + 0.7, COAST_Z);
+  coping(HARBOUR.x0, COAST_Z - 0.7, MOLES[0].x0, COAST_Z); coping(MOLES[1].x1, COAST_Z - 0.7, HARBOUR.x1, COAST_Z);
+  for (const M of MOLES) { coping(M.x0, M.z0, M.x0 + 0.6, M.z1); coping(M.x1 - 0.6, M.z0, M.x1, M.z1); coping(M.x0, M.z1 - 0.6, M.x1, M.z1); }
+  const bollard = (x, z) => { B.geo(CM.metal, TPL.cyl8, at(x, 0.35, z, 0.26, 0.7, 0.26), { col: 0x23262a }); B.geo(CM.metal, TPL.cyl8, at(x, 0.72, z, 0.34, 0.1, 0.34), { col: 0x23262a }); };
+  const fender = (x, z, ry) => B.geo(CM.props, TPL.torus, at(x, -0.55, z, 0.45, 0.45, 0.45, ry), { col: 0x1a1a1a });
+  for (let x = BASIN.x0 + 8; x < BASIN.x1 - 4; x += 12) { bollard(x, BASIN.z0 - 1.2); fender(x + 6, BASIN.z0 + 0.25, 0); }
+  for (const sx of [-1, 1]) for (let z = BASIN.z0 + 10; z < COAST_Z - 2; z += 12) { if (Math.abs(z - F.z) < 9) continue; bollard(sx * (BASIN.x1 + 1.2), z); fender(sx * (BASIN.x1 - 0.25), z + 6, Math.PI / 2); }
+  // water's edge: invisible low walls, so nobody walks into the sea (the camera passes over them)
+  const wc = (x0, z0, x1, z1) => G.colliders.push({ minX: x0, maxX: x1, minZ: z0, maxZ: z1, h: 1 });
+  wc(BASIN.x0, BASIN.z0, BASIN.x1, BASIN.z0 + 4);
+  for (const sx of [-1, 1]) {
+    const qa = sx < 0 ? BASIN.x0 : BASIN.x1 - 4, qb = qa + 4;
+    wc(qa, BASIN.z0, qb, F.z - 5.5); wc(qa, F.z + 5.5, qb, MOLES[0].z1 + 4);                       // basin sides, gap at the ferry berth
+    wc(sx < 0 ? -1500 : MOLES[1].x1, COAST_Z, sx < 0 ? MOLES[0].x0 : 1500, COAST_Z + 4);           // the shore
+    const M = MOLES[sx < 0 ? 0 : 1];
+    wc(sx < 0 ? M.x0 - 4 : M.x1, M.z0, sx < 0 ? M.x0 : M.x1 + 4, M.z1 + 4); wc(M.x0 - 4, M.z1, M.x1 + 4, M.z1 + 4);   // the moles
+  }
+  // the berths: the water between the quay and the ferry, closed off whenever she isn't alongside
+  F.gapW = { minX: BASIN.x0, maxX: BASIN.x0 + 4, minZ: F.z - 5.5, maxZ: F.z + 5.5, h: 1 }; F.gapE = { minX: BASIN.x1 - 4, maxX: BASIN.x1, minZ: F.z - 5.5, maxZ: F.z + 5.5, h: 1 };
+  G.colliders.push(F.gapW, F.gapE);
+  // ferry terminals at both piers, a covered walk down to the berth, a timetable at the quay edge
+  for (const sx of [-1, 1]) {
+    const side = sx < 0 ? 'w' : 'e', hx = sx * 231, ex = sx * 216;
+    B.box(CM.fac.white, 30, 10, 50, hx, 5, F.z, { uv: 'facade', top: CM.props, topCol: ROOF }); parapet(B, 30, 50, hx, 10, F.z); addCollider(hx, F.z, 30.4, 50.4, 13);
+    B.box(CM.shop, 0.3, 4.4, 50.2, ex, 2.2, F.z, { uv: { rep: 8, v0: SHOPV[3][0], v1: SHOPV[3][1] }, top: CM.props, topCol: 0xcdb894 });
+    B.box(CM.metal, 25, 0.3, 16, sx * 203.5, 5.6, F.z, { col: 0xd9d2c0 }); B.box(CM.glow, 25, 0.1, 0.12, sx * 203.5, 5.4, F.z - 8, { col: 0x3ee6ff, glow: 2.2 }); B.box(CM.glow, 25, 0.1, 0.12, sx * 203.5, 5.4, F.z + 8, { col: 0x3ee6ff, glow: 2.2 });
+    for (const x of [195, 205, 214]) for (const s of [-1, 1]) { B.box(CM.metal, 0.3, 5.5, 0.3, sx * x, 2.75, F.z + s * 7.7, { col: 0xd9d2c0 }); addCollider(sx * x, F.z + s * 7.7, 0.45, 0.45, 5.5); }
+    B.box(CM.glow, 0.3, 0.02, 11, sx * (BASIN.x1 + 0.5), 0.02, F.z, { col: 0x3ee6ff, glow: 1.8 });   // the boarding line
+    const sign = textTex(1024, 256, '#0b1118', [{ t: 'CONCORD FERRY', y: 92, c: '#3ee6ff', f: 'bold 110px Bahnschrift, sans-serif' }, { t: sx < 0 ? 'WEST PIER  ·  TO THE EAST PIER' : 'EAST PIER  ·  TO THE WEST PIER', y: 196, c: '#e8c46a', f: '56px Bahnschrift, sans-serif' }]);
+    const sm = new THREE.Mesh(new THREE.PlaneGeometry(16, 4), new THREE.MeshStandardMaterial({ map: sign, emissive: 0xffffff, emissiveMap: sign, emissiveIntensity: 0.6 }));
+    sm.position.set(ex - sx * 0.2, 7.6, F.z); sm.rotation.y = -sx * Math.PI / 2; W.scene.add(sm);
+    const kx = sx * 197, kz = F.z - 11;
+    B.box(CM.metal, 0.9, 2.2, 0.5, kx, 1.1, kz, { col: 0x1d2228 }); B.box(CM.glow, 0.7, 0.9, 0.04, kx, 1.5, kz + 0.27, { col: 0x3ee6ff, glow: 1.4 });
+    addCollider(kx, kz, 1.0, 0.6, 2.4);
+    G.props.push({ kind: 'ferry', id: 'ferry', side, name: 'Ferry Timetable', pos: new V3(kx, 0, kz + 1.2) });
+  }
+  // west quay: warehouses and moored dhows; east quay: a container yard, a gantry crane and a ship alongside
+  for (const z of [700, 734]) { B.box(CM.props, 28, 11, 30, -231, 5.5, z, { col: 0x8d7d68, topCol: 0x5a5048 }); B.box(CM.props, 0.3, 7, 10, -216.9, 3.5, z, { col: 0x4a3a2e }); addCollider(-231, z, 28.4, 30.4, 13); }
+  for (const z of [680, 696, 712, 728, 744]) { B.box(CM.props, 2.2, 1.6, 1.6, -206, 0.8, z, { col: 0x7a5232 }); B.box(CM.props, 1.6, 1.4, 1.6, -206, 2.3, z + 0.3, { col: 0x4f6a7a }); addCollider(-206, z, 2.4, 2.4, 3); }
+  for (let z = 678; z < 754; z += 2.7) for (const cx of [221, 235]) { const n = sri(1, 4); for (let h = 0; h < n; h++) B.box(CM.metal, 12.2, 2.55, 2.42, cx, 1.3 + h * 2.6, z, { col: spick(CONTAINER_COLS) }); }
+  addCollider(228, 716, 28.6, 80, 11);
+  const crane = 0xc8502a;
+  for (const lx of [194, 212]) for (const lz of [700, 716]) { B.box(CM.metal, 1.3, 32, 1.3, lx, 16, lz, { col: crane }); addCollider(lx, lz, 1.5, 1.5, 32); }
+  for (const lz of [700, 716]) { B.box(CM.metal, 84, 2.2, 1.4, 190, 33, lz, { col: crane }); B.box(CM.metal, 18.6, 1, 1, 203, 8, lz, { col: crane }); }
+  for (const lx of [194, 212]) B.box(CM.metal, 1.3, 1.3, 17.4, lx, 31, 708, { col: crane });
+  B.box(CM.metal, 7, 5, 8, 226, 36.5, 708, { col: 0xe9e5da }); B.box(CM.metal, 6, 3, 17, 168, 31, 708, { col: 0x3a3f46 });
+  for (const s of [-1, 1]) B.box(CM.metal, 0.08, 12, 0.08, 168, 24, 708 + s * 3, { col: 0x222222 });
+  B.box(CM.metal, 12.2, 2.55, 2.42, 168, 17, 708, { col: 0x1d5a8a, ry: Math.PI / 2 });
+  addShip(B, 176, 716, 76, 14, -Math.PI / 2, 0x23324a);
+  // north quay: the fish market, the Port Authority with its clock tower, the anchor, and two jib cranes
+  const fmx0 = -176, fmx1 = -70, fmz = 538, fmL = fmx1 - fmx0, fmc = (fmx0 + fmx1) / 2;
+  for (const s of [-1, 1]) B.box(CM.metal, fmL, 0.25, 14.6, fmc, 7.9, fmz + s * 6.6, { rx: s * 0.2, col: 0x8a9aa4 });
+  for (let x = fmx0 + 1; x <= fmx1 - 1; x += fmL / 10) for (const s of [-1, 1]) { B.box(CM.metal, 0.4, 7.4, 0.4, x, 3.7, fmz + s * 12.6, { col: 0x5a6470 }); addCollider(x, fmz + s * 12.6, 0.5, 0.5, 7.5); }
+  for (let x = fmx0 + 4; x < fmx1 - 3; x += 4.6) { if (sch(0.9)) addStall(B, x, fmz - 6.5, 0, 'fish'); if (sch(0.9)) addStall(B, x, fmz + 6.5, Math.PI, 'fish'); }
+  for (let x = fmx0 + 6; x < fmx1; x += 10) B.box(CM.glow, 0.5, 0.2, 0.5, x, 6.2, fmz, { col: 0xffe2b0, glow: 2.2 });
+  const fishSign = textTex(1024, 192, '#1d3b4a', [{ t: 'FISH MARKET', y: 100, c: '#f2ece0', f: 'bold 108px Georgia, serif' }]);
+  for (const sx of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(10, 1.9), new THREE.MeshStandardMaterial({ map: fishSign, emissive: 0xffffff, emissiveMap: fishSign, emissiveIntensity: 0.3 })); m.position.set(sx < 0 ? fmx0 - 0.3 : fmx1 + 0.3, 8.2, fmz); m.rotation.y = sx * Math.PI / 2; W.scene.add(m); }
+  B.box(CM.fac.sand, 56, 15, 26, 88, 7.5, 537, { uv: 'facade', top: CM.props, topCol: ROOF }); parapet(B, 56, 26, 88, 15, 537); addCollider(88, 537, 56.4, 26.4, 18);
+  B.box(CM.fac.sand, 10, 34, 10, 121, 17, 537, { uv: 'facade', top: CM.props, topCol: ROOF }); addCollider(121, 537, 10.4, 10.4, 36);
+  B.geo(CM.props, TPL.dome, at(121, 34, 537, 4.4), { col: 0x5fa3a8 }); B.geo(CM.props, TPL.cyl16, at(121, 34.4, 537, 4.6, 0.8, 4.6), { col: TRIM });
+  const clock = canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#f2ece0'; g.beginPath(); g.arc(w / 2, h / 2, 120, 0, 7); g.fill(); g.strokeStyle = '#2a1a10'; g.lineWidth = 8; g.stroke();
+    g.fillStyle = '#2a1a10'; for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; g.fillRect(w / 2 + Math.cos(a) * 100 - 4, h / 2 + Math.sin(a) * 100 - 4, 8, 8); }
+    g.lineWidth = 10; g.beginPath(); g.moveTo(w / 2, h / 2); g.lineTo(w / 2 + 50, h / 2 - 30); g.stroke(); g.lineWidth = 6; g.beginPath(); g.moveTo(w / 2, h / 2); g.lineTo(w / 2 - 10, h / 2 - 90); g.stroke();
+  });
+  clock.wrapS = clock.wrapT = THREE.ClampToEdgeWrapping;
+  const clockM = new THREE.MeshStandardMaterial({ map: clock, emissive: 0xffffff, emissiveMap: clock, emissiveIntensity: 0.25, transparent: false });
+  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2, m = new THREE.Mesh(new THREE.CircleGeometry(3.2, 32), clockM); m.position.set(121 + Math.sin(a) * 5.06, 28, 537 + Math.cos(a) * 5.06); m.rotation.y = a; W.scene.add(m); }
+  const portSign = textTex(1024, 160, '#2a1a10', [{ t: 'PORT OF AD-NOSTRA', y: 86, c: '#f0c46a', f: 'bold 88px Georgia, serif' }]);
+  const ps = new THREE.Mesh(new THREE.PlaneGeometry(24, 3.75), new THREE.MeshStandardMaterial({ map: portSign, emissive: 0xffffff, emissiveMap: portSign, emissiveIntensity: 0.3 })); ps.position.set(84, 11, 550.08); W.scene.add(ps);
+  // the anchor, on its plinth where the Harbour Road reaches the water
+  B.box(CM.props, 4.4, 1.4, 4.4, 0, 0.7, 540, { col: 0xc9b48e }); addCollider(0, 540, 4.6, 4.6, 9);
+  const bronze = 0x7a5a32;
+  B.box(CM.metal, 0.55, 6.4, 0.55, 0, 4.6, 540, { col: bronze }); B.box(CM.metal, 4.2, 0.45, 0.45, 0, 7.2, 540, { col: bronze });
+  B.geo(CM.metal, TPL.torus, at(0, 8.2, 540, 0.65, 0.65, 0.65), { col: bronze });
+  const arms = new THREE.TorusGeometry(2.2, 0.28, 6, 14, Math.PI); arms.rotateZ(Math.PI);
+  B.geo(CM.metal, arms, at(0, 3.6, 540), { col: bronze });
+  for (const s of [-1, 1]) B.geo(CM.metal, TPL.cone6, at(s * 2.2, 3.9, 540, 0.45, 1.1, 0.25, 0, 0, -s * 0.5), { col: bronze });
+  addJibCrane(B, 150, 556, 0, 1); addJibCrane(B, 182, 556, 0, 1, 0xc8502a);
+  for (let k = 0; k < 9; k++) { const x = 132 + (k % 3) * 9, z = 526 + Math.floor(k / 3) * 7; const n = sri(1, 3); for (let h = 0; h < n; h++) B.box(CM.props, 1.7, 1.6, 1.7, x, 0.8 + h * 1.6, z, { col: sch(0.5) ? 0x7a5232 : 0x4f6a7a, ry: sr(-0.2, 0.2) }); addCollider(x, z, 2, 2, n * 1.6); }
+  addShip(B, -118, 576, 100, 18, 0, 0x5a2420); addShip(B, 52, 576, 86, 16, Math.PI, 0x23324a);
+  for (const x of [-150, -90, 20, 80]) B.box(CM.props, 0.12, 0.12, 10, x, 1.6, 562, { col: 0x3a2a1e, rx: -0.32 });   // mooring lines
+  for (let x = BASIN.x0 + 20; x < BASIN.x1; x += 32) addLamp(B, x, 522, 0, 1);
+  for (const sx of [-1, 1]) for (let z = 580; z < COAST_Z - 4; z += 36) if (Math.abs(z - F.z) > 14) addLamp(B, sx * (BASIN.x1 + 2.5), z, -sx, 0);
+  // the moles, a beacon on the west one and the lighthouse on the east
+  for (const M of MOLES) for (let z = M.z0 + 16; z < M.z1 - 14; z += 26) addLamp(B, (M.x0 + M.x1) / 2, z, 0, 1);
+  const bx_ = (MOLES[0].x0 + MOLES[0].x1) / 2, bz = MOLES[0].z1 - 6;
+  B.geo(CM.props, TPL.cyl8, at(bx_, 3, bz, 1.4, 6, 1.4), { col: 0x2f6a3a }); B.geo(CM.glow, TPL.oct, at(bx_, 6.8, bz, 0.6, 0.9, 0.6), { col: 0x6dff9a, glow: 3 }); addCollider(bx_, bz, 3, 3, 7);
+  const lx = (MOLES[1].x0 + MOLES[1].x1) / 2, lz = MOLES[1].z1 - 8;
+  for (let k = 0; k < 5; k++) B.geo(CM.props, TPL.cyl16, at(lx, 2.5 + k * 5, lz, 3.3 - k * 0.16, 5, 3.3 - k * 0.16), { col: k % 2 ? 0xb3301e : 0xf2efe6 });
+  B.geo(CM.metal, TPL.cyl16, at(lx, 25.2, lz, 3.6, 0.4, 3.6), { col: 0x2b323b }); B.geo(CM.glow, TPL.cyl8, at(lx, 26.9, lz, 1.5, 2.8, 1.5), { col: 0xffd890, glow: 2.6 });
+  B.geo(CM.metal, TPL.cone8, at(lx, 29.2, lz, 2.2, 1.8, 2.2), { col: 0x2b323b }); addCollider(lx, lz, 7, 7, 30);
+  const beamM = new THREE.MeshBasicMaterial({ color: 0xffe2a8, transparent: true, opacity: 0.09, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const beam = new THREE.Group(); beam.position.set(lx, 26.9, lz); beam.userData.dynamic = true;
+  for (const s of [-1, 1]) { const c = new THREE.Mesh(new THREE.ConeGeometry(6, 150, 16, 1, true), beamM); c.rotation.z = s * Math.PI / 2; c.position.x = s * 75; beam.add(c); }
+  S.add(beam); W.lightBeam = beam;
+  // boats: dhows moored along the west quay, and a few under sail out in the bay
+  W.boats = [];
+  for (const z of [688, 706, 724, 742]) { const d = makeDhow(false); d.position.set(BASIN.x0 + 4.6, -0.55, z); d.rotation.y = sch(0.5) ? Math.PI / 2 : -Math.PI / 2; S.add(d); W.boats.push({ g: d, ph: sr(0, 6) }); }
+  for (let k = 0; k < 4; k++) { const d = makeDhow(true); S.add(d); W.boats.push({ g: d, ph: sr(0, 6), sail: { cx: sr(-200, 200), cz: sr(1000, 1080), rx: sr(220, 340), rz: sr(60, 110), w: sr(0.008, 0.014) * (sch(0.5) ? 1 : -1), a: sr(0, 6.28) } }); }
+  buildFerry(S);
+}
+function openFerry(side) {
+  const st = ferryState(G.time), here = side === 'w' ? 'West Pier' : 'East Pier', there = side === 'w' ? 'East Pier' : 'West Pier', wait = ferryWait(side);
+  const text = st.docked === side ? `The Talina is alongside. Walk aboard across the ramp; she sails for the ${there} in ${fmtTime(st.left)}.\n\nStand anywhere on her deck and she carries you across the harbour.`
+    : st.docked ? `The Talina is boarding at the ${there}. She'll be back alongside here in ${fmtTime(wait)}.`
+      : st.to === side ? `The Talina is crossing toward this pier and comes alongside in ${fmtTime(st.left)}.` : `The Talina has left for the ${there}. She'll be back alongside here in ${fmtTime(wait)}.`;
+  dialog('CONCORD FERRY', here.toUpperCase(), '', text + '\n\nThe ferry runs all day between the West and East Piers of the Harbour, no fare.', '', [{ label: 'CLOSE', fn: closeAllUI }]);
+}
+function setGap(c, a, b) { if (b - a < 0.3) { c.minX = 1e9; c.maxX = -1e9; } else { c.minX = a; c.maxX = b; } }
+// Moves the Talina, carries whoever is aboard, keeps them inside her rails, and fishes anyone out of the water.
+function updateFerry(dt) {
+  const F = FERRY; if (!F.group) return;
+  const st = ferryState(G.time), prevX = F.x, dx = st.x - prevX; F.x = st.x; F.st = st;
+  F.group.position.x = F.x; F.group.position.y = Math.sin(G.time * 0.9) * 0.025; F.group.rotation.x = Math.sin(G.time * 0.7) * 0.004;
+  for (const side of ['w', 'e']) { const r = F.ramps[side], want = st.docked === side ? 0 : (side === 'w' ? -1.2 : 1.2); r.rotation.z += (want - r.rotation.z) * Math.min(1, dt * 2.2); }
+  setGap(F.gapW, BASIN.x0, Math.min(BASIN.x0 + 4, F.x - F.HL)); setGap(F.gapE, Math.max(BASIN.x1 - 4, F.x + F.HL), BASIN.x1);
+  const P = G.P, ents = [P, ...G.bots];
+  for (const e of ents) {
+    if (!e || !e.pos || (e !== P && !e.alive)) { F.aboard.delete(e); continue; }
+    const lx = e.pos.x - prevX, lz = e.pos.z - F.z;
+    let on = F.aboard.has(e);
+    if (!on && Math.abs(lx) <= F.HL && Math.abs(lz) <= F.HW) { F.aboard.add(e); on = true; }
+    else if (on && (Math.abs(lx) > F.HL + 4 || Math.abs(lz) > F.HW + 4)) { F.aboard.delete(e); on = false; }   // left by tram, or fell over
+    if (on && ((st.docked === 'w' && lx < -F.HL) || (st.docked === 'e' && lx > F.HL))) { F.aboard.delete(e); on = false; }   // walked off down the ramp
+    if (on) {
+      const lim = F.HL - 0.6;
+      e.pos.x = F.x + clamp(lx, st.docked === 'w' ? -F.HL : -lim, st.docked === 'e' ? F.HL : lim);
+      e.pos.z = F.z + clamp(lz, -(F.HW - 0.8), F.HW - 0.8);
+      if (e.group) { e.group.position.x = e.pos.x; e.group.position.z = e.pos.z; }
+      continue;
+    }
+    // not aboard and in the water: back to where they last stood on dry land
+    if (isWaterPt(e.pos.x, e.pos.z)) {
+      if (e.lastLand) { e.pos.x = e.lastLand.x; e.pos.z = e.lastLand.z; } else { e.pos.z = Math.min(e.pos.z, BASIN.z0 - 1); }
+      if (e === P) P.vel.set(0, 0, 0);
+      if (e.group) { e.group.position.x = e.pos.x; e.group.position.z = e.pos.z; }
+    } else (e.lastLand || (e.lastLand = new V3())).set(e.pos.x, 0, e.pos.z);
+  }
+  // your companions come aboard with you
+  if (P && F.aboard.has(P)) for (const b of partyList()) if (b.alive && !F.aboard.has(b) && (d2(b.pos, P.pos) > 9 || isWaterPt(b.pos.x, b.pos.z))) {
+    const o = partyOffset(b); b.pos.set(F.x + clamp(P.pos.x + o.x - F.x, -F.HL + 1.5, F.HL - 1.5), 0, F.z + clamp(P.pos.z + o.z - F.z, -F.HW + 1.2, F.HW - 1.2));
+    b.group.position.copy(b.pos); b.path = []; F.aboard.add(b); burst(b.pos.clone().setY(1), 0x3ee6ff, 14, 2);
+  }
+  // harbour announcements, if you are near enough to hear them
+  const key = st.docked || 'to' + st.to;
+  if (key !== F.lastKey) {
+    if (F.lastKey && P && (G.zone === 'harbour' || d2(P.pos, { x: F.x, z: F.z }) < 300)) {
+      if (st.docked) addChat('zone', null, `The ferry Talina is alongside at the ${st.docked === 'w' ? 'West' : 'East'} Pier. She sails for the ${st.docked === 'w' ? 'East' : 'West'} Pier in ${Math.round(st.left)} seconds.`);
+      else addChat('zone', null, `The Talina casts off for the ${st.to === 'e' ? 'East' : 'West'} Pier.`);
+    }
+    F.lastKey = key;
+  }
+}
+function updateHarbour(dt) {
+  const t = G.time;
+  if (CM.water) CM.water.normalMap.offset.set(t * 0.012, t * 0.007);
+  if (W.lightBeam) W.lightBeam.rotation.y = t * 0.45;
+  const cp = W.cam.position;
+  for (const b of W.boats || []) {
+    const g = b.g;
+    if (b.sail) {   // round an ellipse in the bay, bow along the way she's going
+      const s = b.sail; s.a += s.w * dt; const vx = -Math.sin(s.a) * s.rx * s.w, vz = Math.cos(s.a) * s.rz * s.w;
+      g.position.set(s.cx + Math.cos(s.a) * s.rx, -0.55, s.cz + Math.sin(s.a) * s.rz); g.rotation.y = Math.atan2(-vz, vx);
+    }
+    if (Math.abs(g.position.x - cp.x) + Math.abs(g.position.z - cp.z) > 700) continue;
+    g.position.y = -0.55 + Math.sin(t * 1.1 + b.ph) * 0.08; g.rotation.z = Math.sin(t * 0.8 + b.ph) * 0.03; g.rotation.x = Math.sin(t * 0.6 + b.ph * 2) * 0.02;
+  }
+  updateFerry(dt);
+}
+
+// =====================================================================
+//  CITY LIFE: townsfolk on the pavements, in the market and on the quays; traffic in the sky lanes
+// =====================================================================
+// The walkers follow the pavements and zebra crossings of the street grid, and only ever within a
+// couple of hundred metres of you: when one falls too far behind, they turn up again somewhere ahead
+// (out of sight, or far enough off to be lost in the haze). The rest browse the market, wander the
+// quays and the promenade, or ride the ferry. All of them together are three instanced draw calls.
+const LIFE = { edges: [], cells: new Map(), people: [], cars: [], mesh: null, carMesh: null };
+const LIFE_CELL = 128, LIFE_R = 165;
+function buildWalkGraph(pieces, inters) {
+  const nodes = new Map(), key = (x, z) => Math.round(x * 2) + ',' + Math.round(z * 2);
+  const node = (x, z, make = true) => { const k = key(x, z); let n = nodes.get(k); if (!n && make) nodes.set(k, n = { x, z, e: [] }); return n; };
+  const link = (a, b) => {
+    if (!a || !b || a === b || a.e.includes(b)) return;
+    a.e.push(b); b.e.push(a);
+    const E = [a, b], ck = Math.floor((a.x + b.x) / 2 / LIFE_CELL) + ',' + Math.floor((a.z + b.z) / 2 / LIFE_CELL);
+    LIFE.edges.push(E); if (!LIFE.cells.has(ck)) LIFE.cells.set(ck, []); LIFE.cells.get(ck).push(E);
+  };
+  for (const p of pieces) for (const sd of [-1, 1]) {   // along each pavement, corner to corner
+    const o = p.c + sd * (p.hw + 1.5), e0 = p.s0 + (p.t0 ? 1.5 : 0.5), e1 = p.s1 - (p.t1 ? 1.5 : 0.5);
+    if (e1 - e0 > 2) link(p.fx ? node(o, e0) : node(e0, o), p.fx ? node(o, e1) : node(e1, o));
+  }
+  for (const I of inters.values()) {   // and over the zebra crossings
+    const c = (sx, sz) => node(I.x + sx * (I.hx + 1.5), I.z + sz * (I.hz + 1.5), false);
+    if (I.n) link(c(-1, -1), c(1, -1)); if (I.s) link(c(-1, 1), c(1, 1));
+    if (I.w) link(c(-1, -1), c(-1, 1)); if (I.e) link(c(1, -1), c(1, 1));
+  }
+}
+// places people potter about in: [rect, share of the crowd]. A rect with ferry: true is on the Talina's deck.
+const MILL = [
+  [{ x0: -6, x1: 6, z0: 82, z1: 148 }, 9], [{ x0: -54, x1: 54, z0: 93, z1: 101 }, 8], [{ x0: -54, x1: 54, z0: 110.5, z1: 116 }, 5], [{ x0: -54, x1: 54, z0: 124.5, z1: 130 }, 5],
+  [{ x0: -54, x1: 54, z0: 138.5, z1: 144 }, 4], [{ x0: -7, x1: 7, z0: 33, z1: 45 }, 3],
+  [{ x0: -60, x1: 50, z0: 525, z1: 557 }, 6], [{ x0: -172, x1: -74, z0: 535.5, z1: 540.5 }, 5], [{ x0: -214, x1: -194, z0: 572, z1: 626 }, 3], [{ x0: 194, x1: 212, z0: 572, z1: 626 }, 3],
+  [{ x0: -530, x1: -262, z0: 738, z1: 756 }, 3], [{ x0: 262, x1: 530, z0: 738, z1: 756 }, 3], [{ x0: -14, x1: 14, z0: -4.4, z1: 4.4, ferry: true }, 5],
+];
+function buildPeople(S) {
+  const g = citizenGeos(), N = TOUCH ? 130 : 260, nMill = Math.round(N * 0.32);
+  const mk = (geo, rough) => { const m = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: rough }), N); m.frustumCulled = false; m.castShadow = true; m.receiveShadow = true; m.userData.dynamic = true; S.add(m); return m; };
+  LIFE.mesh = [mk(g.body, 0.92), mk(g.head, 0.6), mk(g.wrap, 0.9)];
+  const total = MILL.reduce((a, m) => a + m[1], 0), c = new THREE.Color(), areas = [];
+  for (const [R, w] of MILL) for (let k = 0; k < Math.max(1, Math.round(w / total * nMill)); k++) areas.push(R);
+  for (let i = 0; i < N; i++) {
+    const area = i < areas.length ? areas[i] : null;
+    const p = { i, s: rand(0.92, 1.08), ph: rand(0, 6.28), sp: rand(1.05, 1.55), pos: new V3(0, -50, 0), yaw: rand(0, 6.28), area, a: null, b: null, t: 0, len: 1, off: rand(-0.7, 0.7), wait: rand(0, 4), tgt: new V3(), loc: new V3(), retry: 0 };
+    if (area) { millPick(p); p.loc.copy(p.tgt); p.pos.set(p.loc.x + (area.ferry ? FERRY.x : 0), 0, p.loc.z + (area.ferry ? FERRY.z : 0)); }
+    _pm.compose(p.pos, _pq.identity(), _ps.setScalar(area ? p.s : 0));   // walkers stay hidden until they first appear near you
+    for (const m of LIFE.mesh) m.setMatrixAt(i, _pm);
+    LIFE.mesh[0].setColorAt(i, c.setHex(pick(ROBES))); LIFE.mesh[1].setColorAt(i, c.setHex(pick(SKINS))); LIFE.mesh[2].setColorAt(i, c.setHex(pick(WRAPS)));
+    LIFE.people.push(p);
+  }
+  for (const m of LIFE.mesh) { m.instanceColor.needsUpdate = true; m.instanceMatrix.needsUpdate = true; }
+}
+function millPick(p) { const R = p.area; p.tgt.set(rand(R.x0, R.x1), 0, rand(R.z0, R.z1)); }
+// somewhere on the pavements near you for a walker to appear: behind the camera, or far enough off to be hazy
+function spawnWalker(p, first) {
+  const P = G.P, cx0 = Math.floor((P.pos.x - LIFE_R) / LIFE_CELL), cx1 = Math.floor((P.pos.x + LIFE_R) / LIFE_CELL), cz0 = Math.floor((P.pos.z - LIFE_R) / LIFE_CELL), cz1 = Math.floor((P.pos.z + LIFE_R) / LIFE_CELL);
+  const lists = [];
+  for (let x = cx0; x <= cx1; x++) for (let z = cz0; z <= cz1; z++) { const l = LIFE.cells.get(x + ',' + z); if (l) lists.push(l); }
+  if (!lists.length) return false;
+  const fx = -Math.sin(G.cam.yaw), fz = -Math.cos(G.cam.yaw);
+  for (let k = 0; k < 14; k++) {
+    const l = pick(lists), E = pick(l), t = Math.random(), x = E[0].x + (E[1].x - E[0].x) * t, z = E[0].z + (E[1].z - E[0].z) * t, dx = x - P.pos.x, dz = z - P.pos.z, d = Math.hypot(dx, dz);
+    if (d > LIFE_R) continue;
+    if (!first && d < 110 && (dx * fx + dz * fz) / (d || 1) > -0.2) continue;   // never pop in where you can see it
+    const fwd = Math.random() < 0.5;
+    p.a = fwd ? E[0] : E[1]; p.b = fwd ? E[1] : E[0]; p.len = Math.max(0.1, Math.hypot(p.b.x - p.a.x, p.b.z - p.a.z)); p.t = fwd ? t : 1 - t;
+    return true;
+  }
+  return false;
+}
+const _pq = new THREE.Quaternion(), _pe = new THREE.Euler(), _pm = new THREE.Matrix4(), _ps = new V3(), _pp = new V3();
+function updatePeople(dt) {
+  if (!LIFE.mesh) return;
+  const P = G.P, F = FERRY, cp = W.cam.position, t = G.time;
+  let budget = 24;
+  for (const p of LIFE.people) {
+    let moving = false;
+    if (!p.area) {   // a walker on the street grid
+      p.retry -= dt;
+      if ((!p.a || Math.abs(p.pos.x - P.pos.x) + Math.abs(p.pos.z - P.pos.z) > LIFE_R * 1.45) && p.retry <= 0 && budget > 0) {
+        budget--; if (!spawnWalker(p, !p.a)) { p.retry = 1.5; if (!p.a) continue; }
+      }
+      if (!p.a) continue;
+      p.t += p.sp * dt / p.len;
+      while (p.t >= 1) {
+        const opts = p.b.e.filter(n => n !== p.a), nxt = opts.length ? pick(opts) : p.a;
+        p.t = (p.t - 1) * p.len; p.a = p.b; p.b = nxt; p.len = Math.max(0.1, Math.hypot(p.b.x - p.a.x, p.b.z - p.a.z)); p.t /= p.len;
+      }
+      const dx = (p.b.x - p.a.x) / p.len, dz = (p.b.z - p.a.z) / p.len;
+      p.pos.set(p.a.x + (p.b.x - p.a.x) * p.t - dz * p.off, 0, p.a.z + (p.b.z - p.a.z) * p.t + dx * p.off);
+      p.yaw = Math.atan2(dx, dz); moving = true;
+    } else {         // milling about a market, a quay, the promenade or the ferry deck (positions kept relative to it)
+      const ox = p.area.ferry ? F.x : 0, oz = p.area.ferry ? F.z : 0;
+      if (Math.abs(p.loc.x + ox - cp.x) + Math.abs(p.loc.z + oz - cp.z) > 520) continue;
+      if (p.wait > 0) p.wait -= dt;
+      else {
+        const dx = p.tgt.x - p.loc.x, dz = p.tgt.z - p.loc.z, d = Math.hypot(dx, dz);
+        if (d < 0.3) { p.wait = rand(2, 9); millPick(p); }
+        else { const s = Math.min(d, p.sp * 0.75 * dt); p.loc.x += dx / d * s; p.loc.z += dz / d * s; p.yaw = Math.atan2(dx, dz); moving = true; }
+      }
+      p.pos.set(ox + p.loc.x, 0, oz + p.loc.z);
+    }
+    const k = moving ? t * p.sp * 5.6 + p.ph : t * 0.8 + p.ph, bob = moving ? Math.abs(Math.sin(k)) * 0.035 : 0;
+    _pe.set(0, p.yaw + (moving ? 0 : Math.sin(k) * 0.15), moving ? Math.sin(k) * 0.035 : Math.sin(k * 0.7) * 0.01);
+    _pq.setFromEuler(_pe); _pm.compose(_pp.set(p.pos.x, bob, p.pos.z), _pq, _ps.setScalar(p.s));
+    for (const m of LIFE.mesh) m.setMatrixAt(p.i, _pm);
+  }
+  for (const m of LIFE.mesh) m.instanceMatrix.needsUpdate = true;
+}
+// Hover-cars on the sky lanes over the avenues: north-south at one height, east-west at another.
+function buildTraffic(S) {
+  const N = TOUCH ? 60 : 130, parts = [], glows = [];
+  const box = (w, h, d, x, y, z, arr, col) => { const g = new THREE.BoxGeometry(w, h, d).toNonIndexed(); g.translate(x, y, z); if (col) { const n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set(col, i * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.deleteAttribute('uv'); } arr.push(g); };
+  box(2.2, 0.6, 4.8, 0, 0, 0, parts); box(0.36, 0.36, 3.4, -1.28, -0.12, -0.2, parts); box(0.36, 0.36, 3.4, 1.28, -0.12, -0.2, parts); box(1.7, 0.18, 1.2, 0, 0.12, 2.2, parts);
+  box(1.5, 0.48, 2.3, 0, 0.5, -0.35, glows, [0.02, 0.05, 0.07]);                 // tinted canopy
+  box(1.9, 0.1, 0.08, 0, 0.12, 2.42, glows, [1.8, 2.1, 2.3]);                   // headlight bar
+  box(2.0, 0.12, 0.08, 0, 0.12, -2.42, glows, [2.6, 0.12, 0.18]);               // tail lights
+  box(0.2, 0.06, 3.2, -1.28, -0.31, -0.2, glows, [0.4, 1.9, 2.2]); box(0.2, 0.06, 3.2, 1.28, -0.31, -0.2, glows, [0.4, 1.9, 2.2]);   // drive glow
+  const body = new THREE.InstancedMesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.6, roughness: 0.32 }), N);
+  const glow = new THREE.InstancedMesh(mergeGeometries(glows), new THREE.MeshBasicMaterial({ vertexColors: true }), N);
+  for (const m of [body, glow]) { m.frustumCulled = false; m.userData.dynamic = true; S.add(m); }
+  body.castShadow = false; LIFE.carMesh = [body, glow];
+  const lanes = [];
+  for (let k = -3; k <= 3; k++) for (const dir of [-1, 1]) {
+    const c = k * 256, half = Math.sqrt(900 * 900 - c * c);
+    lanes.push({ fx: true, c: c + dir * 3.6, dir, y: dir > 0 ? 36 : 40, half }, { fx: false, c: c - dir * 3.6, dir, y: dir > 0 ? 47 : 51, half });
+  }
+  const col = new THREE.Color(), CARS = [0xe8e4da, 0x9aa4ae, 0x1d2228, 0xe0a526, 0xe0a526, 0x1d7a84, 0xb3301e, 0x2b3f8e, 0xe8e4da];
+  for (let i = 0; i < N; i++) {
+    const L = lanes[i % lanes.length];
+    LIFE.cars.push({ i, L, s: rand(-L.half, L.half), v: rand(20, 32), ph: rand(0, 6.28) });
+    body.setColorAt(i, col.setHex(pick(CARS)));
+  }
+  body.instanceColor.needsUpdate = true;
+}
+function updateTraffic(dt) {
+  if (!LIFE.carMesh) return;
+  const t = G.time;
+  for (const c of LIFE.cars) {
+    const L = c.L; c.s += L.dir * c.v * dt;
+    if (c.s > L.half) c.s = -L.half; else if (c.s < -L.half) c.s = L.half;
+    const y = L.y + Math.sin(t * 0.9 + c.ph) * 0.35;
+    _pp.set(L.fx ? L.c : c.s, y, L.fx ? c.s : L.c);
+    _pe.set(0, L.fx ? (L.dir > 0 ? 0 : Math.PI) : (L.dir > 0 ? Math.PI / 2 : -Math.PI / 2), Math.sin(t * 0.7 + c.ph) * 0.03); _pq.setFromEuler(_pe);
+    _pm.compose(_pp, _pq, _ps.setScalar(1));
+    for (const m of LIFE.carMesh) m.setMatrixAt(c.i, _pm);
+  }
+  for (const m of LIFE.carMesh) m.instanceMatrix.needsUpdate = true;
+}
+function updateCityLife(dt) { updateHarbour(dt); updatePeople(dt); updateTraffic(dt); }
 
 // =====================================================================
 //  ENTITIES
@@ -1589,14 +2647,14 @@ function updateAnimals(dt) {
 }
 
 // Birds: every bird in the sky is one instanced mesh; wings flap in the vertex shader.
-function makeBirdFlock(list) {
+function makeBirdFlock(list, color = 0x2a221d) {
   const pos = [], wing = [];
   const tri = (a, b, c, w) => { pos.push(...a, ...b, ...c); wing.push(w, w, w); };
   // body (a thin diamond) and two swept wings
   tri([0, 0.06, 0.45], [-0.09, 0, 0], [0.09, 0, 0], 0); tri([0, 0.06, 0.45], [0.09, 0, 0], [0, 0.05, -0.5], 0); tri([0, 0.06, 0.45], [0, 0.05, -0.5], [-0.09, 0, 0], 0);
   for (const s of [-1, 1]) { tri([s * 0.08, 0.02, 0.2], [s * 1.3, 0, -0.15], [s * 0.08, 0.02, -0.25], 1); tri([s * 1.3, 0, -0.15], [s * 0.75, 0.01, -0.4], [s * 0.08, 0.02, -0.25], 1); }
   const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('wing', new THREE.Float32BufferAttribute(wing, 1)); geo.computeVertexNormals();
-  const m = new THREE.MeshLambertMaterial({ color: 0x2a221d, side: THREE.DoubleSide });
+  const m = new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide });
   m.onBeforeCompile = sh => {
     sh.uniforms.uTime = grassTime;
     sh.vertexShader = 'uniform float uTime;\nattribute float wing;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -1721,6 +2779,7 @@ function spawnShards() {
 
 // ---------------------------------------------------------------- bots
 const GATES = { ashen: [new V3(36, 0, 0)], echo: [new V3(-36, 0, 0)], crater: [new V3(0, 0, -38), new V3(0, 0, -106)], plaza: [], cantina: [new V3(0, 0, 40), new V3(0, 0, 49)],
+  market: [new V3(21, 0, 30), new V3(21, 0, 86)],
   rail: [new V3(36, 0, 0), new V3(232, 0, 0)], tenements: [new V3(-36, 0, 0), new V3(-232, 0, 0)], reservoir: [new V3(21, 0, 30), new V3(21, 0, 88), new V3(0, 0, 98), new V3(0, 0, 240)] };
 // Reachable spots in each Outer Ward district: clear of scenery, with a clear straight walk from the district's entry.
 const DPOINTS = {};
@@ -1739,6 +2798,14 @@ function buildDistrictPoints() {
       list.push(q);
     }
   }
+}
+const _cin = new Set(), _cinL = [];
+function collidersIn(x0, z0, x1, z1) {   // colliders overlapping a rectangle, through the grid
+  _cin.clear(); _cinL.length = 0;
+  if (!G.colGrid) { for (const k of G.colliders) if (k.maxX > x0 && k.minX < x1 && k.maxZ > z0 && k.minZ < z1) _cinL.push(k); return _cinL; }
+  for (let gx = Math.floor(x0 / COL_CELL); gx <= Math.floor(x1 / COL_CELL); gx++) for (let gz = Math.floor(z0 / COL_CELL); gz <= Math.floor(z1 / COL_CELL); gz++)
+    for (const k of G.colGrid.get(gx * 10007 + gz) || []) if (!_cin.has(k) && k.maxX > x0 && k.minX < x1 && k.maxZ > z0 && k.minZ < z1) { _cin.add(k); _cinL.push(k); }
+  return _cinL;
 }
 function pointBlocked(x, z, m = 1.2) {
   if (!G.colGrid) return false;
@@ -1858,7 +2925,8 @@ function syncResidents() {
 }
 // ---- the party: allies who fight at your side
 const partyList = () => G.bots.filter(b => b.party);
-const ZONE_IN = { plaza: 'Concordia Plaza', causeway: 'the Concord Causeway', ward: 'the Spire Wards', ashen: 'the Scorched Veld', echo: 'the Echo Plains', crater: 'the Catharsis Crater', cantina: 'the Salt Lantern', rail: 'the Sunken Rail Yards', tenements: 'the Ashfall Tenements', reservoir: 'the Dry Reservoir' };
+const ZONE_IN = { plaza: 'Concordia Plaza', causeway: 'the Concord Causeway', ward: 'the Spire Wards', ashen: 'the Scorched Veld', echo: 'the Echo Plains', crater: 'the Catharsis Crater', cantina: 'the Salt Lantern', rail: 'the Sunken Rail Yards', tenements: 'the Ashfall Tenements', reservoir: 'the Dry Reservoir',
+  market: 'the Lantern Market', harbour: 'the Harbour', ring: 'the Rampart Ring', northgate: 'Northgate', sunrise: 'Sunrise Ward', kopje: 'Kopje Heights', dhow: 'the Dhow Quarter' };
 const PARTY_SLOTS = [[-1.9, -2.2], [1.9, -2.2], [0, -3.9]];   // [right, forward] from the player, in metres
 function partyOffset(b) {
   const i = Math.max(0, partyList().indexOf(b)), [sx, fz] = PARTY_SLOTS[i % PARTY_SLOTS.length];
@@ -2134,7 +3202,7 @@ function setupPlayer() {
     hp: maxHp(), en: maxEn(), shield: 0, shieldT: 0, target: null, gcd: 0, cds: {}, autoOn: false, autoT: 0, combatT: 0,
     critNext: false, atk: 0, move: 0, danceT: 0, medT: 0, height: 2.1, radius: 0.45,
   };
-  if (D.pos && zoneAt(D.pos[0], D.pos[1]) !== 'ward') P.pos.set(D.pos[0], 0, D.pos[1]);
+  if (D.pos && Math.hypot(D.pos[0], D.pos[1]) < WORLD_R - 3 && !isWaterPt(D.pos[0], D.pos[1]) && !pointBlocked(D.pos[0], D.pos[1], 0.6)) P.pos.set(D.pos[0], 0, D.pos[1]);
   P.group.position.copy(P.pos); W.scene.add(P.group);
   G.P = P;
   G.cam = { yaw: 0, pitch: 0.32, dist: 9.5 };
@@ -2542,7 +3610,7 @@ function updatePlayer(dt) {
     const gap = Z.pl - playerPL(), warn = gap >= 2 ? ' · ☠ FAR ABOVE YOUR POWER' : gap === 1 ? ' · ABOVE YOUR POWER' : '';
     $('zone-name').textContent = Z.name; $('zone-sub').textContent = Z.safe || !Z.pl ? Z.sub : `${Z.sub} · ◆${Z.pl}`;
     $('zone-sub').style.color = Z.safe || !Z.pl ? '' : PL_COL[plTag(Z.pl)];
-    if (!(prev === 'causeway' && z === 'ward') && !(prev === 'ward' && z === 'causeway')) banner(Z.safe ? 'SANCTUARY' : 'ENTERING', Z.name, Z.safe || !Z.pl ? Z.sub : `◆ POWER LEVEL ${Z.pl}${warn}`);
+    if (!(QUIET_ZONES.has(prev) && QUIET_ZONES.has(z))) banner(Z.safe ? 'SANCTUARY' : 'ENTERING', Z.name, Z.safe || !Z.pl ? Z.sub : `◆ POWER LEVEL ${Z.pl}${warn}`);
     if (gap >= 2 && !Z.safe) addChat('err', null, `Warning: ${ZONE_IN[z]} is power level ${Z.pl} and you are power level ${playerPL()}. The Remnants here will kill you quickly. Ilse Varn in Concordia Plaza sells stronger armour.`);
     if (z === 'cantina') Sound.playMusic('cantina'); else if (prev === 'cantina') Sound.playMusic('world');
   }
@@ -2731,8 +3799,8 @@ function updateShards(dt) {
 }
 function updateAmbient(dt) {
   const t = G.time, P = G.P;
-  W.sky.material.uniforms.t.value = t; grassTime.value = t;
-  updateAnimals(dt); updateBirds(W.birds, t);
+  W.sky.material.uniforms.t.value = t; grassTime.value = t; W.sky.position.copy(W.cam.position);   // the sky travels with you
+  updateAnimals(dt); updateBirds(W.birds, t); updateBirds(W.gulls, t);
   updateGrass(W.grass, W.cam); updateLOD(); cullStatic();
   // the Salt Lantern: crystal turns and breathes; inside, the roof steps aside and the room warms up
   W.lanternCrystal.rotation.y += dt * 0.4; W.lanternCrystal.material.emissiveIntensity = 2.0 + Math.sin(t * 1.7) * 0.4;
@@ -2764,7 +3832,7 @@ function updateCamera(dt) {
   const cp = new V3(Math.sin(c.yaw) * Math.cos(c.pitch), Math.sin(c.pitch), Math.cos(c.yaw) * Math.cos(c.pitch)).multiplyScalar(c.dist).add(tgt);
   cp.y = Math.max(0.6, cp.y);
   // keep the camera out of walls
-  const near = G.colliders.filter(k => k.maxX > Math.min(tgt.x, cp.x) - 1 && k.minX < Math.max(tgt.x, cp.x) + 1 && k.maxZ > Math.min(tgt.z, cp.z) - 1 && k.minZ < Math.max(tgt.z, cp.z) + 1);
+  const near = collidersIn(Math.min(tgt.x, cp.x) - 1, Math.min(tgt.z, cp.z) - 1, Math.max(tgt.x, cp.x) + 1, Math.max(tgt.z, cp.z) + 1);
   if (near.length) {
     const step = new V3().subVectors(cp, tgt).divideScalar(24), q = tgt.clone();
     for (let i = 0; i < 24; i++) {
@@ -2779,7 +3847,7 @@ function updateCamera(dt) {
 }
 
 function updateWorld(dt) {
-  updatePlayer(dt); updateEnemies(dt); updateBots(dt); updateProjectiles(dt); updateFx(dt); updateShards(dt); updateAmbient(dt); updateCamera(dt);
+  updatePlayer(dt); updateEnemies(dt); updateBots(dt); updateCityLife(dt); updateProjectiles(dt); updateFx(dt); updateShards(dt); updateAmbient(dt); updateCamera(dt);
   // target ring
   const t = G.P.target;
   if (t && t.alive) { W.targetRing.visible = true; W.targetRing.position.set(t.pos.x, 0.1, t.pos.z); W.targetRing.scale.setScalar(t.radius * 1.3); W.targetRing.rotation.z += dt; } else W.targetRing.visible = false;
@@ -2854,7 +3922,7 @@ function nearestInteract() {
   const P = G.P; let best = null, bd = 5;
   for (const n of G.npcs) { const d = d2(P.pos, n.pos); if (d < bd) { bd = d; best = n; } }
   for (const b of G.bots) if (b.ally && b.alive) { const d = d2(P.pos, b.pos); if (d < (b.party ? 2.6 : 4) && d < bd && !(b.party && best)) { bd = d; best = b; } }   // companions at your heel don't crowd out the NPCs
-  for (const p of G.props) { const d = d2(P.pos, p.pos); if (d < (p.kind === 'tram' ? 3.5 : 2.2) && d < bd) { bd = d; best = p; } }
+  for (const p of G.props) { const d = d2(P.pos, p.pos); if (d < (p.kind === 'tram' || p.kind === 'ferry' ? 3.5 : 2.2) && d < bd) { bd = d; best = p; } }
   for (const s of G.shards) { if (!s.active) continue; const d = d2(P.pos, s.pos); if (d < 3 && d < bd) { bd = d; best = s; } }
   return best;
 }
@@ -2868,6 +3936,7 @@ function interact(ent = nearestInteract()) {
   else if (ent.id === 'malia') talkMalia(ent);
   else if (ent.resident) talkResident(ent);
   else if (ent.kind === 'tram') openTram(ent.tram);
+  else if (ent.kind === 'ferry') openFerry(ent.side);
   else if (ent.kind === 'shard') {
     const D = G.D;
     if (D.q.i === 2 && D.q.st === 'active') { ent.active = false; ent.group.visible = false; ent.respawnT = 25; Sound.sfx('pickup'); addChat('loot', null, 'You recover: [Beacon Shard]'); burst(ent.pos.clone().setY(1), 0xff2b4a, 20, 2); questEvent('shard'); }
@@ -2878,7 +3947,7 @@ function interact(ent = nearestInteract()) {
 function updateInteract() {
   const n = nearestInteract(), pr = $('prompt');
   if (n && !G.ui && !G.P.dead) {
-    const label = n.kind === 'shard' ? 'Recover Beacon Shard' : n.id === 'mascar' ? 'Speak with Governor Mascar' : n.id === 'zuri' ? 'Talk to Zuri Adeyemi' : n.id === 'plaque' ? 'Read the memorial plaque' : n.id === 'orion' ? 'Speak with Orion Mascar' : n.id === 'malia' ? 'Speak with Malia Mascar' : n.resident ? `Speak with ${n.name}` : n.kind === 'tram' ? 'Ride the Concord tram' : 'Trade with Ilse Varn';
+    const label = n.kind === 'shard' ? 'Recover Beacon Shard' : n.id === 'mascar' ? 'Speak with Governor Mascar' : n.id === 'zuri' ? 'Talk to Zuri Adeyemi' : n.id === 'plaque' ? 'Read the memorial plaque' : n.id === 'orion' ? 'Speak with Orion Mascar' : n.id === 'malia' ? 'Speak with Malia Mascar' : n.resident ? `Speak with ${n.name}` : n.kind === 'tram' ? 'Ride the Concord tram' : n.kind === 'ferry' ? 'Read the ferry timetable' : 'Trade with Ilse Varn';
     pr.innerHTML = `<b>${TOUCH ? '▶' : '[E]'}</b> ${label}`; pr.classList.remove('hidden');
   } else pr.classList.add('hidden');
 }
@@ -3010,21 +4079,29 @@ function drawMinimap() {
   const X = x => C + (x - P.pos.x) * sc, Y = z => C + (z - P.pos.z) * sc;
   mm.save(); mm.clearRect(0, 0, S, S); mm.beginPath(); mm.arc(C, C, C, 0, Math.PI * 2); mm.clip();
   mm.fillStyle = '#4a3a24'; mm.fillRect(0, 0, S, S);
+  // the sea and the harbour basin (the moles stay dry)
+  mm.fillStyle = '#21505c'; const yc = Y(COAST_Z); if (yc < S) mm.fillRect(0, yc, S, S - yc);
+  mm.fillRect(X(BASIN.x0), Y(BASIN.z0), (BASIN.x1 - BASIN.x0) * sc, (BASIN.z1 - BASIN.z0) * sc);
+  mm.fillStyle = '#4a3a24'; for (const M of MOLES) mm.fillRect(X(M.x0), Y(M.z0), (M.x1 - M.x0) * sc, (M.z1 - M.z0) * sc);
   mm.fillStyle = 'rgba(30,20,12,0.45)'; mm.fillRect(X(34), Y(-62), 122 * sc, 124 * sc);
   mm.fillStyle = 'rgba(220,205,160,0.22)'; mm.fillRect(X(-156), Y(-62), 122 * sc, 124 * sc);
   mm.fillStyle = 'rgba(140,40,30,0.45)'; mm.beginPath(); mm.arc(X(CRATER.x), Y(CRATER.z), 72 * sc, 0, 7); mm.fill();
   if (Math.abs(P.pos.x) > 120 || Math.abs(P.pos.z) > 120) {   // the Outer Wards, tinted by how dangerous they are for you
     for (const [id, R] of [['rail', RAIL], ['tenements', TENE]]) { mm.fillStyle = hexA(PL_COL[plTag(ZONES[id].pl)], 0.16); mm.fillRect(X(R.x0), Y(R.z0), (R.x1 - R.x0) * sc, (R.z1 - R.z0) * sc); }
     mm.fillStyle = hexA(PL_COL[plTag(ZONES.reservoir.pl)], 0.16); mm.beginPath(); mm.arc(X(RESV.x), Y(RESV.z), RESV_R * sc, 0, 7); mm.fill();
-    mm.fillStyle = 'rgba(140,90,58,0.6)'; mm.fillRect(X(-7), Y(91), 14 * sc, 150 * sc);
   }
   mm.fillStyle = '#3ee6ff'; for (const t of TRAMS) if (G.D.trams.includes(t.id)) { mm.save(); mm.translate(X(t.pos.x), Y(t.pos.z)); mm.rotate(Math.PI / 4); mm.fillRect(-3, -3, 6, 6); mm.restore(); }
   mm.fillStyle = 'rgba(62,230,255,0.12)'; mm.beginPath(); mm.arc(X(0), Y(0), 34 * sc, 0, 7); mm.fill();
   mm.fillStyle = 'rgba(255,179,71,0.35)'; mm.fillRect(X(CANTINA.x0), Y(CANTINA.z0), (CANTINA.x1 - CANTINA.x0) * sc, (CANTINA.z1 - CANTINA.z0) * sc);
   mm.strokeStyle = 'rgba(255,179,71,0.9)'; mm.lineWidth = 1; mm.strokeRect(X(CANTINA.x0), Y(CANTINA.z0), (CANTINA.x1 - CANTINA.x0) * sc, (CANTINA.z1 - CANTINA.z0) * sc);
-  mm.fillStyle = 'rgba(140,90,58,0.6)'; mm.fillRect(X(-WORLD_R), Y(-7), WORLD_R * 2 * sc, 14 * sc); mm.fillRect(X(-7), Y(-110), 14 * sc, 110 * sc);
+  mm.fillStyle = 'rgba(255,179,71,0.14)'; mm.fillRect(X(MARKET.x0), Y(MARKET.z0), (MARKET.x1 - MARKET.x0) * sc, (MARKET.z1 - MARKET.z0) * sc);
+  // streets, the Rampart Ring and the buildings round you
+  mm.fillStyle = 'rgba(140,90,58,0.6)';
+  for (const r of W.streets) { if (r.x1 < P.pos.x - 115 || r.x0 > P.pos.x + 115 || r.z1 < P.pos.z - 115 || r.z0 > P.pos.z + 115) continue; mm.fillRect(X(r.x0), Y(r.z0), (r.x1 - r.x0) * sc, (r.z1 - r.z0) * sc); }
+  mm.strokeStyle = 'rgba(140,90,58,0.6)'; mm.lineWidth = 14 * sc; mm.beginPath(); mm.arc(X(0), Y(0), OLD_R * sc, 0, 7); mm.stroke();
   mm.fillStyle = 'rgba(220,190,150,0.3)';
-  for (const c of G.colliders) { if (Math.abs(c.minX - P.pos.x) > 140 || Math.abs(c.minZ - P.pos.z) > 140) continue; const w = (c.maxX - c.minX) * sc; if (w < 2) continue; mm.fillRect(X(c.minX), Y(c.minZ), w, (c.maxZ - c.minZ) * sc); }
+  for (const c of collidersIn(P.pos.x - 115, P.pos.z - 115, P.pos.x + 115, P.pos.z + 115)) { const w = (c.maxX - c.minX) * sc; if (w < 2 || c.h < 2) continue; mm.fillRect(X(c.minX), Y(c.minZ), w, (c.maxZ - c.minZ) * sc); }
+  if (FERRY.group) { mm.fillStyle = '#3ee6ff'; mm.fillRect(X(FERRY.x - FERRY.HL), Y(FERRY.z - FERRY.HW), FERRY.HL * 2 * sc, FERRY.HW * 2 * sc); }
   mm.strokeStyle = 'rgba(232,196,106,0.6)'; mm.lineWidth = 2; mm.beginPath(); mm.arc(X(0), Y(0), (WORLD_R + 6) * sc, 0, 7); mm.stroke();
   if (G.D.q.i === 2 && G.D.q.st === 'active') { mm.fillStyle = '#ff6b7f'; for (const s of G.shards) if (s.active) { mm.save(); mm.translate(X(s.pos.x), Y(s.pos.z)); mm.rotate(Math.PI / 4); mm.fillRect(-2.5, -2.5, 5, 5); mm.restore(); } }
   for (const e of G.enemies) { if (!e.alive) continue; mm.fillStyle = e.isBoss ? '#ff2b4a' : '#ff5a6e'; const r = e.isBoss ? 5 : 2.2; mm.beginPath(); mm.arc(X(e.pos.x), Y(e.pos.z), r, 0, 7); mm.fill(); }
@@ -3125,7 +4202,7 @@ function dialog(who, name, qtitle, text, rew, opts) {
 function openTram(t) {
   const D = G.D, dests = TRAMS.filter(x => x !== t && D.trams.includes(x.id)), unknown = TRAMS.filter(x => !D.trams.includes(x.id)).length;
   const more = unknown ? `\n\n${unknown} more stop${unknown === 1 ? ' is' : 's are'} out in the city that you have not found yet. Walk past a stop to add it to your network.` : '';
-  const text = dests.length ? `The Concord tram runs the length of the city, from the Plaza out to the Outer Wards.\n\nWhere to?${more}` : `This is the only stop on your network so far.${more}`;
+  const text = dests.length ? `The Concord tram runs the length of the city, from the Plaza out to the new wards by the rampart and down to the Harbour.\n\nWhere to?${more}` : `This is the only stop on your network so far.${more}`;
   dialog('CONCORD TRAM', t.name.toUpperCase(), '', text, '', [
     ...dests.map(x => { const pl = ZONES[x.id] ? ZONES[x.id].pl : 0; return { label: `${x.name.toUpperCase()}${pl ? ' · ' + plText(pl) : ''}`, gold: true, fn: () => rideTram(x) }; }),
     { label: 'CANCEL', fn: closeAllUI },
@@ -3149,37 +4226,45 @@ function toggleMap() {
   if (G.ui === 'map') { closeAllUI(); return; }
   closeAllUI(); G.ui = 'map'; $('worldmap').classList.remove('hidden'); drawWorldMap();
 }
-function drawWorldMap() {
-  const cv = $('wm-canvas'), g = cv.getContext('2d'), S = cv.width, sc = S / (WORLD_R * 2 + 40), C = S / 2, P = G.P;
+function drawWorldMap() {   // the whole city, or (click the map) the old city inside the Rampart Ring
+  const cv = $('wm-canvas'), g = cv.getContext('2d'), S = cv.width, zoom = !!G.mapZoom, sc = S / ((zoom ? OLD_R + 30 : WORLD_R + 20) * 2), C = S / 2, P = G.P;
   const X = x => C + x * sc, Y = z => C + z * sc;
   g.clearRect(0, 0, S, S);
   g.fillStyle = '#241d16'; g.beginPath(); g.arc(C, C, (WORLD_R + 6) * sc, 0, 7); g.fill();
+  g.fillStyle = '#1d4652'; g.fillRect(0, Y(COAST_Z), S, S - Y(COAST_Z)); g.fillRect(X(BASIN.x0), Y(BASIN.z0), (BASIN.x1 - BASIN.x0) * sc, (BASIN.z1 - BASIN.z0) * sc);
+  g.fillStyle = '#241d16'; for (const M of MOLES) g.fillRect(X(M.x0), Y(M.z0), (M.x1 - M.x0) * sc, (M.z1 - M.z0) * sc);
   g.fillStyle = 'rgba(205,175,135,0.16)';
-  for (const c of G.colliders) { const w = (c.maxX - c.minX) * sc, h = (c.maxZ - c.minZ) * sc; if (w < 1.2 || h < 1.2) continue; g.fillRect(X(c.minX), Y(c.minZ), w, h); }
+  for (const c of G.colliders) { const w = (c.maxX - c.minX) * sc, h = (c.maxZ - c.minZ) * sc; if (w < 1.2 || h < 1.2 || c.h < 2) continue; g.fillRect(X(c.minX), Y(c.minZ), w, h); }
   g.fillStyle = 'rgba(150,98,62,0.95)';
-  g.fillRect(X(-WORLD_R), Y(-7), WORLD_R * 2 * sc, 14 * sc); g.fillRect(X(-7), Y(-120), 14 * sc, 120 * sc); g.fillRect(X(-7), Y(91), 14 * sc, 150 * sc); g.fillRect(X(14), Y(26), 14 * sc, 66 * sc);
+  for (const r of W.streets) g.fillRect(X(r.x0), Y(r.z0), Math.max(1, (r.x1 - r.x0) * sc), Math.max(1, (r.z1 - r.z0) * sc));
+  g.strokeStyle = 'rgba(150,98,62,0.95)'; g.lineWidth = 14 * sc; g.beginPath(); g.arc(C, C, OLD_R * sc, 0, 7); g.stroke();
+  g.fillStyle = '#3ee6ff'; g.fillRect(X(FERRY.x - FERRY.HL), Y(FERRY.z - FERRY.HW), FERRY.HL * 2 * sc, FERRY.HW * 2 * sc);
   const zone = (id, draw) => {
     const Z = ZONES[id], col = Z.safe || !Z.pl ? '#3ee6ff' : PL_COL[plTag(Z.pl)];
     g.fillStyle = hexA(col, 0.2); g.strokeStyle = col; g.lineWidth = 1.5; g.beginPath(); draw(); g.fill(); g.stroke();
   };
   const rect = R => () => g.rect(X(R.x0), Y(R.z0), (R.x1 - R.x0) * sc, (R.z1 - R.z0) * sc);
   zone('plaza', () => g.arc(X(0), Y(0), 34 * sc, 0, 7));
-  zone('cantina', rect(CANTINA));
+  zone('cantina', rect(CANTINA)); zone('market', rect(MARKET));
   zone('ashen', rect({ x0: 34, x1: 156, z0: -62, z1: 62 }));
   zone('echo', rect({ x0: -156, x1: -34, z0: -62, z1: 62 }));
   zone('crater', () => g.arc(X(CRATER.x), Y(CRATER.z), 72 * sc, 0, 7));
   zone('rail', rect(RAIL)); zone('tenements', rect(TENE));
   zone('reservoir', () => g.arc(X(RESV.x), Y(RESV.z), RESV_R * sc, 0, 7));
-  g.strokeStyle = 'rgba(232,196,106,0.9)'; g.lineWidth = 3; g.beginPath(); g.arc(C, C, (WORLD_R + 6) * sc, 0, 7); g.stroke();
+  { const ra = Math.acos((COAST_Z - 2) / (WORLD_R + 6)); g.strokeStyle = 'rgba(232,196,106,0.9)'; g.lineWidth = 3; g.beginPath(); g.arc(C, C, (WORLD_R + 6) * sc, Math.PI / 2 + ra, Math.PI * 2.5 - ra); g.stroke(); }
   // tram stops
   for (const t of TRAMS) { const k = G.D.trams.includes(t.id); g.fillStyle = k ? '#3ee6ff' : '#5a6470'; g.save(); g.translate(X(t.pos.x), Y(t.pos.z)); g.rotate(Math.PI / 4); g.fillRect(-4, -4, 8, 8); g.restore(); }
   // labels
   g.textAlign = 'center'; g.shadowColor = '#000'; g.shadowBlur = 5;
-  for (const [id, x, z] of [['plaza', 0, -2], ['cantina', 0, 96], ['ashen', 95, -30], ['echo', -95, -30], ['crater', 0, -165], ['rail', 328, -30], ['tenements', -328, -30], ['reservoir', 0, 330], ['ward', 200, -220]]) {
+  const labels = zoom ? [['plaza', 0, -58], ['cantina', 0, 64], ['market', 0, 168], ['ashen', 108, 24], ['echo', -108, 24], ['crater', 0, -165], ['rail', 328, -30], ['tenements', -328, -30], ['reservoir', 0, 330], ['ward', 210, -230], ['ward', -230, 230], ['ring', -300, -385]]
+    : [['reservoir', 0, 336], ['harbour', 0, 690], ['northgate', 0, -700], ['sunrise', 700, -110], ['kopje', -700, -110], ['dhow', -470, 640], ['dhow', 470, 640], ['ring', -300, -385], ['crater', 0, -165]];
+  for (const [id, x, z] of labels) {
     const Z = ZONES[id], col = Z.safe ? '#9fe9ff' : !Z.pl ? '#c9b89a' : PL_COL[plTag(Z.pl)];
     g.font = 'bold 12px Bahnschrift, Segoe UI, sans-serif'; g.fillStyle = '#fff'; g.fillText(Z.name, X(x), Y(z));
     g.font = '11px Bahnschrift, Segoe UI, sans-serif'; g.fillStyle = col; g.fillText(Z.safe ? 'SANCTUARY' : !Z.pl ? 'THE CITY' : `◆ POWER LEVEL ${Z.pl}${Z.pl - playerPL() >= 2 ? ' ☠' : ''}`, X(x), Y(z) + 14);
   }
+  g.font = '11px Bahnschrift, Segoe UI, sans-serif'; g.fillStyle = 'rgba(200,215,225,0.75)'; g.textAlign = 'left';
+  g.fillText(zoom ? 'CLICK THE MAP FOR THE WHOLE CITY' : 'CLICK THE MAP FOR THE OLD CITY', 12, S - 12);
   g.shadowBlur = 0;
   // the Mascars and your companions
   for (const b of G.bots) if (b.alive && (b.legend || b.party)) { g.fillStyle = b.legend ? '#e8c46a' : '#4dff9a'; g.beginPath(); g.arc(X(b.pos.x), Y(b.pos.z), 3.5, 0, 7); g.fill(); if (b.party) { g.strokeStyle = '#4dff9a'; g.lineWidth = 1.5; g.beginPath(); g.arc(X(b.pos.x), Y(b.pos.z), 6, 0, 7); g.stroke(); } }
@@ -3502,7 +4587,7 @@ function saveGame() {
 window.addEventListener('beforeunload', () => { if (G.mode === 'world') saveGame(); });
 
 $('respawn').onclick = respawn;
-$('vendor-x').onclick = closeAllUI; $('wm-x').onclick = closeAllUI; $('sheet-x').onclick = closeAllUI;
+$('vendor-x').onclick = closeAllUI; $('wm-x').onclick = closeAllUI; $('wm-canvas').onclick = () => { G.mapZoom = !G.mapZoom; drawWorldMap(); }; $('sheet-x').onclick = closeAllUI;
 $('pz-resume').onclick = closeAllUI; $('pz-sheet').onclick = openSheet;
 $('pz-codex').onclick = () => { closeAllUI(); openCodex(); };
 $('pz-settings').onclick = () => { closeAllUI(); openSettings(); };
@@ -3571,5 +4656,5 @@ function loop() {
   setTimeout(() => { hide('splash-load'); show('splash-press'); G.ready = true; }, 400);
   $('splash').addEventListener('pointerdown', () => { if (G.ready && G.mode === 'splash') enterMenuFromSplash(); });
   if (TOUCH) $('splash-press').textContent = 'TAP TO BEGIN';
-  window.__AD = G; window.__ADdbg = { W, menu, damage, killEnemy, talkMascar, updateTracker, stats: () => ({ batch: W.batch, res: RES_STEPS[perf.level], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries, tex: renderer.info.memory.textures, pr: renderer.getPixelRatio() }) }; // debug handles
+  window.__AD = G; window.__ADdbg = { W, menu, damage, killEnemy, talkMascar, updateTracker, LIFE, FERRY, toggleMap, stats: () => ({ batch: W.batch, res: RES_STEPS[perf.level], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries, tex: renderer.info.memory.textures, pr: renderer.getPixelRatio() }) }; // debug handles
 })();

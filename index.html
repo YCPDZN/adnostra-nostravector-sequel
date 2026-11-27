@@ -239,13 +239,13 @@ input[type=checkbox]{accent-color:var(--cyan);width:18px;height:18px}
 
 /* dialog / vendor / sheet */
 #dialog,#vendor,#sheet,#pause,#death{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:auto}
-#dialog{width:min(620px,92vw);padding:24px 28px}
+#dialog{width:min(620px,92vw);padding:24px 28px;max-height:92vh;overflow:auto}
 #dialog .who{font-size:10px;letter-spacing:.4em;color:var(--gold)}
 #dialog .whn{font-size:24px;letter-spacing:.15em;font-weight:600;margin-top:4px}
 #dialog .qtitle{font-size:12px;letter-spacing:.3em;color:var(--cyan);margin-top:16px}
 #dialog .txt{font-size:15px;line-height:1.75;color:#cfdbe5;margin-top:10px;white-space:pre-line}
 #dialog .rew{font-size:12px;letter-spacing:.15em;color:var(--gold);margin-top:12px}
-#dialog .opts{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
+#dialog .opts{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;justify-content:flex-end}
 #vendor{width:min(520px,92vw);padding:24px 28px}
 .vitem{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.07)}
 .vitem b{font-size:14px;letter-spacing:.1em;font-weight:600}
@@ -461,7 +461,7 @@ canvas#scene{touch-action:none}
     <div class="np-rule"></div>
     <div class="np-quote">“We did not win the war to inherit ashes. We won it to build.”<span>— ON HIS RETURN FROM CARAX, 2127</span></div>
   </div>
-  <div class="menu-foot"><span>CONCORD BUILD 2137.04 · v0.2.0</span><span><span class="dot"></span><span id="online">4,812</span> ASCENDANTS ONLINE</span></div>
+  <div class="menu-foot"><span>CONCORD BUILD 2137.05 · v0.3.0</span><span><span class="dot"></span><span id="online">4,812</span> ASCENDANTS ONLINE</span></div>
 </div>
 
 <!-- CODEX -->
@@ -643,6 +643,6 @@ canvas#scene{touch-action:none}
 <div id="err" class="panel hidden"></div>
 <div id="fps" class="hidden"></div>
 
-<script src="game.js?v=0.2.0"></script>
+<script src="game.js?v=0.3.0"></script>
 </body>
 </html>
