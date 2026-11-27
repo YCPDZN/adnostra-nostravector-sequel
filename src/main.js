@@ -785,13 +785,14 @@ const ZONES = {
   concordia: { name: 'CONCORDIA PLAZA', sub: 'SANCTUARY · SEAT OF THE GOVERNOR', safe: true, pl: 0 },
   causeway: { name: 'CONCORD CAUSEWAY', sub: 'AD-NOSTRA', safe: true, pl: 0 },
   ward: { name: 'THE SPIRE WARDS', sub: 'AD-NOSTRA', safe: true, pl: 0 },
-  ashen: { name: 'SCORCHED VELD', sub: 'CONTESTED', pl: 1 },
-  echo: { name: 'ECHO PLAINS', sub: 'CONTESTED', pl: 2 },
-  crater: { name: 'THE CATHARSIS CRATER', sub: 'HOSTILE', pl: 3 },
+  // Power levels run outward from Concordia Plaza: the Dry Reservoir beside it is the gentlest, the Veld the deadliest.
+  ashen: { name: 'SCORCHED VELD', sub: 'DEADLY', pl: 6 },
+  echo: { name: 'ECHO PLAINS', sub: 'DEADLY', pl: 5 },
+  crater: { name: 'THE CATHARSIS CRATER', sub: 'HOSTILE', pl: 4 },
   cantina: { name: 'THE SALT LANTERN', sub: 'CANTINA · SANCTUARY', safe: true, pl: 0 },
-  rail: { name: 'THE SUNKEN RAIL YARDS', sub: 'OUTER WARDS · HOSTILE', pl: 4 },
-  tenements: { name: 'THE ASHFALL TENEMENTS', sub: 'OUTER WARDS · HOSTILE', pl: 5 },
-  reservoir: { name: 'THE DRY RESERVOIR', sub: 'OUTER WARDS · DEADLY', pl: 6 },
+  rail: { name: 'THE SUNKEN RAIL YARDS', sub: 'OUTER WARDS · HOSTILE', pl: 3 },
+  tenements: { name: 'THE ASHFALL TENEMENTS', sub: 'OUTER WARDS · CONTESTED', pl: 2 },
+  reservoir: { name: 'THE DRY RESERVOIR', sub: 'BESIDE CONCORDIA · CONTESTED', pl: 1 },
   market: { name: 'THE LANTERN MARKET', sub: 'BAZAAR · SANCTUARY', safe: true, pl: 0 },
   harbour: { name: 'THE HARBOUR', sub: 'PORT OF AD-NOSTRA', safe: true, pl: 0 },
   ring: { name: 'THE RAMPART RING', sub: 'WHERE THE OLD WALL STOOD', safe: true, pl: 0 },
@@ -1132,7 +1133,7 @@ function buildDistricts(S) {
   }), RESV.x, RESV.z);
   const concreteM = mat('concrete', () => new THREE.MeshStandardMaterial({ color: 0xa8a090, roughness: 0.9 }));
   for (let a = 0; a < Math.PI * 2; a += 0.085) {   // the crumbling retaining wall, open to the north where the avenue comes in
-    if (Math.abs(a - Math.PI * 1.5) < 0.16 || Math.random() < 0.15) continue;
+    if (Math.abs(a - Math.PI * 1.5) < 0.16 || Math.abs(a - Math.PI / 2) < 0.16 || Math.random() < 0.15) continue;
     const x = RESV.x + Math.cos(a) * (RESV_R - 2), z = RESV.z + Math.sin(a) * (RESV_R - 2), h = rand(1.6, 3.4);
     const seg = bx(7.6, h, 1.2, concreteM, x, h / 2, z, S); seg.rotation.y = -a + Math.PI / 2; addCollider(x, z, 4.6, 4.6, h);
   }
@@ -1145,7 +1146,7 @@ function buildDistricts(S) {
   }
   for (let i = 0; i < 14; i++) {   // crimson growths: the Catharsis, spreading through the dry silt
     const a = rand(0, Math.PI * 2), r = rand(14, 78), x = RESV.x + Math.cos(a) * r, z = RESV.z + Math.sin(a) * r;
-    if (z < RESV.z - 60 && Math.abs(x) < 14) continue;
+    if ((z < RESV.z - 60 || z > RESV.z + 60) && Math.abs(x) < 14) continue;
     const c = new THREE.Mesh(GEO.oct, crimGlow); const sz = rand(0.6, 1.6); c.scale.set(sz, sz * rand(2, 4), sz); c.position.set(x, sz * 1.5, z); c.rotation.z = rand(-0.4, 0.4); S.add(c); addCollider(x, z, sz * 1.6, sz * 1.6, sz * 4);
   }
 }
@@ -2747,10 +2748,11 @@ function makeEnemy(type, level, x, z, temp = false, variant = null) {
     rig = makeDrone(level, V ? V.glow : undefined); if (V) rig.group.scale.setScalar(V.scale);
   } else {
     Object.assign(e, { name: 'Remnant of the Catharsis', isBoss: true, maxHp: 2600, dmg: 24, atkCd: 2.3, atkR: 4.8, speed: 3.3, aggroR: 20, xp: 950, height: 8.4, radius: 2.2, respawn: 120, slamT: 7, phase: 0 });
-    rig = makeBoss(); e.pl = 4;
+    rig = makeBoss(); e.pl = ZONES.crater.pl + 1;
   }
   if (V) {
-    e.name = V.name; e.maxHp = Math.round(e.maxHp * (V.hp || 1)); e.dmg *= V.dmg || 1; e.speed *= V.speed || 1; e.aggroR *= V.aggro || 1;
+    const f = clamp((e.pl - 1) / 5, 0, 1);   // a Brute in the gentlest district is big, but not yet twice as hard
+    e.name = V.name; e.maxHp = Math.round(e.maxHp * (1 + ((V.hp || 1) - 1) * f)); e.dmg *= 1 + ((V.dmg || 1) - 1) * f; e.speed *= V.speed || 1; e.aggroR *= V.aggro || 1;
     if (V.atkCd) e.atkCd = V.atkCd; if (V.radius) e.radius = V.radius; e.height = V.base === 'hollowed' ? 2 * V.scale : 3.3 * V.scale;
     e.xp = Math.round(e.xp * 1.15); e.respawn += 6;
   }
@@ -2764,20 +2766,22 @@ function makeEnemy(type, level, x, z, temp = false, variant = null) {
   return e;
 }
 function spawnEnemies() {
-  for (let i = 0; i < 16; i++) { const x = rand(44, 150), z = rand(-56, 56); makeEnemy('hollowed', x < 75 ? 1 : x < 115 ? 2 : 3, x, z); }
-  for (let i = 0; i < 14; i++) { const x = rand(-150, -44), z = rand(-56, 56); makeEnemy('drone', x > -75 ? 2 : x > -115 ? 3 : 4, x, z); }
-  for (let i = 0; i < 9; i++) { const a = rand(0, Math.PI * 2), r = rand(22, 56); makeEnemy('hollowed', randi(4, 5), CRATER.x + Math.cos(a) * r, CRATER.z + Math.sin(a) * r); }
-  for (let i = 0; i < 4; i++) { const a = rand(0, Math.PI * 2), r = rand(20, 50); makeEnemy('drone', 5, CRATER.x + Math.cos(a) * r, CRATER.z + Math.sin(a) * r); }
+  // levels by power level: ◆1 1-3, ◆2 2-4, ◆3 4-6, ◆4 9-12, ◆5 13-16, ◆6 17-21
+  const LV = { 1: [1, 3], 2: [2, 4], 3: [4, 6], 4: [9, 12], 5: [13, 16], 6: [17, 21] }, lv = id => randi(...LV[ZONES[id].pl]);
+  for (let i = 0; i < 16; i++) { const x = rand(44, 150), z = rand(-56, 56); makeEnemy('hollowed', lv('ashen'), x, z); }
+  for (let i = 0; i < 14; i++) { const x = rand(-150, -44), z = rand(-56, 56); makeEnemy('drone', lv('echo'), x, z); }
+  for (let i = 0; i < 9; i++) { const a = rand(0, Math.PI * 2), r = rand(22, 56); makeEnemy('hollowed', lv('crater'), CRATER.x + Math.cos(a) * r, CRATER.z + Math.sin(a) * r); }
+  for (let i = 0; i < 4; i++) { const a = rand(0, Math.PI * 2), r = rand(20, 50); makeEnemy('drone', lv('crater'), CRATER.x + Math.cos(a) * r, CRATER.z + Math.sin(a) * r); }
   G.boss = makeEnemy('boss', 7, CRATER.x, CRATER.z + 2);
   // the Outer Wards
   const inR = R => [rand(R.x0 + 10, R.x1 - 10), rand(R.z0 + 8, R.z1 - 8)];
-  for (let i = 0; i < 15; i++) makeEnemy('hollowed', randi(9, 12), ...inR(RAIL), false, 'rusthollow');
-  for (let i = 0; i < 6; i++) makeEnemy('drone', randi(10, 12), ...inR(RAIL), false, 'scrapdrone');
-  for (let i = 0; i < 15; i++) makeEnemy('hollowed', randi(13, 16), ...inR(TENE), false, 'stalker');
-  for (let i = 0; i < 7; i++) makeEnemy('drone', randi(13, 16), ...inR(TENE), false, 'cinderdrone');
+  for (let i = 0; i < 15; i++) makeEnemy('hollowed', lv('rail'), ...inR(RAIL), false, 'rusthollow');
+  for (let i = 0; i < 6; i++) makeEnemy('drone', lv('rail'), ...inR(RAIL), false, 'scrapdrone');
+  for (let i = 0; i < 15; i++) makeEnemy('hollowed', lv('tenements'), ...inR(TENE), false, 'stalker');
+  for (let i = 0; i < 7; i++) makeEnemy('drone', lv('tenements'), ...inR(TENE), false, 'cinderdrone');
   const inResv = () => { const a = rand(0, Math.PI * 2), r = rand(12, RESV_R - 12); return [RESV.x + Math.cos(a) * r, RESV.z + Math.sin(a) * r]; };
-  for (let i = 0; i < 9; i++) makeEnemy('hollowed', randi(17, 21), ...inResv(), false, 'brute');
-  for (let i = 0; i < 9; i++) makeEnemy('drone', randi(17, 21), ...inResv(), false, 'sentinel');
+  for (let i = 0; i < 9; i++) makeEnemy('hollowed', lv('reservoir'), ...inResv(), false, 'brute');
+  for (let i = 0; i < 9; i++) makeEnemy('drone', lv('reservoir'), ...inResv(), false, 'sentinel');
 }
 function spawnShards() {
   const sm = new THREE.MeshStandardMaterial({ color: 0x3a0610, emissive: 0xff2b4a, emissiveIntensity: 3, flatShading: true });
@@ -2793,13 +2797,23 @@ function spawnShards() {
 }
 
 // ---------------------------------------------------------------- bots
-const GATES = { ashen: [new V3(36, 0, 0)], echo: [new V3(-36, 0, 0)], crater: [new V3(0, 0, -38), new V3(0, 0, -106)], plaza: [], cantina: [new V3(0, 0, 40), new V3(0, 0, 49)],
-  market: [new V3(21, 0, 30), new V3(21, 0, 86)],
-  concordia: [new V3(21, 0, 30), new V3(21, 0, 86), new V3(0, 0, 98), new V3(0, 0, 192), new V3(128, 0, 192), new V3(128, 0, 505), new V3(40, 0, 512)],
-  rail: [new V3(36, 0, 0), new V3(232, 0, 0)], tenements: [new V3(-36, 0, 0), new V3(-232, 0, 0)], reservoir: [new V3(21, 0, 30), new V3(21, 0, 88), new V3(0, 0, 98), new V3(0, 0, 240)] };
+// Each district's walk out of Concordia Plaza, along the streets. Routes share their first steps; routeTo goes back only
+// as far as the fork. East: the Quay Road and the x=128 street; west, the same mirrored; north, round the Dry Reservoir
+// and through the Lantern Market to the Frontier.
+const QUAY_E = [new V3(31, 0, 506), new V3(128, 0, 505), new V3(128, 0, 192)], QUAY_W = [new V3(-31, 0, 506), new V3(-128, 0, 505), new V3(-128, 0, 192)];   // out between the plaza's lamps
+const NORTH = [...QUAY_E, new V3(0, 0, 192), new V3(0, 0, 98), new V3(21, 0, 86), new V3(21, 0, 30)];
+const GATES = {
+  concordia: [], harbour: [],
+  reservoir: [new V3(18, 0, 493), new V3(8, 0, 470), new V3(0, 0, 440)],   // round the statue, up the Harbour Road
+  ashen: [...QUAY_E, new V3(128, 0, 70)], rail: [...QUAY_E, new V3(192, 0, 192), new V3(192, 0, 0), new V3(232, 0, 0)],
+  echo: [...QUAY_W, new V3(-128, 0, 70)], tenements: [...QUAY_W, new V3(-192, 0, 192), new V3(-192, 0, 0), new V3(-232, 0, 0)],
+  market: [...QUAY_E, new V3(0, 0, 192), new V3(0, 0, 140)],
+  plaza: [...NORTH, new V3(6, 0, 18)], cantina: [...NORTH, new V3(0, 0, 40), new V3(0, 0, 49)],
+  crater: [...NORTH, new V3(6, 0, 18), new V3(0, 0, -38), new V3(0, 0, -106)],
+};
 // Reachable spots in each Outer Ward district: clear of scenery, with a clear straight walk from the district's entry.
 const DPOINTS = {};
-const districtEntry = (zone, p) => zone === 'reservoir' ? new V3(0, 0, RESV.z - RESV_R + 10) : new V3(p.x, 0, 0);
+const districtEntry = (zone, p) => zone === 'reservoir' ? new V3(0, 0, RESV.z + RESV_R - 10) : new V3(p.x, 0, 0);   // the Reservoir's south gap faces the plaza
 function buildDistrictPoints() {
   const blocked = pointBlocked;
   const clear = (a, b) => { const n = Math.ceil(d2(a, b) / 1.5); for (let i = 0; i <= n; i++) if (blocked(a.x + (b.x - a.x) * i / n, a.z + (b.z - a.z) * i / n, 0.8)) return false; return true; };
@@ -2835,8 +2849,8 @@ function zonePoint(z) {
   for (let i = 0; i < 12 && z !== 'cantina' && pointBlocked(p.x, p.z); i++) p = zonePoint0(z);
   return p;
 }
-// Where a bot calls home: Orion and Malia live in Concordia Plaza with the Governor; everyone else gathers at the Frontier.
-const homeZone = b => b.legend ? 'concordia' : 'plaza';
+// Where a bot calls home: everyone lives in Concordia Plaza now, and sets out from there.
+const homeZone = () => 'concordia';
 const homePoint = b => zonePoint(homeZone(b));
 function zonePoint0(z) {
   if (z === 'cantina') return cantinaSpot();
@@ -2860,7 +2874,7 @@ function spawnBots() {
     const visor = new THREE.Color(pick(VISORS)).getHex();
     const rig = soldierReady() ? makeSoldier({ energy: visor, accent: c.hex, weapon: c.weapon, tint: pick(BOT_TINTS), mats: SOLDIER_MATS })
       : makeHumanoid({ armor: pick([0x2b323c, 0x3a3f4a, 0x2a2f2a, 0x3b2f36, 0x262c38]), accent: c.hex, visor, weapon: c.weapon });
-    const b = { kind: 'bot', name, cls: ck, level: randi(3, 18), guild: pick(GUILDS), rig, group: rig.group, pos: zonePoint('plaza'), alive: true, hp: 260, maxHp: 260, state: 'idle', path: [], idleT: rand(2, 20), actT: 0, act: 'plaza', target: null, atkT: 0, yaw: 0, move: 0, atk: 0, danceT: 0, height: 2.1, radius: 0.5,
+    const b = { kind: 'bot', name, cls: ck, level: randi(3, 18), guild: pick(GUILDS), rig, group: rig.group, pos: zonePoint('concordia'), alive: true, hp: 260, maxHp: 260, state: 'idle', path: [], idleT: rand(2, 20), actT: 0, act: 'plaza', target: null, atkT: 0, yaw: 0, move: 0, atk: 0, danceT: 0, height: 2.1, radius: 0.5,
       vy: 0, slideT: -1, rollT: 0, bjT: 0, flipT: 0, landT: 0, landHard: false, boost: 1, canFlip: false };
     b.pl = clamp(1 + Math.floor(b.level / 4), 1, 5);
     b.group.position.copy(b.pos); W.scene.add(b.group);
@@ -2959,7 +2973,7 @@ function spawnResident(s) {
   const rig = soldierReady() ? makeSoldier({ energy: visor, accent: c.hex, weapon: c.weapon, mats: SOLDIER_MATS })
     : makeHumanoid({ armor: 0x2f3742, accent: c.hex, visor, weapon: c.weapon });
   const b = allyBase({ resident: true, id: 'res:' + s.id, save: s, name: s.name, title: 'Resident of Ad-Nostra', cls: s.cls, level: st.level, rig, group: rig.group,
-    pos: zonePoint('plaza'), hp: st.maxHp, maxHp: st.maxHp, dmg: st.dmg, xp: s.xp | 0, pl: s.armour == null ? 1 : s.armour, pron: 'They', poss: 'their', lines: RESIDENT_LINES, respawnT: 15, idleT: rand(3, 15) });
+    pos: zonePoint('concordia'), hp: st.maxHp, maxHp: st.maxHp, dmg: st.dmg, xp: s.xp | 0, pl: s.armour == null ? 1 : s.armour, pron: 'They', poss: 'their', lines: RESIDENT_LINES, respawnT: 15, idleT: rand(3, 15) });
   if (Math.random() < 0.6) { b.act = pick(botZones(b)); b.pos.copy(zonePoint(b.act)); b.state = 'hunt'; b.actT = rand(40, 160); }
   b.group.position.copy(b.pos); W.scene.add(b.group);
   allyPlate(b, 'bot res'); addHitbox(b, 0.9, 2, 0.9, 1);
@@ -2998,7 +3012,9 @@ function partyOffset(b) {
 }
 function routeTo(from, to) {   // waypoints through the zone gates, so nobody walks into the city walls
   const zf = zoneAt(from.x, from.z), zt = zoneAt(to.x, to.z);
-  const path = (zf === zt ? [] : [...(GATES[zf] || [])].reverse().concat(GATES[zt] || [])).map(p => p.clone());
+  const A = GATES[zf] || [], Bt = GATES[zt] || []; let k = 0;
+  while (k < A.length && k < Bt.length && A[k] === Bt[k]) k++;   // shared steps: only walk back as far as the fork
+  const path = (zf === zt ? [] : [...A.slice(k)].reverse().concat(k ? [A[k - 1]] : [], Bt.slice(k))).map(p => p.clone());
   if (zt !== zf && (zt === 'rail' || zt === 'tenements' || zt === 'reservoir')) path.push(districtEntry(zt, to));
   if (zf !== zt && (zf === 'rail' || zf === 'tenements' || zf === 'reservoir')) path.unshift(districtEntry(zf, from));
   path.push(new V3(to.x, 0, to.z));
@@ -3285,7 +3301,7 @@ function reviveBot(b) {
   if (!b.ally) return;
   b.hitT = 0; b.medT = 0;
   if (d2(b.pos, G.P.pos) < 60) burst(b.pos.clone().setY(1), 0x3ee6ff, 30, 3);
-  if (b.party || b.legend) addChat('sys', null, `${b.name} is back on ${b.poss} feet ${b.legend ? 'in Concordia Plaza' : 'at the Frontier'}.`);
+  if (b.party || b.legend) addChat('sys', null, `${b.name} is back on ${b.poss} feet in Concordia Plaza.`);
   if (b.party && b.lines.back) setTimeout(() => addChat('say', b.name, pick(b.lines.back)), 900);
 }
 // ---- talking to them
@@ -3445,7 +3461,7 @@ function killEnemy(e, src) {
     gainXp(xp);
     const cr = Math.round((e.isBoss ? 300 : randi(2 + e.level, 6 + e.level * 3)) * share); D.credits += cr; addChat('loot', null, `You loot ${cr} credits.`); Sound.sfx('coin');
     D.kills++;
-    questEvent(e.isBoss ? 'boss' : e.variant ? 'remnant' : e.type, e);
+    questEvent(e.isBoss ? 'boss' : e.type, e);
     if (zoneAt(e.pos.x, e.pos.z) === 'crater' && !e.isBoss && D.q.i === 2 && D.q.st === 'active' && Math.random() < 0.4) { addChat('loot', null, 'You loot: [Beacon Shard]'); questEvent('shard'); }
     if (Math.random() < 0.06 && !e.isBoss) { D.medkits++; addChat('loot', null, 'You loot: [Concord Medkit]'); }
     if (e.isBoss) { addChat('world', null, `${D.name} has destroyed the Remnant of the Catharsis!`, 'sys'); setTimeout(() => botSay(pick(chatBots()), pick(['GG ' + D.name + '!!', 'legend', 'WOW', 'grats ' + D.name, 'o7 hero'])), 1500); }
@@ -3485,7 +3501,7 @@ function botDie(b) {
   if (b.ally) {
     b.resume = null; b.path = [];
     const near = d2(b.pos, G.P.pos) < 45;
-    if (b.party || b.legend || near) addChat('sys', null, `${b.name} has fallen in ${ZONE_IN[zoneAt(b.pos.x, b.pos.z)]}. ${b.pron} will return to ${b.legend ? 'Concordia Plaza' : 'the Frontier'}.`);
+    if (b.party || b.legend || near) addChat('sys', null, `${b.name} has fallen in ${ZONE_IN[zoneAt(b.pos.x, b.pos.z)]}. ${b.pron} will return to Concordia Plaza.`);
     if (near && b.lines.fallen) setTimeout(() => addChat('say', b.name, pick(b.lines.fallen)), 500);
     return;
   }
@@ -4324,7 +4340,7 @@ function drawMinimap() {
 function objectivePos() {
   const D = G.D, q = curQ();
   if (D.q.st !== 'active') return G.npcs[0].pos;
-  return { hollowed: new V3(95, 0, 0), drone: new V3(-95, 0, 0), shard: CRATER, boss: CRATER, any: G.P.pos.x >= 0 ? new V3(95, 0, 0) : new V3(-95, 0, 0) }[q.type];
+  return { hollowed: RESV, drone: new V3((TENE.x0 + TENE.x1) / 2, 0, 0), shard: CRATER, boss: CRATER, any: RESV }[q.type];
 }
 
 // =====================================================================
@@ -4353,7 +4369,7 @@ function sendChat(text) {
       case 'help': addChat('sys', null, 'Commands: /who /party /dismiss [name|all] /played /loc /dance /wave /salute /help'); break;
       case 'party': {
         const l = partyList(); if (!l.length) { addChat('sys', null, 'Nobody is fighting at your side. Talk to Orion or Malia Mascar, or to one of your Residents, and ask them to.'); break; }
-        addChat('sys', null, 'At your side: ' + l.map(b => `${b.name} (lv ${b.level}, ${b.alive ? Math.round(b.hp / b.maxHp * 100) + '% health, ' + Math.round(d2(b.pos, P.pos)) + 'm away' : 'fallen, returning to the Frontier'})`).join(', ') + '.'); break;
+        addChat('sys', null, 'At your side: ' + l.map(b => `${b.name} (lv ${b.level}, ${b.alive ? Math.round(b.hp / b.maxHp * 100) + '% health, ' + Math.round(d2(b.pos, P.pos)) + 'm away' : 'fallen, returning to Concordia Plaza'})`).join(', ') + '.'); break;
       }
       case 'dismiss': {
         const arg = text.slice(1).split(' ').slice(1).join(' ').trim().toLowerCase(), l = partyList();

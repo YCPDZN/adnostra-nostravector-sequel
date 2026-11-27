@@ -153,24 +153,24 @@ export const VISORS = ['#3ee6ff', '#e8c46a', '#ff2b4a', '#4dff9a', '#b07bff', '#
 
 export const QUESTS = [
   {
-    title: 'The Turned', type: 'hollowed', count: 6, xp: 220, cr: 80, zone: 'Scorched Veld (east)',
-    obj: 'Grant rest to Hollowed on the Scorched Veld',
-    offer: 'Ascendant. Welcome to Ad-Nostra.\n\nTen years ago, on Carax, the Wanderer and I ended Lord Zark. The Catharsis broke with him. But it had already reached Earth, and what it turned does not simply turn back.\n\nEast of the city, on the Scorched Veld, the Hollowed still walk. They were people once. Grant them rest. Six, to start.',
-    active: 'The Scorched Veld lies east along the Causeway, where the grass burned when the beacon-ship fell. Do not let their faces stop you.',
+    title: 'The Turned', type: 'hollowed', count: 6, xp: 220, cr: 80, zone: 'The Dry Reservoir (north of the plaza)',
+    obj: 'Grant rest to Hollowed in the Dry Reservoir',
+    offer: 'Ascendant. Welcome to Ad-Nostra.\n\nTen years ago, on Carax, the Wanderer and I ended Lord Zark. The Catharsis broke with him. But it had already reached Earth, and what it turned does not simply turn back.\n\nJust north of this plaza lies the Dry Reservoir, drained in the war. The Hollowed walk in its silt. They were people once. Grant them rest. Six, to start.',
+    active: 'Take the Harbour Road north from the plaza, over the Rampart Ring. The Reservoir\'s broken wall opens to the south. Do not let their faces stop you.',
     done: 'I knew a man the Catharsis turned. I faced him at Carax. There was nothing left of him to save.\n\nYou did right. You have my thanks, and the city\'s.'
   },
   {
-    title: 'Silence the Echoes', type: 'drone', count: 6, xp: 380, cr: 120, zone: 'Echo Plains (west)',
-    obj: 'Destroy Echo Drones on the Echo Plains',
-    offer: 'West of the city lie the Echo Plains. Zark\'s war-drones still hold station there around their signal pylons, waiting for orders from a fleet that no longer exists.\n\nEvery signal draws the Hollowed closer to our walls. Silence them.',
-    active: 'Follow the Causeway west. The drones strike from range. Close the distance quickly, or outlast them.',
+    title: 'Silence the Echoes', type: 'drone', count: 6, xp: 380, cr: 120, zone: 'The Ashfall Tenements (west)',
+    obj: 'Destroy drones in the Ashfall Tenements',
+    offer: 'West of the old city, in the burnt-out Ashfall Tenements, Zark\'s war-drones still circle the ruins, echoing signals to a fleet that no longer exists.\n\nEvery signal draws the Hollowed closer to our streets. Silence them.',
+    active: 'Take the Quay Road west, then the streets north to the Causeway. The drones strike from range. Close the distance quickly, or outlast them.',
     done: 'Quiet. Hear that? Wind in the grass, and nothing else.\n\nThat is what we fought for.'
   },
   {
     title: 'Shards of the Beacon', type: 'shard', count: 5, xp: 520, cr: 160, zone: 'The Crater (north)',
     obj: 'Recover beacon shards from the Crater',
     offer: 'When Zark fell, one of his beacon-ships came down north of here. We call the place the Crater.\n\nThe shards of that beacon are warming. Go north and recover five before anything else does. They glow crimson among the rocks, and the Remnants there carry some of their own.\n\nDo not hold them longer than you must.',
-    active: 'The Crater lies north, at the end of the Causeway. Look for the crimson light and press E to recover a shard.',
+    active: 'The Crater lies far to the north, past the Frontier at the heart of the old city. Look for the crimson light and press E to recover a shard.',
     done: 'They are pulsing together. Like a heartbeat.\n\nI felt this once before, on Carax, just before Zark showed himself. Something in that wreck remembers him.'
   },
   {
@@ -259,8 +259,8 @@ export const MALIA_LINES = {
     'Walk with me a while, if you like. I prefer to see the plains for myself rather than read reports about them.',
   ],
   city: 'Ad-Nostra was ash and old roads when Croxian came home. Now there is a plaza, a statue, and a cantina that never closes.\n\nPeople think a city is built from stone. It is built from people deciding to stay. Some of them decide to stay for good: the Ascendants who hang up their oath and simply live here. You will see them about.',
-  croxian: 'He stands on that dais all day and lets the whole city look at him. Then he sits in the corner of the Lantern and lets no one look at him at all.\n\nThe Concord will not let him leave the city. So I go out for him. I walk the Veld, the Plains and the Crater, and I tell him what I find.',
-  orion: 'My father-in-law walks. The plaza, the Veld, the Plains, the Crater, and back to the Lantern to stand over that plaque.\n\nHe says he is making sure the city is still here. I think he simply cannot sit still. It runs in the family. Apparently it runs in me too, now.',
+  croxian: 'He stands on that dais all day and lets the whole city look at him. Then he sits in the corner of the Lantern and lets no one look at him at all.\n\nThe Concord will not let him leave the city. So I go out for him. I walk the Reservoir, the Tenements and the Rail Yards, and I tell him what I find.',
+  orion: 'My father-in-law walks. The plaza, the Reservoir, the Tenements, the Rail Yards, the Crater, and back to the Lantern to stand over that plaque.\n\nHe says he is making sure the city is still here. I think he simply cannot sit still. It runs in the family. Apparently it runs in me too, now.',
   blade: 'This? It is not for show.\n\nThe Governor has guards. The Governor\'s wife has this, and a Concord mending kit. I am better with the second than people expect, and better with the first than they hope.',
   family: 'Orion is already walking with you. One of us at a time; someone has to keep an eye on the city.\n\nSend him home if you would rather have me. And learn to close your own wounds, too. I will not always be close enough.',
   join: 'Then we go together.\n\nKeep your eyes on the Remnants and I will keep mine on you. When you are hurt, I will close the wound. If I go down, I will wake in Concordia Plaza and come straight back to you.',
