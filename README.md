@@ -29,7 +29,7 @@ It also plays on phones and tablets: host the folder anywhere static (or open it
 | Space | Jump; again in the air for a flip; hold on the way down to aim-glide |
 | Q | Slide when moving fast (hold), dodge roll when slow |
 | Q + Space | Bullet jump (slide, then jump) |
-| Mouse drag / wheel | Turn the camera / zoom (right-drag also turns your character) |
+| Mouse drag / wheel | Turn the camera / zoom (right-drag also turns your character). The camera sits close, framed on your character over the right shoulder; scroll out for a wider view |
 | Click, Tab | Pick a target / cycle targets |
 | 1–4 | Class abilities |
 | 5 | Concord Medkit |
