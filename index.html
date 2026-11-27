@@ -238,7 +238,7 @@ input[type=checkbox]{accent-color:var(--cyan);width:18px;height:18px}
 .say-bubble{position:absolute;left:0;top:0;max-width:220px;padding:6px 10px;font-size:12px;background:rgba(7,11,17,.85);border:1px solid rgba(255,255,255,.15);white-space:normal;text-align:center}
 
 /* dialog / vendor / sheet */
-#dialog,#vendor,#sheet,#pause,#death{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:auto}
+#dialog,#vendor,#sheet,#pause,#death,#satchel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:auto}
 #dialog{width:min(620px,92vw);padding:24px 28px;max-height:92vh;overflow:auto}
 #dialog .who{font-size:10px;letter-spacing:.4em;color:var(--gold)}
 #dialog .whn{font-size:24px;letter-spacing:.15em;font-weight:600;margin-top:4px}
@@ -251,6 +251,24 @@ input[type=checkbox]{accent-color:var(--cyan);width:18px;height:18px}
 .vitem b{font-size:14px;letter-spacing:.1em;font-weight:600}
 .vitem p{font-size:12px;color:var(--dim);margin-top:3px}
 #sheet{width:min(460px,92vw);padding:24px 28px}
+#satchel{width:min(600px,94vw);max-height:88vh;overflow:auto;padding:22px 24px}
+#sat-tabs{display:flex;gap:8px;margin:12px 0 14px}#sat-tabs button{flex:1;padding:9px 0;font:inherit;font-size:12px;letter-spacing:.25em;color:var(--dim);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.12);cursor:pointer}
+#sat-tabs button.on{color:#fff;border-color:var(--cyan);background:rgba(62,230,255,.12)}
+.inv{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.islot{position:relative;aspect-ratio:1;border:1px solid rgba(255,255,255,.14);background:rgba(5,9,14,.7);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.islot.empty{border-color:rgba(255,255,255,.06)}.islot i{position:absolute;right:4px;top:2px;font-style:normal;font-size:11px;color:#ffd84a;text-shadow:0 1px 2px #000}.islot em{position:absolute;left:0;right:0;bottom:2px;font-style:normal;font-size:8px;letter-spacing:.04em;color:var(--dim);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 2px}
+.ig{font-size:18px;font-weight:700;text-shadow:0 0 6px rgba(0,0,0,.8)}.sat-note{margin-top:12px;font-size:12px;color:var(--dim);line-height:1.6}
+.sk-total{font-size:12px;letter-spacing:.25em;color:var(--dim);margin-bottom:10px}.sk-total b{color:#fff;font-size:16px}
+.skrow{display:grid;grid-template-columns:30px 1fr;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06)}.skrow>b{font-size:22px;text-align:center}
+.skn{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.2em}.skn span{color:#fff}.skrow.max .skn span{color:#ffd84a}
+.skbar{height:6px;background:rgba(255,255,255,.08);margin:6px 0 4px}.skbar i{display:block;height:100%}.skx{font-size:11px;color:var(--dim)}
+.cr-h{margin:14px 0 6px;font-size:12px;letter-spacing:.25em;color:var(--gold)}.cr-h span{float:right;color:var(--dim)}
+.crow{display:grid;grid-template-columns:28px 1fr auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}.crow b{font-size:13px;letter-spacing:.06em}.crow p{font-size:11px;color:var(--dim);margin-top:3px}.crow .bad{color:#ff7a8a}.crow.no b{opacity:.6}.crow .btn{padding:6px 10px;font-size:11px}
+#castbar{position:absolute;left:50%;bottom:150px;transform:translateX(-50%);width:240px;text-align:center}#castbar span{display:block;font-size:11px;letter-spacing:.2em;color:#fff;text-shadow:0 1px 2px #000;margin-bottom:4px}
+#castbar div{height:8px;border:1px solid rgba(255,255,255,.3);background:rgba(5,9,14,.7)}#castbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#e8c46a,#ffd84a)}
+#buildbar{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);display:flex;gap:6px;align-items:center;padding:8px 10px}
+.bblk{position:relative;width:46px;height:46px;border:1px solid rgba(255,255,255,.18);background:rgba(5,9,14,.75);cursor:pointer}.bblk b{position:absolute;inset:9px;border:1px solid rgba(0,0,0,.5)}.bblk.on{border-color:#4dff9a;box-shadow:0 0 10px rgba(77,255,154,.5)}.bblk.none{opacity:.4}
+.bblk i{position:absolute;right:3px;bottom:1px;font-style:normal;font-size:10px;color:#fff;text-shadow:0 1px 2px #000}.bblk em{position:absolute;left:3px;top:1px;font-style:normal;font-size:9px;color:var(--dim)}
+#buildbar .btn{padding:8px 10px;font-size:11px}#bb-remove.on{border-color:#ff4a5e;color:#ff7a8a}
 .srow{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px;letter-spacing:.12em;color:#c3d1dc}
 .srow b{color:#fff;font-weight:600}
 #pause{width:360px;padding:26px;text-align:center}
@@ -566,9 +584,11 @@ canvas#scene{touch-action:none}
   <div id="hotbar" class="panel cut pe"></div>
   <div id="wallet">⬡ 0 CR</div>
   <div id="xpbar"><i id="xp-fill"></i><span id="xp-text"></span></div>
-  <div id="keys">WASD MOVE · SHIFT SPRINT · SPACE JUMP (AGAIN IN AIR: FLIP, HOLD: GLIDE) · Q SLIDE / ROLL · Q+SPACE BULLET JUMP<br>DRAG CAMERA · WHEEL ZOOM · CLICK / TAB TARGET · 1–4 ABILITIES · 5 MEDKIT · E INTERACT<br>ENTER CHAT · C CHARACTER · M MAP · ESC MENU</div>
+  <div id="keys">WASD MOVE · SHIFT SPRINT · SPACE JUMP (AGAIN IN AIR: FLIP, HOLD: GLIDE) · Q SLIDE / ROLL · Q+SPACE BULLET JUMP<br>DRAG CAMERA · WHEEL ZOOM · CLICK / TAB TARGET · 1–4 ABILITIES · 5 MEDKIT · E INTERACT<br>ENTER CHAT · C CHARACTER · M MAP · I SATCHEL · O SKILLS · K CRAFTING · H BUILD · ESC MENU</div>
 
   <div id="prompt" class="panel pe hidden"></div>
+  <div id="castbar" class="hidden"><span></span><div><i></i></div></div>
+  <div id="buildbar" class="panel cut pe hidden"><div id="bb-blocks" style="display:flex;gap:6px"></div><button class="btn ghost" id="bb-remove">REMOVE</button><button class="btn gold" id="bb-done">DONE</button></div>
 
   <!-- touch controls (shown only on touch devices) -->
   <div id="touch">
@@ -582,6 +602,7 @@ canvas#scene{touch-action:none}
       <button id="tb-chat" class="tb sm" aria-label="Chat">✉</button>
       <button id="tb-sheet" class="tb sm" aria-label="Character">☰</button>
       <button id="tb-map" class="tb sm" aria-label="World map">⌖</button>
+      <button id="tb-bag" class="tb sm" aria-label="Satchel, skills and crafting">⚒</button>
       <button id="tb-menu" class="tb sm" aria-label="Menu">❚❚</button>
     </div>
   </div>
@@ -615,6 +636,13 @@ canvas#scene{touch-action:none}
     </div>
   </div>
 
+  <div id="satchel" class="panel cut hidden">
+    <button class="xbtn" id="satchel-x">✕</button>
+    <h2 style="font-size:20px;letter-spacing:.3em"><small style="display:block;font-size:10px;color:var(--cyan);letter-spacing:.35em;margin-bottom:6px;font-weight:400">CONCORD SUPPLY</small>SATCHEL</h2>
+    <div id="sat-tabs"><button data-tab="inv">SATCHEL · I</button><button data-tab="skills">SKILLS · O</button><button data-tab="craft">CRAFTING · K</button></div>
+    <div id="sat-body"></div>
+    <button class="btn ghost" id="sat-build" style="margin-top:12px;width:100%">BUILD AT YOUR HOMESTEAD · H</button>
+  </div>
   <div id="sheet" class="panel cut hidden">
     <button class="xbtn" id="sheet-x">✕</button>
     <h2 style="font-size:20px;letter-spacing:.3em"><small style="display:block;font-size:10px;color:var(--cyan);letter-spacing:.35em;margin-bottom:6px;font-weight:400">CONCORD REGISTRY</small><span id="sh-name"></span></h2>

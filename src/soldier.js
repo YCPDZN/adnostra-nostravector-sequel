@@ -375,7 +375,7 @@ export function animSoldier(r, e, dt, t, visible = true) {
   }
   st.lastAtk = atk;
   st.actT += dt;
-  const spd = st.spd, grounded = p.y <= 0.02;
+  const spd = st.spd, grounded = p.y - (e.gy || 0) <= 0.02;   // e.gy: the top of a block you're standing on
   if (!visible) return;
 
   const T = st.T, Q = st.Q, C = st.C; T.fill(0);

@@ -134,6 +134,38 @@ Power levels run outward from Concordia Plaza: the Dry Reservoir beside it is wh
 - **The Dry Reservoir** (power level 1, just north of Concordia Plaza; its broken wall opens to the south): the city's drained basin, with a broken retaining wall, a crimson-ringed intake tower, outfall pipes and Catharsis growths in the silt. Reservoir Brutes, huge and slow, and Catharsis Sentinels.
 - **Wildlife** roams the Scorched Veld and the Echo Plains: giraffes, elephants, zebras and gazelles move as herds, grazing and drifting across the plains. Zebras and gazelles bolt if you get close, and spook the rest of the herd.
 
+## Skills, crafting and your Homestead
+Alongside combat, every Ascendant has five skills that level from **1 to 99 on RuneScape's experience curve** (83 xp for level 2, 13,034,431 for 99). Your skills, satchel and home are saved with your character.
+
+| Key | |
+|---|---|
+| **I** | Satchel: 28 slots, stacks of up to 999 |
+| **O** | Skills: each one's level out of 99, its experience, and your total level |
+| **K** | Crafting and Construction recipes |
+| **H** | Build mode, at your Homestead |
+| **E** | Gather at a rock, tree or wreck |
+
+On touch, the ⚒ button opens the satchel.
+
+**Gathering.** Walk up to a node and press E: you keep working it until it is spent (it comes back after a while), your satchel is full, or you move. Higher levels hit more often; better tools work faster. You start with a Concord pickaxe, hatchet and salvage cutter.
+
+| Skill | Resource | Level | Where |
+|---|---|---|---|
+| Mining | Sandstone | 1 | Dry Reservoir |
+| Mining | Iron ore | 20 | Ashfall Tenements, Sunken Rail Yards |
+| Mining | Carax ore | 45 | the Crater |
+| Mining | Crimson crystal | 75 | Scorched Veld |
+| Woodcutting | Acacia logs | 1 | the city's parks, the Dry Reservoir |
+| Woodcutting | Baobab logs | 30 | Echo Plains, Ashfall Tenements |
+| Woodcutting | Ironwood logs | 60 | Scorched Veld |
+| Salvage | Scrap metal | 1 | Dry Reservoir, Ashfall Tenements (Remnants drop it too) |
+| Salvage | Circuitry | 25 | Sunken Rail Yards (and from tougher Remnants) |
+| Salvage | Catharsis alloy | 50 | the Crater |
+
+**Crafting** turns them into planks, glass, steel bars, lamp cores and Carax plate, and into steel (level 20+) and Carax (level 60+) tools that gather a third faster and nearly twice as fast. **Construction** turns materials into building blocks: sandstone (1), timber (5), whitewash (12), glass (20), steel (35), glowing lamp (45), Carax (65) and crimson crystal (85).
+
+**Your Homestead** is a 32 × 32 m plot in the Dhow Quarter, by the sea, with its own tram stop (and a ⌂ on the map). Press **H** there to build, Minecraft-style: click to place the block you have selected (1–8 or the build bar), right-click to take one back into your satchel; on touch, tap to place and switch the bar to REMOVE to take blocks back. You can build 16 blocks high, walk on what you build, climb it by jumping, and walls stop you. Your house is saved with your character.
+
 ## Classes
 - **Vanguard**: plate-armoured defender with heavy blade strikes, a ground slam and a barrier.
 - **Arcwright**: ranged channeler with arc bolts, chain lightning, a self-heal and the Overcharge Lance.
@@ -184,5 +216,6 @@ npm run build
 - [x] Bigger city, phase 1: rampart moved out to 470 m, Outer Wards with three new districts (power levels 4–6), Concord trams, world map
 - [x] Power levels 0–9 from armour, Dragonwilds-style: zone and enemy power levels, damage scaling, coloured diamonds and skulls, armour tiers from Ilse Varn
 - [x] A city that looks like a city, four times the size: rampart at 940 m, a street grid with shopfronts, awnings, lamps and palms, the Rampart Ring, four new wards, the Harbour with the ferry Talina, the Lantern Market, townsfolk and sky traffic
+- [x] Skills 1–99 on RuneScape's curve (Mining, Woodcutting, Salvage, Crafting, Construction), a satchel, crafting, and a Homestead to build on block by block
 - [ ] Bigger city, phase 2: the Frontier beyond the rampart, with power level 7–9 districts and bosses
 - [x] Character registry with multiple Ascendants, and Residents: retired characters who live in the city as allies
