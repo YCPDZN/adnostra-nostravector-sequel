@@ -165,9 +165,9 @@ input[type=checkbox]{accent-color:var(--cyan);width:18px;height:18px}
 .pm.dead .st{color:#ff7f8f}
 .buffs{display:flex;gap:4px;margin-top:6px;min-height:4px}
 .buff{font-size:10px;padding:2px 6px;border:1px solid var(--line);color:var(--cyan);letter-spacing:.1em}
-#bossbar{position:absolute;top:108px;left:50%;transform:translateX(-50%);width:520px;text-align:center}
-#bossbar .bn{font-size:13px;letter-spacing:.4em;color:var(--crimson);text-shadow:0 0 10px var(--crimson)}
-#bossbar .bar2{height:10px}
+#bossbar,#dragonbar{position:absolute;top:108px;left:50%;transform:translateX(-50%);width:520px;text-align:center}
+#bossbar .bn,#dragonbar .bn{font-size:13px;letter-spacing:.4em;color:var(--crimson);text-shadow:0 0 10px var(--crimson)}
+#bossbar .bar2,#dragonbar .bar2{height:10px}
 #mapwrap{position:absolute;right:18px;top:18px;width:200px;padding:8px}
 #minimap{display:block;width:184px;height:184px;border-radius:50%;background:#05080c}
 #zone-name{font-size:12px;letter-spacing:.2em;text-align:center;margin-top:8px;color:#fff}
@@ -380,7 +380,7 @@ canvas#scene{touch-action:none}
   #tracker{right:calc(10px + var(--sr));top:calc(168px + var(--st));width:200px;padding:8px 10px}
   #tracker .qt{font-size:12px}
   #tracker .qo{font-size:11px}
-  #bossbar{top:calc(72px + var(--st));width:min(420px,56vw)}
+  #bossbar,#dragonbar{top:calc(72px + var(--st));width:min(420px,56vw)}
   #banner .b2{font-size:26px}
   #banner .b1,#banner .b3{font-size:10px}
   #chat{left:calc(10px + var(--sl));width:min(340px,40vw)}
@@ -598,6 +598,7 @@ canvas#scene{touch-action:none}
   </div>
 
   <div id="bossbar" class="hidden"><div class="bn">REMNANT OF THE CATHARSIS</div><div class="bar2 ehp"><i id="boss-hp"></i></div></div>
+  <div id="dragonbar" class="hidden"><div class="bn">DRAGON</div><div class="bar2 ehp"><i id="dragon-hp"></i></div></div>
 
   <div id="mapwrap" class="panel cut">
     <canvas id="minimap" width="184" height="184"></canvas>
@@ -702,6 +703,6 @@ canvas#scene{touch-action:none}
 <div id="err" class="panel hidden"></div>
 <div id="fps" class="hidden"></div>
 
-<script src="game.js?v=0.3.1"></script>
+<script src="game.js?v=0.3.2"></script>
 </body>
 </html>

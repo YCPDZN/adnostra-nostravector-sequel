@@ -112,6 +112,8 @@ Like RuneScape: Dragonwilds, every Ascendant, district and Remnant has a **power
 | The Catharsis Crater (boss: 5) | far north | 4 |
 | Echo Plains | west of the Frontier | 5 |
 | Scorched Veld | east of the Frontier | 6 |
+| Tuldran's Roost (dragon: Tuldran) | far west, beyond Kopje Heights | 8 |
+| Taiman's Dune (dragon: Taiman) | far east, beyond Sunrise Ward | 8 |
 
 Power levels run outward from Concordia Plaza: the Dry Reservoir beside it is where new Ascendants cut their teeth, and the Scorched Veld, deepest in the old city, is the deadliest. Remnant levels follow (◆1 levels 1–3 up to ◆6 levels 17–21). The outer-ward Remnants keep their looks everywhere, but a Reservoir Brute in the gentlest district is only as tough as an ordinary Hollowed of its level; the variants grow into their extra toughness as the power level rises.
 
@@ -125,6 +127,12 @@ Power levels run outward from Concordia Plaza: the Dry Reservoir beside it is wh
 - **Concordia Plaza** stands on the waterfront at the head of the harbour, between the two ferry piers. It is where you start and where you come back to when you fall. Governor Mascar stands on his dais beneath the Statue of the Unmaking, looking out over the water, and Quartermaster Ilse Varn sells medkits and armour beside him. Everyone lives here now: Orion and Malia, your Residents and the other Ascendants stroll the plaza between hunts, walk out along the streets to the districts they hunt, come back here, and get back up here when they fall. The whole city is a sanctuary now; on the map it is washed in blue.
 - **Ad Nostra: Frontier** is the old plaza in the middle of the city, marked by a lit sign. It is not a sanctuary: it is the way out to the Scorched Veld, the Echo Plains and the Crater, the deadliest ground in the city. Its tram stop is on your network from the start.
 - **Scorched Veld** (east of the Frontier, power level 6, lv 17–21) holds the Hollowed.
+- **Tuldran's Roost** (far west, power level 8) and **Taiman's Dune** (far east, power level 8) are the lairs of two dragons sworn to the Catharsis Remnants, out past the new wards near the rampart. Each lair's door is beside a ward tram stop (Kopje Heights for the Roost, Sunrise Ward for the Dune), with a Concord warning pylon at the edge.
+  - **Tuldran, the Crimson Wing** crouches on scorched, cracked rock among burnt acacias and old bones, facing east toward the city. **Taiman, the Dune Sleeper** lies half under the sand among broken columns, facing west, his long tail curled round to his right. Both are level 30, power level 8, with a ring of Catharsis spires round them.
+  - **They're alive.** Both are rigged: they breathe, their tails stir, and while they fight their heads follow you as far as their necks reach. Taiman lifts himself off the sand when he wakes; Tuldran lowers his head at you with his wings flared and his jaws working. Every attack has its move (a raised foreleg brought down, Taiman's snapping jaws, rearing back before the breath, wings thrown up before the sweep, a snap of the head for a bolt), they roar when they wake and when they call up their Sworn, and when slain they collapse, then rise again.
+  - **They never move.** A dragon claws whatever stands at its head, breathes down a telegraphed line of ground in front of it (get out of the red circles), sweeps the ground all round it with wing and tail, and spits bolts at anyone out of reach. It doesn't turn, so behind it only the sweep and the bolts can reach you. At 60% and 30% health it calls up three of its Sworn.
+  - **Loyal to the Remnants:** the Sworn (Roost-Sworn Hollowed and Emberwing Drones in the west, Dune-Sworn Hollowed and Sandstorm Drones in the east, lv 26–30) keep each lair, and when one of them is fighting, its dragon joins in from where it lies.
+  - A dragon has its own health bar at the top of the screen while it fights you. Slay one for 1,500 credits and its experience (the whole realm hears about it); it rises again five minutes later. Leave its lair and it settles and heals.
 - **Echo Plains** (west of the Frontier, power level 5, lv 13–16) holds the Echo Drones.
 - **The Catharsis Crater** (far north, power level 4, lv 9–12) holds a crashed Catharsis beacon-ship, its shards, and the **Remnant of the Catharsis**. Vultures circle overhead.
 - **The Salt Lantern** (just south of the plaza) is a sanctuary cantina. Zuri Adeyemi keeps the bar and sells **Lantern Ale** (25 credits: +20% experience for 10 minutes). A bronze plaque in the floor marks where Orion Mascar fought Daniel Brown. Regulars drift in and out. Market stalls stand either side of its door, with lanterns strung between them.
@@ -196,6 +204,8 @@ The other Ascendants in the world are simulated. They have names, guilds and cla
 - `assets/main_menu_theme.mp3` is the main menu theme. It loops on the title and character-creation screens and fades out when you enter the world.
 - `tools/soldier/` is the pipeline that turned the raw model export into that asset.
 - `assets/orion_mascar.glb` is Orion Mascar: cut from 2M to 110k triangles with his original textures kept, rigged with the soldier's 19-bone skeleton, with a 2.6k-triangle copy for distant rendering. `assets/orion.js` is the same model embedded. `tools/orion/` is the pipeline.
+- `assets/tuldran.glb` and `assets/taiman.glb` are the dragons: each cut from 4.8M to 80k triangles with its original textures kept, and rigged (Tuldran 43 bones with a jaw, Taiman 32). Taiman's tail, which stopped short in the export, is regrown with its own baked texture. `src/dragons.js` animates them. `assets/tuldran.js` and `assets/taiman.js` are the same models embedded. `tools/dragons/` is the pipeline.
+- `src/dragons.js` holds the dragons and their lairs: where the lairs are, the scenery, the Sworn, and the dragons' attacks. `main.js` hands it what it needs through `initDragons()`.
 - `assets/malia_mascar.glb` is Malia Mascar: cut from 4.9M to 110k triangles with her original textures kept, rigged the same way, with her left hand held on her hip. `assets/malia.js` is the same model embedded. `tools/malia/` has her rig script.
 
 To rebuild after editing `src/`, run:
@@ -223,5 +233,7 @@ npm run build
 - [x] Power levels 0–9 from armour, Dragonwilds-style: zone and enemy power levels, damage scaling, coloured diamonds and skulls, armour tiers from Ilse Varn
 - [x] A city that looks like a city, four times the size: rampart at 940 m, a street grid with shopfronts, awnings, lamps and palms, the Rampart Ring, four new wards, the Harbour with the ferry Talina, the Lantern Market, townsfolk and sky traffic
 - [x] Skills 1–99 on RuneScape's curve (Mining, Woodcutting, Salvage, Crafting, Construction), a satchel, crafting, and a Homestead to build on block by block
+- [x] Dragons: Tuldran (west) and Taiman (east), stationary world bosses sworn to the Catharsis Remnants, in two power level 8 lairs
+- [x] Dragons rigged and animated; Taiman's tail regrown
 - [ ] Bigger city, phase 2: the Frontier beyond the rampart, with power level 7–9 districts and bosses
 - [x] Character registry with multiple Ascendants, and Residents: retired characters who live in the city as allies

@@ -90,6 +90,11 @@ export const CODEX = [
     'On the Echo Plains to the west, its war-drones still hold station around their signal pylons.',
     'And in the Crater to the north, the shards of the beacon have begun to pulse in rhythm. Something of Lord Zark\'s will is gathering itself in the wreck.'
   ]},
+  { title: 'Tuldran and Taiman', tag: 'THE DRAGONS · ◆8', body: [
+    'Two dragons came down with the beacon-ship\'s escort in 2127 and never went home. When the Catharsis fell at Carax they did not scatter, as the drones did, or wander, as the Hollowed do. They chose ground inside the new rampart and lay down on it, and they have not moved since.',
+    'TULDRAN, the Crimson Wing, holds the Roost beyond Kopje Heights in the west: scorched rock, burnt acacias, and the bones of those who tried. TAIMAN, the Dune Sleeper, lies beyond Sunrise Ward in the east, half under the sand he has heaped round him.',
+    'Both are sworn to the Catharsis Remnants. The Sworn keep their lairs, and when a Remnant there is threatened, its dragon answers from where it lies: claw and jaw at its head, breath down the ground before it, wing and tail all round it, and bolts for anyone who stays out of reach. The Concord rates both lairs power level 8. Do not go in alone.'
+  ]},
   { title: 'Ascendants', tag: 'YOU', body: [
     'Ascendants are citizens of Ad-Nostra who have sworn the Governor\'s Oath to defend the city and its grasslands.',
     'VANGUARDS hold the line in heavy plate. ARCWRIGHTS turn salvaged Catharsis technology into lightning. SHADES move between moments and strike where the Remnants are blind.',

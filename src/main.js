@@ -11,6 +11,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Sound } from './audio.js';
 import { loadSoldier, loadOrion, loadMalia, soldierReady, makeSoldier, animSoldier, MOVE_DUR } from './soldier.js';
+import { LAIR_R, LAIRS, DRAGON_PL, DRAGON_VARIANTS, lairAt, initDragons, loadDragons, buildLairs, spawnDragons, updateDragon, dragonSlain } from './dragons.js';
 import {
   CODEX, TIPS, CLASSES, VISORS, QUESTS, MASCAR_IDLE, BOT_NAMES, GUILDS,
   WORLD_CHAT, ZONE_CHAT, GOV_ANNOUNCE, LORE_REPLIES, GREET_REPLIES, ZURI_LINES, CANTINA_CHAT, PLAQUE, ORION_LINES, MALIA_LINES, RESIDENT_LINES, CROXIAN_LINES, SKILLS, ITEMS, RECIPES, NODES
@@ -800,6 +801,9 @@ const ZONES = {
   sunrise: { name: 'SUNRISE WARD', sub: 'THE NEW CITY · AD-NOSTRA', safe: true, pl: 0 },
   kopje: { name: 'KOPJE HEIGHTS', sub: 'THE NEW CITY · AD-NOSTRA', safe: true, pl: 0 },
   dhow: { name: 'THE DHOW QUARTER', sub: 'OLD TOWN BY THE SEA · AD-NOSTRA', safe: true, pl: 0 },
+  // the dragons' lairs (src/dragons.js): inside the rampart, past the new wards, the deadliest ground in the city
+  tuldran: { name: "TULDRAN'S ROOST", sub: 'BEYOND KOPJE HEIGHTS · DRAGON LAIR', pl: DRAGON_PL },
+  taiman: { name: "TAIMAN'S DUNE", sub: 'BEYOND SUNRISE WARD · DRAGON LAIR', pl: DRAGON_PL },
 };
 // The whole city is a sanctuary; only the old districts and the Frontier beside them are not.
 const QUIET_ZONES = new Set(['causeway', 'ward', 'ring']);   // walking between these doesn't throw up a banner
@@ -838,6 +842,7 @@ function zoneAt(x, z) {
   if (inRect(TENE, x, z)) return 'tenements';
   if (Math.hypot(x - RESV.x, z - RESV.z) < RESV_R) return 'reservoir';
   if (Math.hypot(x - CONC.x, z - CONC.z) < 34) return 'concordia';
+  const lair = lairAt(x, z); if (lair) return lair;
   if (inRect(HARBOUR, x, z)) return 'harbour';
   if (r < OLD_R - 10) return (Math.abs(z) < 12 || (Math.abs(x) < 12 && z < 0)) ? 'causeway' : 'ward';
   if (r < OLD_R + 10) return 'ring';
@@ -1026,6 +1031,7 @@ function buildWorld() {
   buildDistricts(S);
   buildTrams(S);
   buildCity(S);
+  buildLairs(S);   // Tuldran's Roost and Taiman's Dune
   buildHomestead(S);
   buildPeople(S); buildTraffic(S);
   // grass: burnt on the veld, pale on the Echo Plains, gold in the parks, none on the streets or in the crater
@@ -1440,6 +1446,7 @@ const WILD = [
   { rect: { x0: 30, x1: 160, z0: -66, z1: 66 } }, { rect: { x0: -160, x1: -30, z0: -66, z1: 66 } },
   { c: [CRATER.x, CRATER.z], r: 76 }, { rect: growR(RAIL, 4) }, { rect: growR(TENE, 4) }, { rect: SOUTH_LANE },
   { c: [RESV.x, RESV.z], r: RESV_R + 4 }, { rect: HARBOUR }, { c: [CONC.x, CONC.z], r: 38 }, { rect: { x0: 267, x1: 311, z0: 649, z1: 695 } }, { rect: { x0: -2000, x1: 2000, z0: COAST_Z - 29, z1: 4000 } },
+  ...LAIRS.map(L => ({ c: [L.x, L.z], r: LAIR_R + 4 })),   // the dragons' lairs
 ];
 function wildReason(R, m) {   // why a rectangle can't simply be built over: '' if it can
   for (const Z of WILD) {
@@ -3064,6 +3071,7 @@ const VARIANTS = {
   cinderdrone: { base: 'drone', name: 'Cinder Drone', glow: 0xffb030, scale: 1.15, hp: 1.1 },
   brute: { base: 'hollowed', name: 'Reservoir Brute', armor: 0x2a0a10, accent: 0xff2b4a, scale: 1.65, hp: 2.1, dmg: 1.5, speed: 0.8, atkCd: 2.3, radius: 0.9 },
   sentinel: { base: 'drone', name: 'Catharsis Sentinel', glow: 0xff2b4a, scale: 1.5, hp: 1.7, dmg: 1.3, radius: 1.2 },
+  ...DRAGON_VARIANTS,   // the Sworn, who keep the dragons' lairs
 };
 function makeEnemy(type, level, x, z, temp = false, variant = null) {
   const V = variant && VARIANTS[variant]; if (V) type = V.base;
@@ -3112,6 +3120,7 @@ function spawnEnemies() {
   const inResv = () => { const a = rand(0, Math.PI * 2), r = rand(12, RESV_R - 12); return [RESV.x + Math.cos(a) * r, RESV.z + Math.sin(a) * r]; };
   for (let i = 0; i < 9; i++) makeEnemy('hollowed', lv('reservoir'), ...inResv(), false, 'brute');
   for (let i = 0; i < 9; i++) makeEnemy('drone', lv('reservoir'), ...inResv(), false, 'sentinel');
+  spawnDragons();   // Tuldran and Taiman, and the Sworn in their lairs
 }
 function spawnShards() {
   const sm = new THREE.MeshStandardMaterial({ color: 0x3a0610, emissive: 0xff2b4a, emissiveIntensity: 3, flatShading: true });
@@ -3332,7 +3341,7 @@ function syncResidents() {
 }
 // ---- the party: allies who fight at your side
 const partyList = () => G.bots.filter(b => b.party);
-const ZONE_IN = { plaza: 'the Frontier', concordia: 'Concordia Plaza', causeway: 'the Concord Causeway', ward: 'the Spire Wards', ashen: 'the Scorched Veld', echo: 'the Echo Plains', crater: 'the Catharsis Crater', cantina: 'the Salt Lantern', rail: 'the Sunken Rail Yards', tenements: 'the Ashfall Tenements', reservoir: 'the Dry Reservoir',
+const ZONE_IN = { plaza: 'the Frontier', concordia: 'Concordia Plaza', causeway: 'the Concord Causeway', ward: 'the Spire Wards', ashen: 'the Scorched Veld', echo: 'the Echo Plains', crater: 'the Catharsis Crater', cantina: 'the Salt Lantern', rail: 'the Sunken Rail Yards', tenements: 'the Ashfall Tenements', reservoir: 'the Dry Reservoir', tuldran: "Tuldran's Roost", taiman: "Taiman's Dune",
   market: 'the Lantern Market', harbour: 'the Harbour', ring: 'the Rampart Ring', northgate: 'Northgate', sunrise: 'Sunrise Ward', kopje: 'Kopje Heights', dhow: 'the Dhow Quarter' };
 const PARTY_SLOTS = [[-1.9, -2.2], [1.9, -2.2], [0, -3.9]];   // [right, forward] from the player, in metres
 function partyOffset(b) {
@@ -3782,6 +3791,7 @@ function killEnemy(e, src) {
   e.alive = false; e.hp = 0; e.state = 'dead'; e.deadT = 0; e.dots = []; e.target = null;
   burst(e.pos.clone().setY(e.height * 0.5), e.isBoss ? 0xff2b4a : 0xff5a6e, e.isBoss ? 120 : 30, e.isBoss ? 9 : 4);
   Sound.sfx(e.isBoss ? 'boom' : 'die');
+  if (e.dragon) dragonSlain(e, src);
   if (G.P.target === e) setTimeout(() => { if (G.P.target === e) setTarget(null); }, 600);
   if (src && src.resident && src.save) src.save.kills = (src.save.kills | 0) + 1;
   if (src && src.ally && src.alive !== false) allyXp(src, e);
@@ -3791,7 +3801,7 @@ function killEnemy(e, src) {
     const share = src && src.legend && !e.yours ? 0.5 : 1;   // a Mascar's kill you never struck is worth half
     xp = Math.round(xp * share);
     gainXp(xp);
-    const cr = Math.round((e.isBoss ? 300 : randi(2 + e.level, 6 + e.level * 3)) * share); D.credits += cr; addChat('loot', null, `You loot ${cr} credits.`); Sound.sfx('coin');
+    const cr = Math.round((e.isBoss ? 300 : e.dragon ? 1500 : randi(2 + e.level, 6 + e.level * 3)) * share); D.credits += cr; addChat('loot', null, `You loot ${cr} credits.`); Sound.sfx('coin');
     D.kills++;
     questEvent(e.isBoss ? 'boss' : e.type, e);
     if (zoneAt(e.pos.x, e.pos.z) === 'crater' && !e.isBoss && D.q.i === 2 && D.q.st === 'active' && Math.random() < 0.4) { addChat('loot', null, 'You loot: [Beacon Shard]'); questEvent('shard'); }
@@ -4152,6 +4162,7 @@ function updatePlayer(dt) {
 function updateEnemies(dt) {
   const P = G.P;
   for (const e of G.enemies) {
+    if (e.dragon) { updateDragon(e, dt); continue; }   // they never move: src/dragons.js
     e.anim += dt;
     if (!e.alive) {
       e.deadT += dt;
@@ -4562,7 +4573,7 @@ function updateTargetFrame(force) {
   if (!t) { tf.classList.add('hidden'); return; }
   tf.classList.remove('hidden');
   if (t.kind === 'enemy') {
-    setT('t-name', t.name); setT('t-lvl', `${plText(t.pl)} · LV ${t.level}`); setT('t-sub', t.isBoss ? 'ELITE · REMNANT' : t.type === 'drone' ? 'MECHANICAL · REMNANT' : 'HOLLOWED · REMNANT');
+    setT('t-name', t.name); setT('t-lvl', `${plText(t.pl)} · LV ${t.level}`); setT('t-sub', t.dragon ? 'DRAGON · SWORN TO THE CATHARSIS' : t.isBoss ? 'ELITE · REMNANT' : t.type === 'drone' ? 'MECHANICAL · REMNANT' : 'HOLLOWED · REMNANT');
     $('t-bar').style.display = ''; setW('t-hp', t.hp / t.maxHp); setT('t-hpt', `${Math.max(0, Math.ceil(t.hp))} / ${t.maxHp}`);
   } else if (t.kind === 'bot' && t.ally) {
     setT('t-name', t.name); setT('t-lvl', 'LV ' + t.level); setT('t-sub', `${t.title.toUpperCase()}${t.party ? ' · WITH YOU' : ''}`);
@@ -4589,7 +4600,7 @@ function updatePlates() {
   const mq = G.npcs[0].plate.firstChild; if (mq.textContent !== qm) mq.textContent = qm;
   for (const e of list) {
     const el = e.plate; const d = W.cam.position.distanceTo(e.pos);
-    let vis = show && (e.alive || e.kind === 'bot') && d < (e.kind === 'npc' ? 70 : e.isBoss ? 90 : 50);
+    let vis = show && (e.alive || e.kind === 'bot') && d < (e.kind === 'npc' ? 70 : e.dragon ? 170 : e.isBoss ? 90 : 50);
     let s = null; if (vis) { s = toScreen(e.pos, e.height + 0.35); vis = !!s; }
     if (!vis) { if (el._v !== false) { el.style.display = 'none'; el._v = false; } continue; }
     if (el._v !== true) { el.style.display = ''; el._v = true; }
@@ -4629,6 +4640,7 @@ function drawMinimap() {
   if (Math.abs(P.pos.x) > 120 || Math.abs(P.pos.z) > 120) {   // the Outer Wards, tinted by how dangerous they are for you
     for (const [id, R] of [['rail', RAIL], ['tenements', TENE]]) { mm.fillStyle = hexA(PL_COL[plTag(ZONES[id].pl)], 0.16); mm.fillRect(X(R.x0), Y(R.z0), (R.x1 - R.x0) * sc, (R.z1 - R.z0) * sc); }
     mm.fillStyle = hexA(PL_COL[plTag(ZONES.reservoir.pl)], 0.16); mm.beginPath(); mm.arc(X(RESV.x), Y(RESV.z), RESV_R * sc, 0, 7); mm.fill();
+    for (const L of LAIRS) { mm.fillStyle = hexA(PL_COL[plTag(DRAGON_PL)], 0.2); mm.beginPath(); mm.arc(X(L.x), Y(L.z), LAIR_R * sc, 0, 7); mm.fill(); }   // the dragons' lairs
   }
   mm.fillStyle = '#3ee6ff'; for (const t of TRAMS) if (G.D.trams.includes(t.id)) { mm.save(); mm.translate(X(t.pos.x), Y(t.pos.z)); mm.rotate(Math.PI / 4); mm.fillRect(-3, -3, 6, 6); mm.restore(); }
   mm.fillStyle = 'rgba(62,230,255,0.16)'; mm.beginPath(); mm.arc(X(CONC.x), Y(CONC.z), 34 * sc, 0, 7); mm.fill();   // Concordia Plaza
@@ -4645,7 +4657,7 @@ function drawMinimap() {
   if (FERRY.group) { mm.fillStyle = '#3ee6ff'; mm.fillRect(X(FERRY.x - FERRY.HL), Y(FERRY.z - FERRY.HW), FERRY.HL * 2 * sc, FERRY.HW * 2 * sc); }
   mm.strokeStyle = 'rgba(232,196,106,0.6)'; mm.lineWidth = 2; mm.beginPath(); mm.arc(X(0), Y(0), (WORLD_R + 6) * sc, 0, 7); mm.stroke();
   if (G.D.q.i === 2 && G.D.q.st === 'active') { mm.fillStyle = '#ff6b7f'; for (const s of G.shards) if (s.active) { mm.save(); mm.translate(X(s.pos.x), Y(s.pos.z)); mm.rotate(Math.PI / 4); mm.fillRect(-2.5, -2.5, 5, 5); mm.restore(); } }
-  for (const e of G.enemies) { if (!e.alive) continue; mm.fillStyle = e.isBoss ? '#ff2b4a' : '#ff5a6e'; const r = e.isBoss ? 5 : 2.2; mm.beginPath(); mm.arc(X(e.pos.x), Y(e.pos.z), r, 0, 7); mm.fill(); }
+  for (const e of G.enemies) { if (!e.alive) continue; mm.fillStyle = e.isBoss || e.dragon ? '#ff2b4a' : '#ff5a6e'; const r = e.dragon ? 8 : e.isBoss ? 5 : 2.2; mm.beginPath(); mm.arc(X(e.pos.x), Y(e.pos.z), r, 0, 7); mm.fill(); }
   for (const b of G.bots) if (b.alive && !b.legend) { mm.fillStyle = b.resident ? '#9dffb0' : '#7fe3ff'; mm.beginPath(); mm.arc(X(b.pos.x), Y(b.pos.z), b.resident ? 2.8 : 2.2, 0, 7); mm.fill(); }
   mm.fillStyle = '#e8c46a'; for (const n of [...G.npcs, ...G.bots.filter(b => b.legend && b.alive)]) { mm.beginPath(); mm.arc(X(n.pos.x), Y(n.pos.z), 3.5, 0, 7); mm.fill(); }
   mm.strokeStyle = '#4dff9a'; mm.lineWidth = 1.5; for (const b of G.bots) if (b.party && b.alive) { mm.beginPath(); mm.arc(X(b.pos.x), Y(b.pos.z), 5.5, 0, 7); mm.stroke(); }
@@ -4813,6 +4825,7 @@ function drawMapBase(zoom) {   // everything that doesn't move, drawn once per z
   ground('#7a6a52', ['#6a5a44', '#8a7a60'], () => rectP(RAIL)); ground('#4c4038', ['#3a3028', '#5a4c40', '#8a4a2a'], () => rectP(TENE));
   ground('#9a8a6c', ['#8a7a5c', '#aa9a7a', '#6a5a44'], () => g.arc(X(RESV.x), Y(RESV.z), L(RESV_R), 0, 7));
   ground('#b0613c', ['#a35834', '#bd6c45'], () => rectP(MARKET));
+  for (const Lr of LAIRS) ground(Lr.mapGround[0], Lr.mapGround.slice(1), () => g.arc(X(Lr.x), Y(Lr.z), L(LAIR_R), 0, 7));   // the dragons' lairs
   for (const R of W.parks || []) ground('#6f8a3a', ['#5f7a2e', '#7f9a46'], () => rectP(R));
   g.strokeStyle = 'rgba(40,25,15,0.6)'; g.lineWidth = 1;   // rails in the yards, rocks round the crater
   for (const tz of [-62, -44, -26, 26, 44, 62]) { g.beginPath(); g.moveTo(X(RAIL.x0), Y(tz)); g.lineTo(X(RAIL.x1), Y(tz)); g.stroke(); }
@@ -4848,14 +4861,14 @@ function drawMapBase(zoom) {   // everything that doesn't move, drawn once per z
   const hole = R => { g.moveTo(X(R.x0), Y(R.z0)); g.lineTo(X(R.x0), Y(R.z1)); g.lineTo(X(R.x1), Y(R.z1)); g.lineTo(X(R.x1), Y(R.z0)); g.closePath(); };
   const holeC = (x, z, r) => { g.moveTo(X(x) + L(r), Y(z)); g.arc(X(x), Y(z), L(r), 0, Math.PI * 2, true); g.closePath(); };
   for (const R of [{ x0: 34, x1: 156, z0: -62, z1: 62 }, { x0: -156, x1: -34, z0: -62, z1: 62 }, RAIL, TENE, BASIN]) hole(R);
-  holeC(CRATER.x, CRATER.z, 72); holeC(RESV.x, RESV.z, RESV_R); holeC(0, 0, 34);
+  holeC(CRATER.x, CRATER.z, 72); holeC(RESV.x, RESV.z, RESV_R); holeC(0, 0, 34); for (const Lr of LAIRS) holeC(Lr.x, Lr.z, LAIR_R);
   g.fillStyle = 'rgba(40,150,255,0.22)'; g.fill('evenodd');
   g.strokeStyle = 'rgba(90,190,255,0.9)'; g.lineWidth = 1.5; g.stroke();
   g.restore();
   g.save(); g.strokeStyle = '#e8c46a'; g.setLineDash([5, 4]); g.lineWidth = 2; g.beginPath(); g.arc(X(0), Y(0), L(34), 0, 7); g.stroke(); g.restore();   // the Frontier: not a sanctuary
   // the danger of each hostile district, as a dashed border
   g.setLineDash([5, 4]); g.lineWidth = 2;
-  for (const [id, draw] of [['ashen', () => rectP({ x0: 34, x1: 156, z0: -62, z1: 62 })], ['echo', () => rectP({ x0: -156, x1: -34, z0: -62, z1: 62 })], ['crater', () => g.arc(X(CRATER.x), Y(CRATER.z), L(72), 0, 7)], ['rail', () => rectP(RAIL)], ['tenements', () => rectP(TENE)], ['reservoir', () => g.arc(X(RESV.x), Y(RESV.z), L(RESV_R), 0, 7)]]) {
+  for (const [id, draw] of [['ashen', () => rectP({ x0: 34, x1: 156, z0: -62, z1: 62 })], ['echo', () => rectP({ x0: -156, x1: -34, z0: -62, z1: 62 })], ['crater', () => g.arc(X(CRATER.x), Y(CRATER.z), L(72), 0, 7)], ['rail', () => rectP(RAIL)], ['tenements', () => rectP(TENE)], ['reservoir', () => g.arc(X(RESV.x), Y(RESV.z), L(RESV_R), 0, 7)], ...LAIRS.map(Lr => [Lr.id, () => g.arc(X(Lr.x), Y(Lr.z), L(LAIR_R), 0, 7)])]) {
     g.strokeStyle = PL_COL[plTag(ZONES[id].pl)]; g.beginPath(); draw(); g.stroke();
   }
   g.setLineDash([]);
@@ -4910,10 +4923,11 @@ function drawWorldMap() {
   mapIcon(g, X(CONC.x), Y(CONC.z - 14), '#8a6a1e', '♛', r); mapIcon(g, X(CONC.x + 14), Y(CONC.z + 2), '#6a4a8a', '⚔', r);   // the Governor and the Quartermaster
   mapIcon(g, X(197), Y(872), '#b3301e', '▲', r);
   mapIcon(g, X(HOME_C.x), Y(HOME_C.z), '#2a8a6a', '⌂', r);   // your Homestead                                          // the lighthouse
+  for (const Lr of LAIRS) mapIcon(g, X(Lr.x), Y(Lr.z - 16), '#8a1e2a', '✹', r + 1);   // the dragons
   mapIcon(g, X(-50), Y(540), '#4a6a7a', '⚓', r - 1);                                      // the anchor on the north quay
   // names
   const labels = zoom ? [['plaza', 0, -48], ['cantina', 0, 80], ['market', 0, 168], ['ashen', 108, 24], ['echo', -108, 24], ['crater', 0, -165], ['rail', 328, -30], ['tenements', -328, -30], ['reservoir', 0, 330], ['ward', 210, -230], ['ward', -230, 230], ['ring', -300, -385]]
-    : [['reservoir', 0, 336], ['harbour', 0, 690], ['northgate', 0, -700], ['sunrise', 700, -110], ['kopje', -700, -110], ['dhow', -470, 640], ['dhow', 470, 640], ['ring', -300, -385], ['crater', 0, -165], ['plaza', 0, -60], ['concordia', 0, 470]];
+    : [['reservoir', 0, 336], ['harbour', 0, 690], ['northgate', 0, -700], ['sunrise', 700, -110], ['kopje', -700, -110], ['dhow', -470, 640], ['dhow', 470, 640], ['ring', -300, -385], ['crater', 0, -165], ['plaza', 0, -60], ['concordia', 0, 470], ['tuldran', -805, 52], ['taiman', 805, 52]];
   const cap = s => s.toLowerCase().replace(/(^|[\s-])(\S)/g, (m, a, b) => a + b.toUpperCase()).replace(/\bOf\b/g, 'of').replace(/\bThe\b(?!^)/g, 'the').replace(/^the/, 'The');
   for (const [id, x, z] of labels) {
     const Z = ZONES[id], danger = !Z.safe && Z.pl;
@@ -5350,6 +5364,11 @@ function loop() {
   catch (err) { console.error(err); }   // without his model, Orion simply isn't in the world
   try { await loadMalia(); }
   catch (err) { console.error(err); }   // likewise Malia
+  initDragons({
+    THREE: { Group: THREE.Group, Mesh: THREE.Mesh, MeshStandardMaterial: THREE.MeshStandardMaterial, CircleGeometry: THREE.CircleGeometry, TorusGeometry: THREE.TorusGeometry, PlaneGeometry: THREE.PlaneGeometry, Vector3: THREE.Vector3, Color: THREE.Color, Box3: THREE.Box3, DoubleSide: THREE.DoubleSide, Object3D: THREE.Object3D },
+    GLTFLoader, G, W, GEO, Sound, glowMat, canvasTex, addCollider, pointBlocked, makeEnemy, makePlate, addHitbox, damage, telegraph, projectile, burst, ringFx, addChat, botSay, chatBots, rand, randi, pick, d2, esc,
+  });
+  await loadDragons();   // Tuldran and Taiman (a lair without its model keeps its Remnants)
   buildMenu();
   setScene(menu.scene, menu.cam);
   loop();
