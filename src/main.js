@@ -2694,7 +2694,7 @@ function addHitbox(ent, w, h, d, y) {
 function spawnNPCs() {
   // Governor Croxian Mascar
   const m = mascarInstance(2.25); m.position.set(0, 1.2, -12); W.scene.add(m);
-  const mascar = { kind: 'npc', id: 'mascar', name: 'Croxian Mascar', title: 'Governor of Ad-Nostra', pos: new V3(0, 1.2, -12), group: m, height: 2.6, radius: 1, alive: true, pl: 7, hp: 1e6, maxHp: 1e6 };
+  const mascar = { kind: 'npc', id: 'mascar', name: 'Croxian Mascar', title: 'Governor of Ad-Nostra', pos: new V3(0, 1.2, -12), group: m, height: 2.6, radius: 1, alive: true, pl: 7, hp: 1600, maxHp: 1600 };
   mascar.plate = makePlate('npc', `<div class="qm"></div><div class="n"><b class="pld">◆7</b> Croxian Mascar</div><div class="g">&lt;Governor of Ad-Nostra&gt;</div>`);
   addHitbox(mascar, 1.2 / m.scale.x, 2.4, 1.2, 1.2);
   G.npcs.push(mascar);
@@ -2897,7 +2897,7 @@ function allyXp(b, e) {
   while (b.xp >= xpNext(b.level) && b.level < 30) {
     b.xp -= xpNext(b.level); b.level++;
     const oldPL = b.pl | 0;
-    if (b.legend) applyLegendLevel(b);
+    if (b.legend && !b.fury) applyLegendLevel(b);
     else if (b.resident) { const st = residentStats({ cls: b.cls, level: b.level }); Object.assign(b, { maxHp: st.maxHp, dmg: st.dmg }); }
     b.hp = b.maxHp;
     if (b.save) { b.save.level = b.level; b.save.xp = b.xp; }
@@ -3168,11 +3168,17 @@ function croxianLogic(dt) {
     const a = rand(0, 6.28); c.pos.set(m.pos.x + Math.cos(a) * 2.6, 0, m.pos.z + Math.sin(a) * 2.6); resolveCollision(c.pos, 0.8); c.group.position.copy(c.pos);
     ringFx(c.pos, 0x3ee6ff, 6, 0.7); burst(c.pos.clone().setY(1.5), 0x3ee6ff, 60, 5);
     for (const e of foes) { e.target = c; e.state = 'chase'; }
-    Object.assign(CROX, { state: 'fight', t: 24, calm: 0, atkT: 0.4, spin: 0 }); c.hp = c.maxHp;
+    Object.assign(CROX, { state: 'fight', t: 24, calm: 0, atkT: 0.4, spin: 0 }); c.hp = c.maxHp; c.alive = true;
     if (croxianNear()) {
       banner('THE GOVERNOR', 'CROXIAN MASCAR', 'STANDS OVER HIS WIFE · ◆7');
       addChat('say', c.name, pick(CROXIAN_LINES.arrive));
     } else setTimeout(() => botSay(pick(chatBots()), pick(CROXIAN_LINES.seen)), 2500);
+    return;
+  }
+  if (CROX.state === 'down') {   // on the ground; if Malia falls too, Orion comes
+    CROX.t -= dt;
+    if (!m.alive && !CROX.furyDone) orionFury(c);
+    if (CROX.t <= 0 && !G.bots.some(b => b.fury)) croxianRise(c, m);
     return;
   }
   // fighting: Remnants on Malia or on him, within reach of her
@@ -3193,6 +3199,55 @@ function croxianLogic(dt) {
     }
   } else if (d2(c.pos, m.pos) > 5) { moveToward(c, m.pos, 9, dt, 3); turnTo(c.group, Math.atan2(m.pos.x - c.pos.x, m.pos.z - c.pos.z), dt, 8); }
   resolveCollision(c.pos, 0.8); c.group.position.set(c.pos.x, 0, c.pos.z);
+}
+// He can fall, out there. If Malia falls too, Orion Mascar loses his temper.
+function croxianFall(c, killer) {
+  if (CROX.state !== 'fight') { c.hp = c.maxHp; return; }
+  c.alive = false; c.hp = 0; CROX.state = 'down'; CROX.t = 30; CROX.killer = killer && killer.kind === 'enemy' ? killer : null; CROX.where = c.pos.clone(); CROX.furyDone = false;
+  for (const e of G.enemies) if (e.target === c) { e.target = null; e.state = 'return'; }
+  c.group.rotation.set(-Math.PI / 2, c.group.rotation.y, 0); c.group.position.set(c.pos.x, 0.35, c.pos.z);
+  addChat('sys', null, `Governor Croxian Mascar has fallen in ${ZONE_IN[zoneAt(c.pos.x, c.pos.z)]}.`);
+  if (croxianNear()) addChat('say', c.name, pick(CROXIAN_LINES.fall));
+}
+function croxianRise(c, m) {
+  c.alive = true; c.hp = c.maxHp; c.group.rotation.set(0, 0, 0);
+  if (croxianNear()) addChat('say', c.name, pick(CROXIAN_LINES.rise));
+  croxianLeave(c, m);
+}
+// Orion, for a little while, at power level 9: straight to whatever put his son down, and through it.
+function orionFury(c) {
+  const o = G.bots.find(b => b.id === 'orion'); CROX.furyDone = true;
+  if (!o || !o.alive) return;
+  let foe = CROX.killer && CROX.killer.alive ? CROX.killer : null;
+  if (!foe) { let bd = 30; for (const e of G.enemies) { if (!e.alive) continue; const d = d2(e.pos, CROX.where); if (d < bd) { bd = d; foe = e; } } }
+  if (!foe) return;
+  o.fury = { foe, t: 40, prev: { pl: o.pl, dmg: o.dmg, atkCd: o.atkCd, state: o.state, party: o.party }, auraT: 0 };
+  o.pl = 9; o.dmg *= 2; o.atkCd = [0.55, 0.8]; o.hp = o.maxHp; o.talkT = 0; o.path = []; o.resume = null; o.target = foe;
+  o.plate.querySelector('.pld').textContent = '◆9';
+  if (d2(o.pos, foe.pos) > 6) { burst(o.pos.clone().setY(1.5), 0xffd27a, 40, 4); const a = rand(0, 6.28); o.pos.set(foe.pos.x + Math.cos(a) * 3, 0, foe.pos.z + Math.sin(a) * 3); resolveCollision(o.pos, 0.5); o.group.position.copy(o.pos); }
+  ringFx(o.pos, 0xffd27a, 9, 0.9); burst(o.pos.clone().setY(1.5), 0xffd27a, 80, 6);
+  foe.target = o; foe.state = 'chase';
+  const near = G.P && d2(G.P.pos, o.pos) < 150;
+  if (near) { banner('ORION MASCAR', 'POWER LEVEL 9', 'HE IS COMING FOR WHOEVER DID THIS'); addChat('say', o.name, pick(CROXIAN_LINES.fury)); }
+  else setTimeout(() => botSay(pick(chatBots()), pick(CROXIAN_LINES.furySeen)), 3000);
+}
+function furyLogic(o, dt) {
+  const F = o.fury; F.t -= dt; F.auraT -= dt;
+  if (F.auraT <= 0) { F.auraT = 0.8; if (G.P && d2(G.P.pos, o.pos) < 70) { ringFx(o.pos, 0xffd27a, 3.5, 0.6); burst(o.pos.clone().setY(1.2), 0xffd27a, 10, 2); } }
+  if (!F.foe.alive) {   // then anything else still on the spot where his son fell
+    let next = null, bd = 16; for (const e of G.enemies) { if (!e.alive) continue; const d = d2(e.pos, CROX.where); if (d < bd) { bd = d; next = e; } }
+    if (next && F.t > 0) { F.foe = next; next.target = o; next.state = 'chase'; } else { furyEnd(o); return; }
+  }
+  if (F.t <= 0) { furyEnd(o); return; }
+  if (d2(o.pos, F.foe.pos) > 3 + F.foe.radius) moveToward(o, F.foe.pos, 16, dt, 2.5 + F.foe.radius);
+  botFight(o, F.foe, dt);
+}
+function furyEnd(o) {
+  const P = o.fury.prev; o.fury = null;
+  o.pl = P.pl; o.dmg = P.dmg; o.atkCd = P.atkCd; o.target = null;
+  o.plate.querySelector('.pld').textContent = `◆${o.pl}`;
+  if (G.P && d2(G.P.pos, o.pos) < 150) addChat('say', o.name, pick(CROXIAN_LINES.furyDone));
+  if (P.party) { o.state = 'escort'; o.party = true; } else sendHome(o);
 }
 function croxianLeave(c, m) {
   for (const e of G.enemies) if (e.target === c) { e.target = null; e.state = 'return'; }
@@ -3352,7 +3407,7 @@ function damage(tgt, amt, src, opt = {}) {
   } else if (tgt.kind === 'bot') {
     tgt.hitT = 5;
     if (tgt.hp <= 0) botDie(tgt);
-  }
+  } else if (tgt.id === 'mascar' && tgt.hp <= 0) croxianFall(tgt, src);
 }
 function killEnemy(e, src) {
   e.alive = false; e.hp = 0; e.state = 'dead'; e.deadT = 0; e.dots = []; e.target = null;
@@ -3402,6 +3457,7 @@ function respawn() {
   G.cam.yaw = 0;
 }
 function botDie(b) {
+  if (b.fury) furyEnd(b);
   b.alive = false; b.hp = 0; b.state = 'dead'; b.deadT = 0; b.target = null;
   b.group.rotation.x = -Math.PI / 2; b.group.position.y = 0.3;
   for (const e of G.enemies) if (e.target === b) { e.target = null; e.state = 'return'; }
@@ -3819,8 +3875,10 @@ function updateBots(dt) {
     }
     b.atk = Math.max(0, b.atk - dt); b.danceT = Math.max(0, b.danceT - dt);
     const px = b.pos.x, pz = b.pos.z;
-    if (b.ally) { allySupport(b, dt); if (!b.party && b.state !== 'assist' && b.talkT <= 0) assistCheck(b, dt); }
-    if (b.ally && b.talkT > 0) {   // stops to talk to you
+    if (b.ally && !b.fury) { allySupport(b, dt); if (!b.party && b.state !== 'assist' && b.talkT <= 0) assistCheck(b, dt); }
+    if (b.fury) {   // Orion, avenging his son
+      furyLogic(b, dt);
+    } else if (b.ally && b.talkT > 0) {   // stops to talk to you
       b.talkT -= dt; b.move = Math.max(0, b.move - dt * 5); faceTo(b, G.P.pos);
     } else if (b.state === 'escort') {   // fighting at your side
       escortLogic(b, dt);
@@ -3872,7 +3930,7 @@ function updateBots(dt) {
     } else if (want > 0.01 && (b.blockT = (b.blockT || 0) + dt) > 1.5) b.side = 0;
     if (b.rig.isSoldier) botMotion(b, dt);
     b.group.position.copy(b.pos); turnTo(b.group, b.yaw + (b.danceT > 0 ? G.time * 6 : 0), dt, b.danceT > 0 ? 50 : 12);
-    if (b.rig.isSoldier) { b.combat = (b.state === 'hunt' || b.state === 'escort' || b.state === 'assist') && !!b.target && b.target.alive && d2(b.pos, b.target.pos) < 18; animSoldier(b.rig, b, dt, G.time, b.lodNear !== false); }
+    if (b.rig.isSoldier) { b.combat = (b.fury || b.state === 'hunt' || b.state === 'escort' || b.state === 'assist') && !!b.target && b.target.alive && d2(b.pos, b.target.pos) < 18; animSoldier(b.rig, b, dt, G.time, b.lodNear !== false); }
     else animHumanoid(b.rig, b.move, G.time + b.name.length, b.atk, b.danceT);
   }
 }
