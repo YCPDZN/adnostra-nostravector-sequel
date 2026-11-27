@@ -781,9 +781,10 @@ function updateMenu(dt) {
 const W = { scene: new THREE.Scene(), cam: new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 3600) };
 // Every zone has a power level (0–9). Enemies there share it; fight above your own and they will take you apart.
 const ZONES = {
-  plaza: { name: 'CONCORDIA PLAZA', sub: 'SANCTUARY · SEAT OF THE GOVERNOR', safe: true, pl: 0 },
-  causeway: { name: 'CONCORD CAUSEWAY', sub: 'AD-NOSTRA', pl: 0 },
-  ward: { name: 'THE SPIRE WARDS', sub: 'AD-NOSTRA', pl: 0 },
+  plaza: { name: 'AD NOSTRA: FRONTIER', sub: 'THE EDGE OF THE WILDS', pl: 0 },   // the old plaza, where Ascendants set out from
+  concordia: { name: 'CONCORDIA PLAZA', sub: 'SANCTUARY · SEAT OF THE GOVERNOR', safe: true, pl: 0 },
+  causeway: { name: 'CONCORD CAUSEWAY', sub: 'AD-NOSTRA', safe: true, pl: 0 },
+  ward: { name: 'THE SPIRE WARDS', sub: 'AD-NOSTRA', safe: true, pl: 0 },
   ashen: { name: 'SCORCHED VELD', sub: 'CONTESTED', pl: 1 },
   echo: { name: 'ECHO PLAINS', sub: 'CONTESTED', pl: 2 },
   crater: { name: 'THE CATHARSIS CRATER', sub: 'HOSTILE', pl: 3 },
@@ -792,13 +793,14 @@ const ZONES = {
   tenements: { name: 'THE ASHFALL TENEMENTS', sub: 'OUTER WARDS · HOSTILE', pl: 5 },
   reservoir: { name: 'THE DRY RESERVOIR', sub: 'OUTER WARDS · DEADLY', pl: 6 },
   market: { name: 'THE LANTERN MARKET', sub: 'BAZAAR · SANCTUARY', safe: true, pl: 0 },
-  harbour: { name: 'THE HARBOUR', sub: 'PORT OF AD-NOSTRA', pl: 0 },
-  ring: { name: 'THE RAMPART RING', sub: 'WHERE THE OLD WALL STOOD', pl: 0 },
-  northgate: { name: 'NORTHGATE', sub: 'THE GLASS WARD · AD-NOSTRA', pl: 0 },
-  sunrise: { name: 'SUNRISE WARD', sub: 'THE NEW CITY · AD-NOSTRA', pl: 0 },
-  kopje: { name: 'KOPJE HEIGHTS', sub: 'THE NEW CITY · AD-NOSTRA', pl: 0 },
-  dhow: { name: 'THE DHOW QUARTER', sub: 'OLD TOWN BY THE SEA · AD-NOSTRA', pl: 0 },
+  harbour: { name: 'THE HARBOUR', sub: 'PORT OF AD-NOSTRA', safe: true, pl: 0 },
+  ring: { name: 'THE RAMPART RING', sub: 'WHERE THE OLD WALL STOOD', safe: true, pl: 0 },
+  northgate: { name: 'NORTHGATE', sub: 'THE GLASS WARD · AD-NOSTRA', safe: true, pl: 0 },
+  sunrise: { name: 'SUNRISE WARD', sub: 'THE NEW CITY · AD-NOSTRA', safe: true, pl: 0 },
+  kopje: { name: 'KOPJE HEIGHTS', sub: 'THE NEW CITY · AD-NOSTRA', safe: true, pl: 0 },
+  dhow: { name: 'THE DHOW QUARTER', sub: 'OLD TOWN BY THE SEA · AD-NOSTRA', safe: true, pl: 0 },
 };
+// The whole city is a sanctuary; only the old districts and the Frontier beside them are not.
 const QUIET_ZONES = new Set(['causeway', 'ward', 'ring']);   // walking between these doesn't throw up a banner
 // The city runs out to a rampart at WORLD_R metres, four times the area inside the old wall. The old wall stood at
 // OLD_R and is now the Rampart Ring, a palm boulevard. The sea closes the city to the south, where the Harbour is cut
@@ -814,6 +816,9 @@ const inCantina = (x, z) => x > CANTINA.x0 + 0.3 && x < CANTINA.x1 - 0.3 && z > 
 const inCantinaLot = (x, z) => Math.abs(x) < 17 && z > 28 && z < 78;
 const MARKET = { x0: -58, x1: 58, z0: 78, z1: 150 };          // the Lantern Market, behind the Salt Lantern
 const CRATER = new V3(0, 0, -165);
+// Concordia Plaza, the Governor's seat, at the head of the harbour where the Talina crosses. The old plaza in the middle of
+// the city is now Ad Nostra: Frontier, where Ascendants gather before heading out into the old districts.
+const CONC = new V3(0, 0, 524);
 // the shore: open water south of COAST_Z, and the harbour basin cut into the land, with a mole either side of its mouth
 const COAST_Z = 760;
 const BASIN = { x0: -190, x1: 190, z0: 560, z1: COAST_Z };
@@ -831,6 +836,7 @@ function zoneAt(x, z) {
   if (inRect(RAIL, x, z)) return 'rail';
   if (inRect(TENE, x, z)) return 'tenements';
   if (Math.hypot(x - RESV.x, z - RESV.z) < RESV_R) return 'reservoir';
+  if (Math.hypot(x - CONC.x, z - CONC.z) < 34) return 'concordia';
   if (inRect(HARBOUR, x, z)) return 'harbour';
   if (r < OLD_R - 10) return (Math.abs(z) < 12 || (Math.abs(x) < 12 && z < 0)) ? 'causeway' : 'ward';
   if (r < OLD_R + 10) return 'ring';
@@ -884,9 +890,10 @@ function buildWorld() {
     addCollider(x, z, 26, 26, 46);
   }
 
-  // hologram billboards
+  // ---------- CONCORDIA PLAZA, on the waterfront at the head of the harbour
+  const PX = CONC.x, PZ = CONC.z;
   const words = ['AD-NOSTRA', 'REBUILD · RENEW · REMEMBER', 'CONCORD', 'ANNO DOMINI 2137', 'THE SKY IS OURS', 'ENLIST · ASCEND'];
-  words.forEach((wd, i) => {
+  words.forEach((wd, i) => {   // hologram billboards round the plaza
     const tex = canvasTex(1024, 192, (g, w, h) => {
       g.clearRect(0, 0, w, h); g.strokeStyle = i % 2 ? '#e8c46a' : '#3ee6ff'; g.lineWidth = 4; g.strokeRect(8, 8, w - 16, h - 16);
       g.fillStyle = i % 2 ? '#e8c46a' : '#3ee6ff'; g.font = 'bold 84px Bahnschrift, Segoe UI, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(wd, w / 2, h / 2 + 4);
@@ -894,36 +901,42 @@ function buildWorld() {
     tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
     const a = i / words.length * Math.PI * 2 + 0.5;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(26, 4.9), new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.85, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
-    m.position.set(Math.cos(a) * 46, rand(20, 30), Math.sin(a) * 46); m.lookAt(0, m.position.y, 0); S.add(m);
+    m.position.set(PX + Math.cos(a) * 46, rand(20, 30), PZ + Math.sin(a) * 46); m.lookAt(PX, m.position.y, PZ); S.add(m);
   });
-
-  // ---------- CONCORDIA PLAZA
   const plazaTex = canvasTex(1024, 1024, (g, w, h) => {
     g.fillStyle = '#b4936c'; g.fillRect(0, 0, w, h); speckle(g, w, h, 8000, ['#c0a07a', '#a6845e', '#c9ab86']);
     g.strokeStyle = 'rgba(90,60,30,0.35)'; g.lineWidth = 3;
     for (let r = 64; r < 512; r += 64) { g.beginPath(); g.arc(512, 512, r, 0, Math.PI * 2); g.stroke(); }
     for (let i = 0; i < 32; i++) { const a = i / 32 * Math.PI * 2; g.beginPath(); g.moveTo(512 + Math.cos(a) * 64, 512 + Math.sin(a) * 64); g.lineTo(512 + Math.cos(a) * 512, 512 + Math.sin(a) * 512); g.stroke(); }
   });
-  overlay(new THREE.CircleGeometry(34, 96), plazaTex, 0, 0, 0.03, { roughness: 0.85 });
-  for (const [r, o] of [[33.6, 0.9], [30, 0.5], [16, 0.6]]) { const ring = new THREE.Mesh(new THREE.RingGeometry(r - 0.15, r, 128), new THREE.MeshBasicMaterial({ color: 0x3ee6ff, transparent: true, opacity: o })); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; S.add(ring); }
-  // lamps
   const lampM = armorMat(0x2a313b);
-  for (let i = 0; i < 12; i++) {
-    const a = i / 12 * Math.PI * 2 + Math.PI / 12; const x = Math.cos(a) * 31, z = Math.sin(a) * 31;
-    bx(0.25, 5, 0.25, lampM, x, 2.5, z, S); bx(0.9, 0.12, 0.9, glowMat(0x9fe9ff, 3), x, 5.05, z, S); addCollider(x, z, 0.5, 0.5);
-  }
-
+  const plazaFloor = (cx, cz, ringCol, rings) => {   // paving, glowing rings and a circle of lamps
+    overlay(new THREE.CircleGeometry(34, 96), plazaTex, cx, cz, 0.03, { roughness: 0.85 });
+    for (const [r, o] of rings) { const ring = new THREE.Mesh(new THREE.RingGeometry(r - 0.15, r, 128), new THREE.MeshBasicMaterial({ color: ringCol, transparent: true, opacity: o })); ring.rotation.x = -Math.PI / 2; ring.position.set(cx, 0.05, cz); S.add(ring); }
+    for (let i = 0; i < 12; i++) {
+      const a = i / 12 * Math.PI * 2 + Math.PI / 12; const x = cx + Math.cos(a) * 31, z = cz + Math.sin(a) * 31;
+      bx(0.25, 5, 0.25, lampM, x, 2.5, z, S); bx(0.9, 0.12, 0.9, glowMat(0x9fe9ff, 3), x, 5.05, z, S); addCollider(x, z, 0.5, 0.5);
+    }
+  };
+  plazaFloor(PX, PZ, 0x3ee6ff, [[33.6, 0.9], [30, 0.5], [16, 0.6]]);
   // the Governor's dais + the Statue of the Unmaking
   const daisM = new THREE.MeshStandardMaterial({ color: 0x8a7258, metalness: 0.2, roughness: 0.6 });
-  for (const [r, h] of [[5.5, 0.4], [4.3, 0.8], [3.2, 1.2]]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r + 0.2, h, 48), daisM); c.position.set(0, h / 2, -12); c.receiveShadow = true; c.castShadow = true; S.add(c); }
-  const dr = new THREE.Mesh(new THREE.TorusGeometry(3.25, 0.03, 6, 96), glowMat(0x3ee6ff, 4)); dr.rotation.x = Math.PI / 2; dr.position.set(0, 1.21, -12); S.add(dr);
-  const statuePed = bx(9, 4, 9, daisM, 0, 2, -27, S); addCollider(0, -27, 9, 9);
+  for (const [r, h] of [[5.5, 0.4], [4.3, 0.8], [3.2, 1.2]]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r + 0.2, h, 48), daisM); c.position.set(PX, h / 2, PZ - 12); c.receiveShadow = true; c.castShadow = true; S.add(c); }
+  const dr = new THREE.Mesh(new THREE.TorusGeometry(3.25, 0.03, 6, 96), glowMat(0x3ee6ff, 4)); dr.rotation.x = Math.PI / 2; dr.position.set(PX, 1.21, PZ - 12); S.add(dr);
+  bx(9, 4, 9, daisM, PX, 2, PZ - 27, S); addCollider(PX, PZ - 27, 9, 9);
   const plaque = canvasTex(512, 128, (g, w, h) => { g.fillStyle = '#c9a85a'; g.font = 'bold 40px Bahnschrift, sans-serif'; g.textAlign = 'center'; g.fillText('CARAX · SAGITTARIUS A*', w / 2, 52); g.font = '28px Bahnschrift, sans-serif'; g.fillText('MMCXXVII', w / 2, 98); });
   plaque.wrapS = plaque.wrapT = THREE.ClampToEdgeWrapping;
-  const pl = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshStandardMaterial({ map: plaque, transparent: true, emissive: 0xc9a85a, emissiveMap: plaque, emissiveIntensity: 0.5 })); pl.position.set(0, 2.2, -22.48); S.add(pl);
+  const pl = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshStandardMaterial({ map: plaque, transparent: true, emissive: 0xc9a85a, emissiveMap: plaque, emissiveIntensity: 0.5 })); pl.position.set(PX, 2.2, PZ - 22.48); S.add(pl);
   const statue = mascarInstance(15, new THREE.MeshStandardMaterial({ color: 0x8c939c, roughness: 0.75, metalness: 0.15 }));
-  statue.position.set(0, 4, -27); S.add(statue);
-  const halo = new THREE.Mesh(new THREE.TorusGeometry(7, 0.12, 8, 128), glowMat(0x3ee6ff, 3)); halo.position.set(0, 15, -29); halo.userData.dynamic = true; S.add(halo); W.halo = halo;
+  statue.position.set(PX, 4, PZ - 27); S.add(statue);
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(7, 0.12, 8, 128), glowMat(0x3ee6ff, 3)); halo.position.set(PX, 15, PZ - 29); halo.userData.dynamic = true; S.add(halo); W.halo = halo;
+
+  // ---------- AD NOSTRA: FRONTIER, the old plaza: where Ascendants gather before heading out into the old districts
+  plazaFloor(0, 0, 0xe8c46a, [[33.6, 0.8], [30, 0.4]]);
+  const frontier = textTex(1024, 256, '#0b1118', [{ t: 'AD NOSTRA', y: 86, c: '#e8c46a', f: 'bold 96px Georgia, serif' }, { t: 'F R O N T I E R', y: 186, c: '#3ee6ff', f: 'bold 70px Bahnschrift, sans-serif' }]);
+  bx(0.6, 9, 0.6, lampM, 0, 4.5, -16, S); addCollider(0, -16, 0.9, 0.9, 9);
+  bx(9.4, 2.6, 0.5, lampM, 0, 9.4, -16, S);
+  for (const sd of [-1, 1]) { const fs = new THREE.Mesh(new THREE.PlaneGeometry(9, 2.25), new THREE.MeshStandardMaterial({ map: frontier, emissive: 0xffffff, emissiveMap: frontier, emissiveIntensity: 0.7 })); fs.position.set(0, 9.4, -16 + sd * 0.27); fs.rotation.y = sd > 0 ? 0 : Math.PI; S.add(fs); }
 
   // ---------- SCORCHED VELD
   const ashTex = canvasTex(512, 512, (g, w, h) => { g.fillStyle = '#4a3a2c'; g.fillRect(0, 0, w, h); speckle(g, w, h, 9000, ['#3a2e24', '#2a221c', '#5c4834', '#6e5028'], 3); cracks(g, w, h, 18, 'rgba(0,0,0,0.6)', 2); cracks(g, w, h, 4, 'rgba(255,90,40,0.25)', 1.5); }, 8);
@@ -1139,7 +1152,8 @@ function buildDistricts(S) {
 
 // Concord tram stops: fast travel between the districts. A stop works once you have walked past it.
 const TRAMS = [
-  { id: 'plaza', name: 'Concordia Plaza', pos: new V3(-21, 0, 14) },
+  { id: 'concordia', name: 'Concordia Plaza', pos: new V3(CONC.x - 21, 0, CONC.z + 14) },
+  { id: 'plaza', name: 'Ad Nostra: Frontier', pos: new V3(-21, 0, 14) },
   { id: 'ashen', name: 'Scorched Veld', pos: new V3(46, 0, 16) },
   { id: 'echo', name: 'Echo Plains', pos: new V3(-46, 0, 16) },
   { id: 'crater', name: 'Crater Rim', pos: new V3(16, 0, -86) },
@@ -1422,7 +1436,7 @@ const WILD = [
   { c: [0, 0], r: 36 }, { rect: { x0: -17, x1: 17, z0: 28, z1: 78 } }, { rect: MARKET },
   { rect: { x0: 30, x1: 160, z0: -66, z1: 66 } }, { rect: { x0: -160, x1: -30, z0: -66, z1: 66 } },
   { c: [CRATER.x, CRATER.z], r: 76 }, { rect: growR(RAIL, 4) }, { rect: growR(TENE, 4) }, { rect: SOUTH_LANE },
-  { c: [RESV.x, RESV.z], r: RESV_R + 4 }, { rect: HARBOUR }, { rect: { x0: -2000, x1: 2000, z0: COAST_Z - 29, z1: 4000 } },
+  { c: [RESV.x, RESV.z], r: RESV_R + 4 }, { rect: HARBOUR }, { c: [CONC.x, CONC.z], r: 38 }, { rect: { x0: -2000, x1: 2000, z0: COAST_Z - 29, z1: 4000 } },
 ];
 function wildReason(R, m) {   // why a rectangle can't simply be built over: '' if it can
   for (const Z of WILD) {
@@ -2010,18 +2024,19 @@ function buildHarbour(S, B) {
   const portSign = textTex(1024, 160, '#2a1a10', [{ t: 'PORT OF AD-NOSTRA', y: 86, c: '#f0c46a', f: 'bold 88px Georgia, serif' }]);
   const ps = new THREE.Mesh(new THREE.PlaneGeometry(24, 3.75), new THREE.MeshStandardMaterial({ map: portSign, emissive: 0xffffff, emissiveMap: portSign, emissiveIntensity: 0.3 })); ps.position.set(84, 11, 550.08); W.scene.add(ps);
   // the anchor, on its plinth where the Harbour Road reaches the water
-  B.box(CM.props, 4.4, 1.4, 4.4, 0, 0.7, 540, { col: 0xc9b48e }); addCollider(0, 540, 4.6, 4.6, 9);
+  const AX = -50;
+  B.box(CM.props, 4.4, 1.4, 4.4, AX, 0.7, 540, { col: 0xc9b48e }); addCollider(AX, 540, 4.6, 4.6, 9);
   const bronze = 0x7a5a32;
-  B.box(CM.metal, 0.55, 6.4, 0.55, 0, 4.6, 540, { col: bronze }); B.box(CM.metal, 4.2, 0.45, 0.45, 0, 7.2, 540, { col: bronze });
-  B.geo(CM.metal, TPL.torus, at(0, 8.2, 540, 0.65, 0.65, 0.65), { col: bronze });
+  B.box(CM.metal, 0.55, 6.4, 0.55, AX, 4.6, 540, { col: bronze }); B.box(CM.metal, 4.2, 0.45, 0.45, AX, 7.2, 540, { col: bronze });
+  B.geo(CM.metal, TPL.torus, at(AX, 8.2, 540, 0.65, 0.65, 0.65), { col: bronze });
   const arms = new THREE.TorusGeometry(2.2, 0.28, 6, 14, Math.PI); arms.rotateZ(Math.PI);
-  B.geo(CM.metal, arms, at(0, 3.6, 540), { col: bronze });
-  for (const s of [-1, 1]) B.geo(CM.metal, TPL.cone6, at(s * 2.2, 3.9, 540, 0.45, 1.1, 0.25, 0, 0, -s * 0.5), { col: bronze });
+  B.geo(CM.metal, arms, at(AX, 3.6, 540), { col: bronze });
+  for (const s of [-1, 1]) B.geo(CM.metal, TPL.cone6, at(AX + s * 2.2, 3.9, 540, 0.45, 1.1, 0.25, 0, 0, -s * 0.5), { col: bronze });
   addJibCrane(B, 150, 556, 0, 1); addJibCrane(B, 182, 556, 0, 1, 0xc8502a);
   for (let k = 0; k < 9; k++) { const x = 132 + (k % 3) * 9, z = 526 + Math.floor(k / 3) * 7; const n = sri(1, 3); for (let h = 0; h < n; h++) B.box(CM.props, 1.7, 1.6, 1.7, x, 0.8 + h * 1.6, z, { col: sch(0.5) ? 0x7a5232 : 0x4f6a7a, ry: sr(-0.2, 0.2) }); addCollider(x, z, 2, 2, n * 1.6); }
   addShip(B, -118, 576, 100, 18, 0, 0x5a2420); addShip(B, 52, 576, 86, 16, Math.PI, 0x23324a);
   for (const x of [-150, -90, 20, 80]) B.box(CM.props, 0.12, 0.12, 10, x, 1.6, 562, { col: 0x3a2a1e, rx: -0.32 });   // mooring lines
-  for (let x = BASIN.x0 + 20; x < BASIN.x1; x += 32) addLamp(B, x, 522, 0, 1);
+  for (let x = BASIN.x0 + 20; x < BASIN.x1; x += 32) if (Math.abs(x - CONC.x) > 38) addLamp(B, x, 522, 0, 1);
   for (const sx of [-1, 1]) for (let z = 580; z < COAST_Z - 4; z += 36) if (Math.abs(z - F.z) > 14) addLamp(B, sx * (BASIN.x1 + 2.5), z, -sx, 0);
   // the moles, a beacon on the west one and the lighthouse on the east
   for (const M of MOLES) for (let z = M.z0 + 16; z < M.z1 - 14; z += 26) addLamp(B, (M.x0 + M.x1) / 2, z, 0, 1);
@@ -2693,18 +2708,18 @@ function addHitbox(ent, w, h, d, y) {
 
 function spawnNPCs() {
   // Governor Croxian Mascar
-  const m = mascarInstance(2.25); m.position.set(0, 1.2, -12); W.scene.add(m);
-  const mascar = { kind: 'npc', id: 'mascar', name: 'Croxian Mascar', title: 'Governor of Ad-Nostra', pos: new V3(0, 1.2, -12), group: m, height: 2.6, radius: 1, alive: true, pl: 7, hp: 1600, maxHp: 1600 };
+  const m = mascarInstance(2.25); m.position.set(CONC.x, 1.2, CONC.z - 12); W.scene.add(m);
+  const mascar = { kind: 'npc', id: 'mascar', name: 'Croxian Mascar', title: 'Governor of Ad-Nostra', pos: new V3(CONC.x, 1.2, CONC.z - 12), group: m, height: 2.6, radius: 1, alive: true, pl: 7, hp: 1600, maxHp: 1600 };
   mascar.plate = makePlate('npc', `<div class="qm"></div><div class="n"><b class="pld">◆7</b> Croxian Mascar</div><div class="g">&lt;Governor of Ad-Nostra&gt;</div>`);
   addHitbox(mascar, 1.2 / m.scale.x, 2.4, 1.2, 1.2);
   G.npcs.push(mascar);
   // Quartermaster Ilse Varn
   const r = makeHumanoid({ armor: 0x4a3f2c, accent: 0xe8c46a, visor: 0xe8c46a, weapon: 'none' });
-  r.group.position.set(13, 0, -3); r.group.rotation.y = -Math.PI / 2.4; W.scene.add(r.group);
-  const counter = bx(1, 1.1, 3.4, armorMat(0x2a313b), 11.6, 0.55, -3, W.scene); addCollider(11.6, -3, 1, 3.4);
-  bx(0.05, 0.05, 3.42, glowMat(0xe8c46a, 1.5), 11.08, 1.1, -3, W.scene);
-  for (let i = 0; i < 4; i++) bx(0.9, 0.9, 0.9, armorMat(0x3a3326), 14.5 + rand(-.5, .5), 0.45 + (i > 2 ? 0.9 : 0), -4.5 + i * 0.9, W.scene).rotation.y = rand(-.3, .3);
-  const ilse = { kind: 'npc', id: 'ilse', name: 'Ilse Varn', title: 'Concord Quartermaster', pos: new V3(13, 0, -3), group: r.group, rig: r, height: 2.1, radius: 1, alive: true };
+  r.group.position.set(CONC.x + 13, 0, CONC.z - 3); r.group.rotation.y = -Math.PI / 2.4; W.scene.add(r.group);
+  const counter = bx(1, 1.1, 3.4, armorMat(0x2a313b), CONC.x + 11.6, 0.55, CONC.z - 3, W.scene); addCollider(CONC.x + 11.6, CONC.z - 3, 1, 3.4);
+  bx(0.05, 0.05, 3.42, glowMat(0xe8c46a, 1.5), CONC.x + 11.08, 1.1, CONC.z - 3, W.scene);
+  for (let i = 0; i < 4; i++) bx(0.9, 0.9, 0.9, armorMat(0x3a3326), CONC.x + 14.5 + rand(-.5, .5), 0.45 + (i > 2 ? 0.9 : 0), CONC.z - 4.5 + i * 0.9, W.scene).rotation.y = rand(-.3, .3);
+  const ilse = { kind: 'npc', id: 'ilse', name: 'Ilse Varn', title: 'Concord Quartermaster', pos: new V3(CONC.x + 13, 0, CONC.z - 3), group: r.group, rig: r, height: 2.1, radius: 1, alive: true };
   ilse.plate = makePlate('npc', `<div class="n">Ilse Varn</div><div class="g">&lt;Concord Quartermaster&gt;</div>`);
   addHitbox(ilse, 1, 2, 1, 1);
   G.npcs.push(ilse);
@@ -2968,7 +2983,7 @@ function syncResidents() {
 }
 // ---- the party: allies who fight at your side
 const partyList = () => G.bots.filter(b => b.party);
-const ZONE_IN = { plaza: 'Concordia Plaza', causeway: 'the Concord Causeway', ward: 'the Spire Wards', ashen: 'the Scorched Veld', echo: 'the Echo Plains', crater: 'the Catharsis Crater', cantina: 'the Salt Lantern', rail: 'the Sunken Rail Yards', tenements: 'the Ashfall Tenements', reservoir: 'the Dry Reservoir',
+const ZONE_IN = { plaza: 'the Frontier', concordia: 'Concordia Plaza', causeway: 'the Concord Causeway', ward: 'the Spire Wards', ashen: 'the Scorched Veld', echo: 'the Echo Plains', crater: 'the Catharsis Crater', cantina: 'the Salt Lantern', rail: 'the Sunken Rail Yards', tenements: 'the Ashfall Tenements', reservoir: 'the Dry Reservoir',
   market: 'the Lantern Market', harbour: 'the Harbour', ring: 'the Rampart Ring', northgate: 'Northgate', sunrise: 'Sunrise Ward', kopje: 'Kopje Heights', dhow: 'the Dhow Quarter' };
 const PARTY_SLOTS = [[-1.9, -2.2], [1.9, -2.2], [0, -3.9]];   // [right, forward] from the player, in metres
 function partyOffset(b) {
@@ -3152,7 +3167,7 @@ function allySupport(b, dt) {
 // draws them onto himself and cuts them down with his scythe, then goes straight back: the Concord does not like its
 // Governor out on the plains. He is power level 7, above everything in the city except whatever waits beyond the wall.
 // He only ever comes for her: not for you, and not on any schedule you can count on.
-const CROX = { state: 'dais', t: 0, cd: 180, rollT: 0, calm: 0, atkT: 0, spin: 0, home: new V3(0, 1.2, -12) };
+const CROX = { state: 'dais', t: 0, cd: 180, rollT: 0, calm: 0, atkT: 0, spin: 0, home: new V3(CONC.x, 1.2, CONC.z - 12) };
 function croxianNear() { return G.P && d2(G.P.pos, G.npcs[0].pos) < 150; }
 function croxianLogic(dt) {
   const c = G.npcs[0], m = G.bots.find(b => b.id === 'malia'); if (!c || !m || c.id !== 'mascar') return;
@@ -3265,7 +3280,7 @@ function reviveBot(b) {
   if (!b.ally) return;
   b.hitT = 0; b.medT = 0;
   if (d2(b.pos, G.P.pos) < 60) burst(b.pos.clone().setY(1), 0x3ee6ff, 30, 3);
-  if (b.party || b.legend) addChat('sys', null, `${b.name} is back on ${b.poss} feet in Concordia Plaza.`);
+  if (b.party || b.legend) addChat('sys', null, `${b.name} is back on ${b.poss} feet at the Frontier.`);
   if (b.party && b.lines.back) setTimeout(() => addChat('say', b.name, pick(b.lines.back)), 900);
 }
 // ---- talking to them
@@ -3306,9 +3321,9 @@ const chatBots = () => G.bots.filter(b => !b.ally);   // the simulated players (
 // =====================================================================
 //  PLAYER
 // =====================================================================
-const SPAWN = new V3(0, 0, 8);
+const SPAWN = new V3(CONC.x, 0, CONC.z + 8);   // in Concordia Plaza, in front of the Governor
 function newSave(name, cls, visor) {
-  return { v: 1, id: newId(), name, cls, visor, party: [], armour: 1, trams: ['plaza'], level: 1, xp: 0, credits: 30, medkits: 3, wpn: 0, arm: 0, q: { i: 0, st: 'available', p: 0 }, aleT: 0, kills: 0, deaths: 0, title: 'Ascendant', played: 0, completed: 0, pos: null, created: Date.now() };
+  return { v: 1, id: newId(), name, cls, visor, party: [], armour: 1, trams: ['concordia', 'plaza'], level: 1, xp: 0, credits: 30, medkits: 3, wpn: 0, arm: 0, q: { i: 0, st: 'available', p: 0 }, aleT: 0, kills: 0, deaths: 0, title: 'Ascendant', played: 0, completed: 0, pos: null, created: Date.now() };
 }
 const xpNext = l => Math.round(140 * Math.pow(l, 1.55));
 // ---- power level (0–9), as in RuneScape: Dragonwilds. Yours comes from your armour; zones and enemies have their own.
@@ -3347,6 +3362,7 @@ function setupPlayer() {
   const D = G.D, c = CL();
   if (D.armour == null) D.armour = Math.min(3, 1 + Math.floor((D.level - 1) / 6));   // saves from before power levels
   if (!Array.isArray(D.trams)) D.trams = ['plaza'];
+  if (!D.trams.includes('concordia')) D.trams.unshift('concordia');   // everyone knows the way home
   if (G.P && G.P.group) { W.scene.remove(G.P.group); G.P.plate?.remove(); }
   const visor = new THREE.Color(D.visor).getHex();
   const rig = soldierReady() ? makeSoldier({ energy: visor, accent: c.hex, weapon: c.weapon, mats: SOLDIER_MATS })
@@ -3362,7 +3378,7 @@ function setupPlayer() {
   P.group.position.copy(P.pos); W.scene.add(P.group);
   G.P = P;
   G.cam = { yaw: 0, pitch: 0.2, dist: TOUCH ? 6 : 5.2 };   // framed on the body, over the right shoulder (wheel or pinch to pull back)
-  if (P.pos.distanceTo(SPAWN) > 1) G.cam.yaw = Math.atan2(P.pos.x, P.pos.z);
+  if (P.pos.distanceTo(SPAWN) > 1) G.cam.yaw = Math.atan2(P.pos.x - CONC.x, P.pos.z - CONC.z);
   buildHotbar();
 }
 
@@ -3464,7 +3480,7 @@ function botDie(b) {
   if (b.ally) {
     b.resume = null; b.path = [];
     const near = d2(b.pos, G.P.pos) < 45;
-    if (b.party || b.legend || near) addChat('sys', null, `${b.name} has fallen in ${ZONE_IN[zoneAt(b.pos.x, b.pos.z)]}. ${b.pron} will return to Concordia Plaza.`);
+    if (b.party || b.legend || near) addChat('sys', null, `${b.name} has fallen in ${ZONE_IN[zoneAt(b.pos.x, b.pos.z)]}. ${b.pron} will return to the Frontier.`);
     if (near && b.lines.fallen) setTimeout(() => addChat('say', b.name, pick(b.lines.fallen)), 500);
     return;
   }
@@ -4257,7 +4273,8 @@ function drawMinimap() {
     mm.fillStyle = hexA(PL_COL[plTag(ZONES.reservoir.pl)], 0.16); mm.beginPath(); mm.arc(X(RESV.x), Y(RESV.z), RESV_R * sc, 0, 7); mm.fill();
   }
   mm.fillStyle = '#3ee6ff'; for (const t of TRAMS) if (G.D.trams.includes(t.id)) { mm.save(); mm.translate(X(t.pos.x), Y(t.pos.z)); mm.rotate(Math.PI / 4); mm.fillRect(-3, -3, 6, 6); mm.restore(); }
-  mm.fillStyle = 'rgba(62,230,255,0.12)'; mm.beginPath(); mm.arc(X(0), Y(0), 34 * sc, 0, 7); mm.fill();
+  mm.fillStyle = 'rgba(62,230,255,0.16)'; mm.beginPath(); mm.arc(X(CONC.x), Y(CONC.z), 34 * sc, 0, 7); mm.fill();   // Concordia Plaza
+  mm.strokeStyle = 'rgba(232,196,106,0.7)'; mm.lineWidth = 1.5; mm.setLineDash([4, 3]); mm.beginPath(); mm.arc(X(0), Y(0), 34 * sc, 0, 7); mm.stroke(); mm.setLineDash([]);   // the Frontier
   mm.fillStyle = 'rgba(255,179,71,0.35)'; mm.fillRect(X(CANTINA.x0), Y(CANTINA.z0), (CANTINA.x1 - CANTINA.x0) * sc, (CANTINA.z1 - CANTINA.z0) * sc);
   mm.strokeStyle = 'rgba(255,179,71,0.9)'; mm.lineWidth = 1; mm.strokeRect(X(CANTINA.x0), Y(CANTINA.z0), (CANTINA.x1 - CANTINA.x0) * sc, (CANTINA.z1 - CANTINA.z0) * sc);
   mm.fillStyle = 'rgba(255,179,71,0.14)'; mm.fillRect(X(MARKET.x0), Y(MARKET.z0), (MARKET.x1 - MARKET.x0) * sc, (MARKET.z1 - MARKET.z0) * sc);
@@ -4331,7 +4348,7 @@ function sendChat(text) {
       case 'help': addChat('sys', null, 'Commands: /who /party /dismiss [name|all] /played /loc /dance /wave /salute /help'); break;
       case 'party': {
         const l = partyList(); if (!l.length) { addChat('sys', null, 'Nobody is fighting at your side. Talk to Orion or Malia Mascar, or to one of your Residents, and ask them to.'); break; }
-        addChat('sys', null, 'At your side: ' + l.map(b => `${b.name} (lv ${b.level}, ${b.alive ? Math.round(b.hp / b.maxHp * 100) + '% health, ' + Math.round(d2(b.pos, P.pos)) + 'm away' : 'fallen, returning to Concordia Plaza'})`).join(', ') + '.'); break;
+        addChat('sys', null, 'At your side: ' + l.map(b => `${b.name} (lv ${b.level}, ${b.alive ? Math.round(b.hp / b.maxHp * 100) + '% health, ' + Math.round(d2(b.pos, P.pos)) + 'm away' : 'fallen, returning to the Frontier'})`).join(', ') + '.'); break;
       }
       case 'dismiss': {
         const arg = text.slice(1).split(' ').slice(1).join(' ').trim().toLowerCase(), l = partyList();
@@ -4443,8 +4460,10 @@ function drawMapBase(zoom) {   // everything that doesn't move, drawn once per z
   for (const tz of [-62, -44, -26, 26, 44, 62]) { g.beginPath(); g.moveTo(X(RAIL.x0), Y(tz)); g.lineTo(X(RAIL.x1), Y(tz)); g.stroke(); }
   g.fillStyle = '#5a3a2a'; for (let a = 0; a < 6.28; a += 0.16) { if (Math.abs(a - Math.PI / 2) < 0.25) continue; g.beginPath(); g.arc(X(CRATER.x + Math.cos(a) * 70), Y(CRATER.z + Math.sin(a) * 70), L(4), 0, 7); g.fill(); }
   // Concordia Plaza
-  g.fillStyle = '#d6c49a'; g.beginPath(); g.arc(X(0), Y(0), L(34), 0, 7); g.fill(); g.strokeStyle = '#8a7250'; g.lineWidth = 1;
-  for (const r of [10, 20, 30]) { g.beginPath(); g.arc(X(0), Y(0), L(r), 0, 7); g.stroke(); }
+  for (const [px, pz] of [[0, 0], [CONC.x, CONC.z]]) {   // the Frontier, and Concordia Plaza by the harbour
+    g.fillStyle = '#d6c49a'; g.beginPath(); g.arc(X(px), Y(pz), L(34), 0, 7); g.fill(); g.strokeStyle = '#8a7250'; g.lineWidth = 1;
+    for (const r of [10, 20, 30]) { g.beginPath(); g.arc(X(px), Y(pz), L(r), 0, 7); g.stroke(); }
+  }
   // roads: a dark edge, then the road
   const roads = (w, col) => { g.fillStyle = col; for (const r of W.streets) g.fillRect(X(r.x0) - w, Y(r.z0) - w, L(r.x1 - r.x0) + 2 * w, L(r.z1 - r.z0) + 2 * w);
     g.strokeStyle = col; g.lineWidth = L(14) + 2 * w; g.beginPath(); g.arc(X(0), Y(0), L(OLD_R), 0, 7); g.stroke(); };
@@ -4465,6 +4484,17 @@ function drawMapBase(zoom) {   // everything that doesn't move, drawn once per z
   g.strokeStyle = '#a8946e'; g.lineWidth = 4; g.beginPath(); g.arc(C, C, rr, a0, a1); g.stroke();
   g.fillStyle = '#2a2018'; for (let a = a0; a < a1; a += 0.035) g.fillRect(C + Math.cos(a) * (rr + 3.5) - 1.5, C + Math.sin(a) * (rr + 3.5) - 1.5, 3, 3);
   g.save(); g.shadowColor = '#ffd27a'; g.shadowBlur = 8; g.strokeStyle = '#ffd27a'; g.lineWidth = 1.2; g.beginPath(); g.arc(C, C, rr, a0, a1); g.stroke(); g.restore();
+  // the sanctuary, in blue: the whole city on dry land, less the old districts and the Frontier beside them
+  g.save(); g.beginPath(); g.rect(0, 0, S, Y(COAST_Z)); g.clip();
+  g.beginPath(); g.arc(C, C, L(WORLD_R + 6), 0, 7);
+  const hole = R => { g.moveTo(X(R.x0), Y(R.z0)); g.lineTo(X(R.x0), Y(R.z1)); g.lineTo(X(R.x1), Y(R.z1)); g.lineTo(X(R.x1), Y(R.z0)); g.closePath(); };
+  const holeC = (x, z, r) => { g.moveTo(X(x) + L(r), Y(z)); g.arc(X(x), Y(z), L(r), 0, Math.PI * 2, true); g.closePath(); };
+  for (const R of [{ x0: 34, x1: 156, z0: -62, z1: 62 }, { x0: -156, x1: -34, z0: -62, z1: 62 }, RAIL, TENE, BASIN]) hole(R);
+  holeC(CRATER.x, CRATER.z, 72); holeC(RESV.x, RESV.z, RESV_R); holeC(0, 0, 34);
+  g.fillStyle = 'rgba(40,150,255,0.22)'; g.fill('evenodd');
+  g.strokeStyle = 'rgba(90,190,255,0.9)'; g.lineWidth = 1.5; g.stroke();
+  g.restore();
+  g.save(); g.strokeStyle = '#e8c46a'; g.setLineDash([5, 4]); g.lineWidth = 2; g.beginPath(); g.arc(X(0), Y(0), L(34), 0, 7); g.stroke(); g.restore();   // the Frontier: not a sanctuary
   // the danger of each hostile district, as a dashed border
   g.setLineDash([5, 4]); g.lineWidth = 2;
   for (const [id, draw] of [['ashen', () => rectP({ x0: 34, x1: 156, z0: -62, z1: 62 })], ['echo', () => rectP({ x0: -156, x1: -34, z0: -62, z1: 62 })], ['crater', () => g.arc(X(CRATER.x), Y(CRATER.z), L(72), 0, 7)], ['rail', () => rectP(RAIL)], ['tenements', () => rectP(TENE)], ['reservoir', () => g.arc(X(RESV.x), Y(RESV.z), L(RESV_R), 0, 7)]]) {
@@ -4518,13 +4548,13 @@ function drawWorldMap() {
   for (const t of TRAMS) mapIcon(g, X(t.pos.x), Y(t.pos.z), G.D.trams.includes(t.id) ? '#1d8fa8' : '#5a6470', '⇄', r);
   for (const sx of [-1, 1]) mapIcon(g, X(sx * 205), Y(FERRY.z), '#2a5aa0', '⚓', r);
   mapIcon(g, X(0), Y(zoom ? 58 : 46), '#c87a1e', '✦', r);                           // the Salt Lantern
-  if (zoom) { mapIcon(g, X(0), Y(-14), '#8a6a1e', '♛', r); mapIcon(g, X(13), Y(4), '#6a4a8a', '⚔', r); mapIcon(g, X(-30), Y(118), '#b0802a', '¤', r); }   // Governor, Quartermaster, market
-  else mapIcon(g, X(0), Y(122), '#b0802a', '¤', r);
+  mapIcon(g, X(zoom ? -30 : 0), Y(zoom ? 118 : 122), '#b0802a', '¤', r);   // the market
+  mapIcon(g, X(CONC.x), Y(CONC.z - 14), '#8a6a1e', '♛', r); mapIcon(g, X(CONC.x + 14), Y(CONC.z + 2), '#6a4a8a', '⚔', r);   // the Governor and the Quartermaster
   mapIcon(g, X(197), Y(872), '#b3301e', '▲', r);                                          // the lighthouse
-  mapIcon(g, X(0), Y(540), '#4a6a7a', '⚓', r - 1);                                       // the anchor on the north quay
+  mapIcon(g, X(-50), Y(540), '#4a6a7a', '⚓', r - 1);                                      // the anchor on the north quay
   // names
   const labels = zoom ? [['plaza', 0, -48], ['cantina', 0, 80], ['market', 0, 168], ['ashen', 108, 24], ['echo', -108, 24], ['crater', 0, -165], ['rail', 328, -30], ['tenements', -328, -30], ['reservoir', 0, 330], ['ward', 210, -230], ['ward', -230, 230], ['ring', -300, -385]]
-    : [['reservoir', 0, 336], ['harbour', 0, 690], ['northgate', 0, -700], ['sunrise', 700, -110], ['kopje', -700, -110], ['dhow', -470, 640], ['dhow', 470, 640], ['ring', -300, -385], ['crater', 0, -165], ['plaza', 0, -60]];
+    : [['reservoir', 0, 336], ['harbour', 0, 690], ['northgate', 0, -700], ['sunrise', 700, -110], ['kopje', -700, -110], ['dhow', -470, 640], ['dhow', 470, 640], ['ring', -300, -385], ['crater', 0, -165], ['plaza', 0, -60], ['concordia', 0, 470]];
   const cap = s => s.toLowerCase().replace(/(^|[\s-])(\S)/g, (m, a, b) => a + b.toUpperCase()).replace(/\bOf\b/g, 'of').replace(/\bThe\b(?!^)/g, 'the').replace(/^the/, 'The');
   for (const [id, x, z] of labels) {
     const Z = ZONES[id], danger = !Z.safe && Z.pl;

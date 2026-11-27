@@ -71,10 +71,10 @@ export const CODEX = [
   { title: 'Croxian Mascar', tag: 'GOVERNOR OF AD-NOSTRA', body: [
     'Born 2094 in Kaliningrad, during the Third World War, to Orion Mascar and Talina Mascar (née Alvarez).',
     'Once a soldier of Terra Imperia. He walked away from it, then helped the Wanderer bring down Lord Zark and the Catharsis-turned Thomas Hawthorne at Carax in 2127.',
-    'Today he governs Ad-Nostra from Concordia Plaza, beneath a statue raised in his honour against his wishes. He still wears his Carax armour, its seams lit with cyan.'
+    'Today he governs Ad-Nostra from Concordia Plaza on the harbour, beneath a statue raised in his honour against his wishes. He still wears his Carax armour, its seams lit with cyan.'
   ]},
   { title: 'The Salt Lantern', tag: 'CANTINA · AD-NOSTRA', body: [
-    'Just south of Concordia Plaza stands the Salt Lantern: a whitewashed cantina with a great crystal lantern burning over its door, warm as the savannah at dusk.',
+    'Just south of the Frontier, the old plaza at the heart of the city, stands the Salt Lantern: a whitewashed cantina with a great crystal lantern burning over its door, warm as the savannah at dusk.',
     'It is the oldest place in the city that anyone still drinks in. It is also where Orion Mascar fought Daniel Brown. A plaque marks the spot, and the regulars will happily argue about the rest.',
     'The keeper, Zuri Adeyemi, pours Lantern Ale for any Ascendant with credits. It is said to sharpen the mind.',
     'Behind it, and spilling round to its door, is the Lantern Market: rows of stalls under striped awnings selling fruit, spice, cloth, pottery, salvaged tech and, of course, lanterns, strung on lines over the aisles.'
@@ -97,7 +97,7 @@ export const TIPS = [
   'The Salt Lantern is a sanctuary. Lantern Ale from Zuri Adeyemi grants bonus experience.',
   'Hollowed lose interest if you lead them too far from where they rose.',
   'Shades who strike from Blink deal guaranteed critical damage.',
-  'Concordia Plaza is a sanctuary. No Remnant will follow you there.',
+  'The whole city is a sanctuary, from Concordia Plaza on the harbour out to the wall. Only the old districts and the Frontier beside them are not.',
   'Quartermaster Ilse Varn sells medkits and weapon tuning. Press 5 to use a medkit.',
   'Thomas Hawthorne was Orion Mascar\'s apprentice before the Siege of Harbin.',
   'Carax orbits Sagittarius A*, the black hole at the heart of the galaxy.',
@@ -225,7 +225,7 @@ export const ORION_LINES = {
   war: 'The Third World War. 2080 to 2095. I came of age in it and I came out the other side, which is more than most can say.\n\nThomas Hawthorne was my apprentice for much of it. We fought side by side until the Siege of Harbin. After Harbin, he made his own path. I have had a long time to think about where that path led.',
   lantern: 'You have seen the plaque, then. I fought Daniel Brown in that room.\n\nAsk Zuri how it went. She tells it better than I do, and she sells ale while she tells it. The Lantern still stands. That is the part that matters.',
   son: 'Croxian was born in the winter of Kaliningrad, with the war still on. Talina and I named him in a city under siege.\n\nHe wore Terra Imperia\'s colours once, and he walked away from them. Then he went to Carax and came back. Now he governs.\n\nI fought. He builds. I know which of us the city needs more.',
-  join: 'Good. I was heading out anyway.\n\nI will take the ones that go for you. If it gets bad, stand behind me. If I fall, I will be back on my feet in Concordia Plaza before long, and I will come and find you.',
+  join: 'Good. I was heading out anyway.\n\nI will take the ones that go for you. If it gets bad, stand behind me. If I fall, I will be back on my feet at the Frontier before long, and I will come and find you.',
   part: 'As you like. The grass is wide and I have ground to cover.\n\nYou know where to find me. Everywhere.',
   full: 'You already have enough blades at your back, Ascendant. Send one of them home and ask me again.',
   family: 'Malia is already out there with you. One Mascar at a time, Ascendant: the city needs the other one watching it.\n\nSend her home if you want me instead. And do not lean on us too hard. We will not always be there.',
@@ -263,7 +263,7 @@ export const MALIA_LINES = {
   orion: 'My father-in-law walks. The plaza, the Veld, the Plains, the Crater, and back to the Lantern to stand over that plaque.\n\nHe says he is making sure the city is still here. I think he simply cannot sit still. It runs in the family. Apparently it runs in me too, now.',
   blade: 'This? It is not for show.\n\nThe Governor has guards. The Governor\'s wife has this, and a Concord mending kit. I am better with the second than people expect, and better with the first than they hope.',
   family: 'Orion is already walking with you. One of us at a time; someone has to keep an eye on the city.\n\nSend him home if you would rather have me. And learn to close your own wounds, too. I will not always be close enough.',
-  join: 'Then we go together.\n\nKeep your eyes on the Remnants and I will keep mine on you. When you are hurt, I will close the wound. If I go down, I will wake in Concordia Plaza and come straight back to you.',
+  join: 'Then we go together.\n\nKeep your eyes on the Remnants and I will keep mine on you. When you are hurt, I will close the wound. If I go down, I will wake at the Frontier and come straight back to you.',
   part: 'Of course. Go carefully.\n\nI will be out on the plains. Call on me again whenever you need me.',
   full: 'You have a full company already. Send someone home first, and I will come.',
   rejoin: 'I am with you. Mind your footing.',

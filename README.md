@@ -98,7 +98,9 @@ Like RuneScape: Dragonwilds, every Ascendant, district and Remnant has a **power
 
 | District | Where | Power level |
 |---|---|---|
-| Concordia Plaza, the Salt Lantern | centre | sanctuary |
+| Concordia Plaza | on the harbour, in the south | sanctuary (you start and respawn here) |
+| The whole city: every ward, the Rampart Ring, the Harbour, the Lantern Market, the Salt Lantern | everywhere but the old districts | sanctuary (blue on the map) |
+| Ad Nostra: Frontier (the old plaza) | centre | not a sanctuary: the edge of the wilds |
 | Scorched Veld | east | 1 |
 | Echo Plains | west | 2 |
 | The Catharsis Crater (boss: 4) | north | 3 |
@@ -115,7 +117,8 @@ Like RuneScape: Dragonwilds, every Ascendant, district and Remnant has a **power
 - **M** (or ⌖ on touch) opens the map of Ad Nostra: an adventurer's map as the Concord would draw it in 2137. The ground is painted like an old map (every building outlined in stone, the glass towers rimmed in cyan, the streets, the districts in their own ground, the sea with lit waves, the rampart with its gold light strip), laid on a holographic survey slate with a lettered grid, lit corner brackets, a compass ring, hexagonal beacons for the trams, the ferry, the Salt Lantern, the market and the lighthouse, and the title on a lit plate. It also shows the streets, the sea, districts coloured by danger for your power level, tram stops, the ferry, the Mascars, your companions, your objective and you. Click (or tap) the map to zoom in on the old city.
 
 ### Places
-- **Concordia Plaza** is a sanctuary. Governor Mascar stands on his dais beneath the Statue of the Unmaking, and Quartermaster Ilse Varn sells medkits and upgrades.
+- **Concordia Plaza** stands on the waterfront at the head of the harbour, between the two ferry piers. It is where you start and where you come back to when you fall. Governor Mascar stands on his dais beneath the Statue of the Unmaking, looking out over the water, and Quartermaster Ilse Varn sells medkits and armour beside him. The whole city is a sanctuary now; on the map it is washed in blue.
+- **Ad Nostra: Frontier** is the old plaza in the middle of the city, marked by a lit sign. It is not a sanctuary: it is where Ascendants gather before heading out into the Scorched Veld, the Echo Plains and the Crater, and where Orion, Malia and your Residents come back to when they fall. Its tram stop is on your network from the start.
 - **Scorched Veld** (east, lv 1–3) holds the Hollowed.
 - **Echo Plains** (west, lv 2–4) holds the Echo Drones.
 - **The Catharsis Crater** (north, lv 4–7) holds a crashed Catharsis beacon-ship, its shards, and the **Remnant of the Catharsis**. Vultures circle overhead.
@@ -125,7 +128,7 @@ Like RuneScape: Dragonwilds, every Ascendant, district and Remnant has a **power
 - **Orion Mascar** (level 15, power level 4), the Governor's father, walks the whole map with his greatsword. He strolls the plaza, heads out to the Scorched Veld, the Echo Plains, the Crater and the Sunken Rail Yards to cut down Remnants, and stops in at the Salt Lantern to stand over his plaque. Every fifth swing is a wide sweep that hits everything around him, and when you drop below 30% health with Remnants on you, he shouts them onto himself (once every 30 seconds).
 - **Malia Mascar** (level 15, power level 3), the Governor's wife, hunts the Veld, the Plains and the Crater with a short energy blade, and stops in at the Salt Lantern to stand by her husband's corner table. She strikes fast, often twice, and when you fall below 40% health she heals you for 22%, once every 24 seconds (it also works on hurt companions).
 - If either of them is nearby when a Remnant goes for you, they come over and help, then go back to what they were doing. Walk up and press E to talk to them, and choose **FIGHT AT MY SIDE** to keep them with you: they follow you everywhere, attack whatever is attacking you or what you are fighting, and their kills count as yours (experience, credits, loot and quest progress). Up to three companions at once. They show under your own health frame with their health and where they are, and your companions are saved with your character. `/party` lists them and `/dismiss` (or `/dismiss malia`) sends them off.
-- They can be defeated. When they are, they get back up in **Concordia Plaza** after 45 seconds, and if they were with you, they walk back out to find you.
+- They can be defeated. When they are, they get back up at **the Frontier** after 45 seconds, and if they were with you, they walk back out to find you.
 - **Residents**: from the **ASCENDANTS** menu you can retire a character you no longer play as a **Resident of Ad-Nostra**. Residents live in the world as allies, at their own level and class and in their own visor colour: they walk the plaza, drink at the Salt Lantern, hunt the plains, come to your aid in a fight and respawn in Concordia Plaza when defeated. Talk to one to see their record, or ask them to fight at your side. **RECALL** a Resident to play them again.
 - **The Sunken Rail Yards** (power level 4): a rusting freight terminus of tracks, toppled freight cars, gantry cranes and signals still blinking red. Rail-Yard Hollowed and Scrap Drones.
 - **The Ashfall Tenements** (power level 5): burnt-out housing blocks you can walk into, with fires still burning. Ashfall Stalkers, fast and aggressive, and Cinder Drones.
