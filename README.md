@@ -90,7 +90,7 @@ Like RuneScape: Dragonwilds, every Ascendant, district and Remnant has a **power
 - **Yours comes from your armour.** New Ascendants start in Recruit Weave (power level 1). Quartermaster **Ilse Varn** sells the next tier each time, up to **Carax Plate** (power level 9); each tier needs a minimum character level and gives +20 health. Older saves start at power level 1–3 depending on their level.
 - **Fighting above your power level is brutal.** For each level a Remnant is above you, it hits you about 55% harder and your hits on it land at 60% strength. Two or more levels above means it kills you in a few hits. Being above a Remnant helps, but not as dramatically.
 - **The colour of the ◆ tells you where you stand**: green below you, yellow at your level, orange one above, red with a ☠ two or more above. You see it on Remnant nameplates, the target frame, the zone banner, the minimap and the map. Entering a district far above you posts a warning in chat.
-- Orion is power level 4: he clears the Scorched Veld, the Echo Plains and the Crater, and is an even match in the Sunken Rail Yards, as far as he goes. Malia is power level 3: the Crater is as far as she hunts, and she has to work for it there. Their power level shows next to their names, on the minimap and on the map, along with your Residents'.
+- Orion is power level 4: he clears the Dry Reservoir, the Tenements and the Rail Yards, and is an even match in the Crater, as far as he goes. Malia is power level 3: the Rail Yards are as far as she hunts, and she has to work for it there. Their power level shows next to their names, on the minimap and on the map, along with your Residents'.
 - **Croxian Mascar** (power level 7, above everything in the city) almost never leaves his dais. But very rarely, when Malia is close to falling with Remnants on her, he appears beside her in a flash of Carax light, draws them onto himself and cuts them down with sweeps of his scythe, then goes straight back to the plaza before the Concord notices. It is a one-in-five chance each time she is in real trouble, and once he has done it he will not slip away again for at least fifteen minutes. He only comes for her, never for you. If you aren't close enough to see it, someone in world chat will tell you about it.
 - **He can fall out there.** If the Governor is cut down defending Malia and Malia falls too, **Orion Mascar** loses his temper: for a little while he is **power level 9**. He arrives in a burst of gold light beside the Remnant that put his son on the ground, hits twice as hard and twice as fast, and does not stop until it, and anything else still standing where Croxian fell, is gone (or 40 seconds pass). Then he is an old man again, back at the power level he was before, and goes back to what he was doing (or to your side, if he was with you). Croxian gets back up and returns to his dais.
 - **Balance: the Mascars are friends, not a crutch.** Only one of them will fight at your side at a time (the other keeps watch over the city), though a Resident can make up the rest of your company. They hit about as hard as a strong Ascendant of their level, not much harder, and they grow by 4% a level. A kill a Mascar lands on a Remnant you never struck yourself is worth half the experience and credits. Their help is rationed (see the cooldowns above), and when they fall they are out for 45 seconds.
@@ -98,17 +98,16 @@ Like RuneScape: Dragonwilds, every Ascendant, district and Remnant has a **power
 
 | District | Where | Power level |
 |---|---|---|
-| Concordia Plaza | on the harbour, in the south | sanctuary (you start and respawn here) |
-| The whole city: every ward, the Rampart Ring, the Harbour, the Lantern Market, the Salt Lantern | everywhere but the old districts | sanctuary (blue on the map) |
+| Concordia Plaza, and the whole city | the plaza is on the harbour, in the south | sanctuary (you start and respawn here) |
 | Ad Nostra: Frontier (the old plaza) | centre | not a sanctuary: the edge of the wilds |
-| Scorched Veld | east | 1 |
-| Echo Plains | west | 2 |
-| The Catharsis Crater (boss: 4) | north | 3 |
-| The Sunken Rail Yards | far east, Outer Wards | 4 |
-| The Ashfall Tenements | far west, Outer Wards | 5 |
-| The Dry Reservoir | far south, Outer Wards | 6 |
-| The Lantern Market | behind the Salt Lantern | sanctuary |
-| The Rampart Ring, Northgate, Sunrise Ward, Kopje Heights, the Dhow Quarter, the Harbour | the new city, out to the wall | 0 (the city) |
+| The Dry Reservoir | just north of Concordia Plaza | 1 |
+| The Ashfall Tenements | west, Outer Wards | 2 |
+| The Sunken Rail Yards | east, Outer Wards | 3 |
+| The Catharsis Crater (boss: 5) | far north | 4 |
+| Echo Plains | west of the Frontier | 5 |
+| Scorched Veld | east of the Frontier | 6 |
+
+Power levels run outward from Concordia Plaza: the Dry Reservoir beside it is where new Ascendants cut their teeth, and the Scorched Veld, deepest in the old city, is the deadliest. Remnant levels follow (◆1 levels 1–3 up to ◆6 levels 17–21). The outer-ward Remnants keep their looks everywhere, but a Reservoir Brute in the gentlest district is only as tough as an ordinary Hollowed of its level; the variants grow into their extra toughness as the power level rises.
 
 ### Getting around
 - **Avenues** cross the whole city every 256 m; the central one runs south through the Lantern Market, past the Dry Reservoir, down to the Harbour.
@@ -117,11 +116,11 @@ Like RuneScape: Dragonwilds, every Ascendant, district and Remnant has a **power
 - **M** (or ⌖ on touch) opens the map of Ad Nostra: an adventurer's map as the Concord would draw it in 2137. The ground is painted like an old map (every building outlined in stone, the glass towers rimmed in cyan, the streets, the districts in their own ground, the sea with lit waves, the rampart with its gold light strip), laid on a holographic survey slate with a lettered grid, lit corner brackets, a compass ring, hexagonal beacons for the trams, the ferry, the Salt Lantern, the market and the lighthouse, and the title on a lit plate. It also shows the streets, the sea, districts coloured by danger for your power level, tram stops, the ferry, the Mascars, your companions, your objective and you. Click (or tap) the map to zoom in on the old city.
 
 ### Places
-- **Concordia Plaza** stands on the waterfront at the head of the harbour, between the two ferry piers. It is where you start and where you come back to when you fall. Governor Mascar stands on his dais beneath the Statue of the Unmaking, looking out over the water, and Quartermaster Ilse Varn sells medkits and armour beside him. Orion and Malia live here too: they stroll the plaza between hunts, walk out through the city (down the Lantern's lane, through the market, round the Dry Reservoir and along the Quay Road) to the districts they hunt, and come back here. The whole city is a sanctuary now; on the map it is washed in blue.
-- **Ad Nostra: Frontier** is the old plaza in the middle of the city, marked by a lit sign. It is not a sanctuary: it is where Ascendants gather before heading out into the Scorched Veld, the Echo Plains and the Crater, and where your Residents come back to when they fall. Its tram stop is on your network from the start.
-- **Scorched Veld** (east, lv 1–3) holds the Hollowed.
-- **Echo Plains** (west, lv 2–4) holds the Echo Drones.
-- **The Catharsis Crater** (north, lv 4–7) holds a crashed Catharsis beacon-ship, its shards, and the **Remnant of the Catharsis**. Vultures circle overhead.
+- **Concordia Plaza** stands on the waterfront at the head of the harbour, between the two ferry piers. It is where you start and where you come back to when you fall. Governor Mascar stands on his dais beneath the Statue of the Unmaking, looking out over the water, and Quartermaster Ilse Varn sells medkits and armour beside him. Everyone lives here now: Orion and Malia, your Residents and the other Ascendants stroll the plaza between hunts, walk out along the streets to the districts they hunt, come back here, and get back up here when they fall. The whole city is a sanctuary now; on the map it is washed in blue.
+- **Ad Nostra: Frontier** is the old plaza in the middle of the city, marked by a lit sign. It is not a sanctuary: it is the way out to the Scorched Veld, the Echo Plains and the Crater, the deadliest ground in the city. Its tram stop is on your network from the start.
+- **Scorched Veld** (east of the Frontier, power level 6, lv 17–21) holds the Hollowed.
+- **Echo Plains** (west of the Frontier, power level 5, lv 13–16) holds the Echo Drones.
+- **The Catharsis Crater** (far north, power level 4, lv 9–12) holds a crashed Catharsis beacon-ship, its shards, and the **Remnant of the Catharsis**. Vultures circle overhead.
 - **The Salt Lantern** (just south of the plaza) is a sanctuary cantina. Zuri Adeyemi keeps the bar and sells **Lantern Ale** (25 credits: +20% experience for 10 minutes). A bronze plaque in the floor marks where Orion Mascar fought Daniel Brown. Regulars drift in and out. Market stalls stand either side of its door, with lanterns strung between them.
 - **The Lantern Market** (behind the Salt Lantern) is a sanctuary bazaar: rows of stalls under striped awnings selling fruit, spices, cloth, pottery, salvaged tech and lanterns, with a merchant at every stall, lantern strings over the central aisle, a gate at each end and a crowd browsing the aisles.
 - **The Harbour** (south, on the sea) is the port: a stone basin with paved quays, bollards and fenders, two moles with a beacon and a turning lighthouse, cargo ships alongside the north and east quays, the fish market, the Port Authority and its clock tower, a bronze anchor where the Harbour Road meets the water, jib cranes and a gantry crane over the container yard, warehouses, dhows moored on the west quay and more under sail in the bay, gulls overhead, and the **Concord Ferry** terminals on the West and East Piers.
@@ -130,9 +129,9 @@ Like RuneScape: Dragonwilds, every Ascendant, district and Remnant has a **power
 - If either of them is nearby when a Remnant goes for you, they come over and help, then go back to what they were doing. Walk up and press E to talk to them, and choose **FIGHT AT MY SIDE** to keep them with you: they follow you everywhere, attack whatever is attacking you or what you are fighting, and their kills count as yours (experience, credits, loot and quest progress). Up to three companions at once. They show under your own health frame with their health and where they are, and your companions are saved with your character. `/party` lists them and `/dismiss` (or `/dismiss malia`) sends them off.
 - They can be defeated. When they are, they get back up in **Concordia Plaza** after 45 seconds, and if they were with you, they walk back out to find you.
 - **Residents**: from the **ASCENDANTS** menu you can retire a character you no longer play as a **Resident of Ad-Nostra**. Residents live in the world as allies, at their own level and class and in their own visor colour: they walk the plaza, drink at the Salt Lantern, hunt the plains, come to your aid in a fight and respawn in Concordia Plaza when defeated. Talk to one to see their record, or ask them to fight at your side. **RECALL** a Resident to play them again.
-- **The Sunken Rail Yards** (power level 4): a rusting freight terminus of tracks, toppled freight cars, gantry cranes and signals still blinking red. Rail-Yard Hollowed and Scrap Drones.
-- **The Ashfall Tenements** (power level 5): burnt-out housing blocks you can walk into, with fires still burning. Ashfall Stalkers, fast and aggressive, and Cinder Drones.
-- **The Dry Reservoir** (power level 6): the city's drained basin, with a broken retaining wall, a crimson-ringed intake tower, outfall pipes and Catharsis growths in the silt. Reservoir Brutes, huge and slow, and Catharsis Sentinels.
+- **The Sunken Rail Yards** (power level 3): a rusting freight terminus of tracks, toppled freight cars, gantry cranes and signals still blinking red. Rail-Yard Hollowed and Scrap Drones.
+- **The Ashfall Tenements** (power level 2): burnt-out housing blocks you can walk into, with fires still burning. Ashfall Stalkers, fast and aggressive, and Cinder Drones.
+- **The Dry Reservoir** (power level 1, just north of Concordia Plaza; its broken wall opens to the south): the city's drained basin, with a broken retaining wall, a crimson-ringed intake tower, outfall pipes and Catharsis growths in the silt. Reservoir Brutes, huge and slow, and Catharsis Sentinels.
 - **Wildlife** roams the Scorched Veld and the Echo Plains: giraffes, elephants, zebras and gazelles move as herds, grazing and drifting across the plains. Zebras and gazelles bolt if you get close, and spook the rest of the herd.
 
 ## Classes
