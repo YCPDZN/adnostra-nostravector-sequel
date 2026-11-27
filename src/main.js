@@ -2873,11 +2873,12 @@ function allyPlate(b, cls) {
 // power level rises by one (they have no quartermaster), and with it the districts they hunt. Their progress is kept
 // for the whole realm, not per Ascendant.
 const MASCAR_KEY = 'adnostra_mascars';
-const MASCAR_BASE = { orion: { pl: 4, hp: 950, dmg: 38 }, malia: { pl: 3, hp: 760, dmg: 27 } };
+// Balance: they are strong friends, not a substitute for your own blade. See the BALANCE notes in the README.
+const MASCAR_BASE = { orion: { pl: 4, hp: 820, dmg: 28 }, malia: { pl: 3, hp: 640, dmg: 20 } };
 const legendPL = b => clamp(MASCAR_BASE[b.id].pl + Math.floor((b.level - 15) / 5), 0, 9);
 const plZones = pl => { const l = HUNT_ZONES.filter(z => ZONES[z].pl <= pl); return l.length ? l : ['ashen']; };
 function applyLegendLevel(b) {
-  const B = MASCAR_BASE[b.id], k = 1 + 0.06 * (b.level - 15);
+  const B = MASCAR_BASE[b.id], k = 1 + 0.04 * (b.level - 15);
   b.pl = legendPL(b); b.maxHp = Math.round(B.hp * k); b.dmg = B.dmg * k; b.hp = Math.min(b.hp || b.maxHp, b.maxHp);
   b.zones = plZones(b.pl); if (b.id === 'orion') b.zones.push('crater');   // he never tires of the Crater
 }
@@ -2912,8 +2913,8 @@ function spawnOrion() {
   if (!soldierReady('orion')) return;
   const rig = makeSoldier({ model: 'orion', accent: 0x8fe6ff, weapon: 'greatsword', mats: SOLDIER_MATS });
   const o = allyBase({ legend: true, id: 'orion', name: 'Orion Mascar', title: 'Father of the Governor', cls: 'vanguard', level: 15, rig, group: rig.group,
-    pos: zonePoint('plaza'), hp: 950, maxHp: 950, dmg: 38, atkCd: [1.3, 1.7], reach: 2.7, glow: 0x8fe6ff, pron: 'He', poss: 'his', lines: ORION_LINES,
-    pl: 4, zones: ['ashen', 'echo', 'crater', 'crater', 'rail'], respawnT: 20, loungeSpot: ORION_PLAQUE_SPOT, loungeLook: new V3(0.6, 0, 56) });
+    pos: zonePoint('plaza'), hp: 820, maxHp: 820, dmg: 28, atkCd: [1.3, 1.7], reach: 2.7, glow: 0x8fe6ff, pron: 'He', poss: 'his', lines: ORION_LINES,
+    pl: 4, zones: ['ashen', 'echo', 'crater', 'crater', 'rail'], respawnT: 45, loungeSpot: ORION_PLAQUE_SPOT, loungeLook: new V3(0.6, 0, 56) });
   loadLegend(o);
   o.group.position.copy(o.pos); W.scene.add(o.group);
   allyPlate(o, 'npc'); addHitbox(o, 0.9, 2, 0.9, 1);
@@ -2924,8 +2925,8 @@ function spawnMalia() {
   if (!soldierReady('malia')) return;
   const rig = makeSoldier({ model: 'malia', accent: 0x8fe6ff, weapon: 'sabre', mats: SOLDIER_MATS, hold: ['clavL', 'uarmL', 'farmL', 'handL'] });
   const m = allyBase({ legend: true, id: 'malia', name: 'Malia Mascar', title: 'Wife of the Governor', cls: 'vanguard', level: 15, rig, group: rig.group,
-    pos: new V3(rand(-6, 6), 0, rand(-4, 2)), hp: 760, maxHp: 760, dmg: 27, atkCd: [0.9, 1.25], reach: 2.4, glow: 0x8fe6ff, pron: 'She', poss: 'her', lines: MALIA_LINES,
-    pl: 3, zones: ['ashen', 'echo', 'echo', 'crater'], respawnT: 20, height: 2.0, idleT: rand(10, 25), loungeSpot: new V3(-7.0, 0, 65.6), loungeLook: new V3(-8.6, 0, 67.4) });
+    pos: new V3(rand(-6, 6), 0, rand(-4, 2)), hp: 640, maxHp: 640, dmg: 20, atkCd: [0.9, 1.25], reach: 2.4, glow: 0x8fe6ff, pron: 'She', poss: 'her', lines: MALIA_LINES,
+    pl: 3, zones: ['ashen', 'echo', 'echo', 'crater'], respawnT: 45, height: 2.0, idleT: rand(10, 25), loungeSpot: new V3(-7.0, 0, 65.6), loungeLook: new V3(-8.6, 0, 67.4) });
   loadLegend(m);
   m.group.position.copy(m.pos); W.scene.add(m.group);
   allyPlate(m, 'npc'); addHitbox(m, 0.9, 2, 0.9, 1);
@@ -3010,6 +3011,7 @@ function leaveParty(b, quiet = false) {
 // On entering the world: your saved companions are with you again, standing beside you.
 function restoreParty() {
   const want = new Set(G.D.party || []);
+  if (want.has('orion') && want.has('malia')) want.delete('malia');   // saves from before only one Mascar could come along
   for (const b of G.bots) if (b.ally) {
     const was = b.party; b.party = want.has(b.id);
     if (b.party && b.alive) {
@@ -3024,6 +3026,7 @@ function partyOpt(b, talk) {
   return b.party ? { label: 'PART WAYS', fn: () => { leaveParty(b); talk(b, fmtQ(b.lines.part)); } }
     : { label: 'FIGHT AT MY SIDE', gold: true, fn: () => {
       if (partyList().length >= PARTY_MAX) { talk(b, fmtQ(b.lines.full)); return; }
+      if (b.legend && partyList().some(o => o.legend)) { talk(b, fmtQ(b.lines.family)); return; }   // the city needs the other one
       joinParty(b); talk(b, fmtQ(b.lines.join));
     } };
 }
@@ -3053,9 +3056,9 @@ function botFight(b, t, dt) {
   b.atkT = b.atkCd ? rand(b.atkCd[0], b.atkCd[1]) : rand(1.4, 1.9); b.atk = 0.3; b.swings++;
   const dmg = (b.dmg || 6 + b.level * 0.7) * rand(0.9, 1.1), near = d2(b.pos, G.P.pos) < 30;
   if (ranged) { b.actHint = 'cast'; projectile(b.pos.clone().setY(b.pos.y + 1.4), t, c.hex, 0.12, 30, () => damage(t, dmg, b), b); return; }
-  if (b.id === 'orion' && b.swings % 4 === 0) {   // a wide greatsword sweep through everything around him
+  if (b.id === 'orion' && b.swings % 5 === 0) {   // a wide greatsword sweep through everything around him
     b.actHint = 'judge';
-    for (const e of G.enemies) if (e.alive && d2(e.pos, b.pos) < 5 + e.radius) damage(e, dmg * (e === t ? 1.3 : 0.8), b);
+    for (const e of G.enemies) if (e.alive && d2(e.pos, b.pos) < 5 + e.radius) damage(e, dmg * (e === t ? 1.2 : 0.6), b);
     if (near) { ringFx(b.pos, 0x8fe6ff, 5, 0.45); slashFx(t, 0x8fe6ff, 1.8); Sound.sfx('heavy'); }
     return;
   }
@@ -3125,19 +3128,19 @@ function allySupport(b, dt) {
   const P = G.P;
   if (!b.legend || b.supT > 0 || !P || P.dead || b.talkT > 0 || d2(b.pos, P.pos) > (b.party ? 28 : 20)) return;
   if (b.id === 'malia') {
-    let who = P.hp < maxHp() * 0.5 ? P : null;
+    let who = P.hp < maxHp() * 0.4 ? P : null;
     if (!who) for (const o of G.bots) if (o.party && o.alive && o !== b && o.hp < o.maxHp * 0.4 && d2(o.pos, b.pos) < 22) { who = o; break; }
     if (!who) return;
-    const mx = who === P ? maxHp() : who.maxHp, amt = Math.round(mx * 0.35);
-    who.hp = Math.min(mx, who.hp + amt); b.supT = 14; b.atk = 0.3; b.actHint = 'restore'; faceTo(b, who.pos);
+    const mx = who === P ? maxHp() : who.maxHp, amt = Math.round(mx * 0.22);
+    who.hp = Math.min(mx, who.hp + amt); b.supT = 24; b.atk = 0.3; b.actHint = 'restore'; faceTo(b, who.pos);
     ringFx(who.pos, 0x4dff9a, 2.4, 0.6); burst(who.pos.clone().setY(1.1), 0x4dff9a, 22, 2.2); boltFx(b.pos.clone().setY(1.4), who.pos.clone().setY(1.2), 0x4dff9a);
     floater(who.pos, '+' + amt, '#4dff9a', 2.7); Sound.sfx('heal');
     if (who === P) addChat('say', b.name, pick(MALIA_LINES.heal));
   } else if (b.id === 'orion') {
-    if (P.hp >= maxHp() * 0.4) return;
+    if (P.hp >= maxHp() * 0.3) return;
     const foes = G.enemies.filter(e => e.alive && e.target === P && d2(e.pos, P.pos) < 20);
     if (!foes.length) return;
-    b.supT = 18; b.atk = 0.3; b.actHint = 'slam';
+    b.supT = 30; b.atk = 0.3; b.actHint = 'slam';
     for (const e of foes) { e.target = b; e.state = 'chase'; }
     ringFx(b.pos, 0xe8c46a, 6, 0.5); floater(b.pos, 'HOLD THE LINE', '#e8c46a', 2.9); Sound.sfx('shield');
     addChat('say', b.name, pick(ORION_LINES.taunt));
@@ -3286,7 +3289,7 @@ function damage(tgt, amt, src, opt = {}) {
   if (tgt.kind === 'enemy') {
     const party = src && src.party && d2(src.pos, P.pos) < 45;   // your companions' hits count as yours
     if (party) tgt.tagged = true;
-    if (src === P) { tgt.tagged = true; floater(tgt.pos, String(amt), opt.crit ? '#ffd166' : '#ffffff', tgt.height * 0.75 + (tgt.type === 'drone' ? 0.6 : 0), opt.crit); Sound.sfx('hit'); }
+    if (src === P) { tgt.tagged = true; tgt.yours = true; floater(tgt.pos, String(amt), opt.crit ? '#ffd166' : '#ffffff', tgt.height * 0.75 + (tgt.type === 'drone' ? 0.6 : 0), opt.crit); Sound.sfx('hit'); }
     if (tgt.state === 'idle' || !tgt.target || !tgt.target.alive) { if (tgt.isBoss && (src === P || party) && tgt.state === 'idle') bossEngage(); tgt.target = src; tgt.state = 'chase'; }
     if (src === P && tgt.target && tgt.target.kind === 'bot' && Math.random() < 0.15) tgt.target = P;
     if (tgt.hp <= 0) killEnemy(tgt, src);
@@ -3305,8 +3308,10 @@ function killEnemy(e, src) {
   if (e.tagged) {
     const D = G.D; let xp = e.xp; const diff = D.level - e.level;
     if (diff >= 4) xp = Math.round(xp * 0.2); else if (diff >= 2) xp = Math.round(xp * 0.6);
+    const share = src && src.legend && !e.yours ? 0.5 : 1;   // a Mascar's kill you never struck is worth half
+    xp = Math.round(xp * share);
     gainXp(xp);
-    const cr = e.isBoss ? 300 : randi(2 + e.level, 6 + e.level * 3); D.credits += cr; addChat('loot', null, `You loot ${cr} credits.`); Sound.sfx('coin');
+    const cr = Math.round((e.isBoss ? 300 : randi(2 + e.level, 6 + e.level * 3)) * share); D.credits += cr; addChat('loot', null, `You loot ${cr} credits.`); Sound.sfx('coin');
     D.kills++;
     questEvent(e.isBoss ? 'boss' : e.variant ? 'remnant' : e.type, e);
     if (zoneAt(e.pos.x, e.pos.z) === 'crater' && !e.isBoss && D.q.i === 2 && D.q.st === 'active' && Math.random() < 0.4) { addChat('loot', null, 'You loot: [Beacon Shard]'); questEvent('shard'); }
@@ -3669,7 +3674,7 @@ function updateEnemies(dt) {
       else e.group.visible = false;
       if (e.temp && e.deadT > 2.2) { W.scene.remove(e.group); e.plate.remove(); e.removed = true; continue; }
       if (!e.temp && e.deadT > e.respawn) {
-        e.alive = true; e.hp = e.maxHp; e.pos.copy(e.spawn); e.state = 'idle'; e.tagged = false; e.phase = 0; e.group.visible = true; e.group.rotation.z = 0; e.group.position.y = 0;
+        e.alive = true; e.hp = e.maxHp; e.pos.copy(e.spawn); e.state = 'idle'; e.tagged = false; e.yours = false; e.phase = 0; e.group.visible = true; e.group.rotation.z = 0; e.group.position.y = 0;
         burst(e.pos.clone().setY(1), 0xff2b4a, 20, 2);
       }
       continue;
@@ -3703,7 +3708,7 @@ function updateEnemies(dt) {
         if (e.isBoss) bossLogic(e, dt);
       }
     } else if (e.state === 'return') {
-      e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.25 * dt); e.dots = []; e.tagged = false;
+      e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.25 * dt); e.dots = []; e.tagged = false; e.yours = false;
       if (moveToward(e, e.spawn, e.speed * 1.6, dt, 0.5)) { e.state = 'idle'; e.hp = e.maxHp; if (e.isBoss) { e.phase = 0; $('bossbar').classList.add('hidden'); Sound.playMusic('world'); } }
     }
     // separation
