@@ -67,13 +67,23 @@ The other Ascendants bullet-jump, flip and slide on their way out to the zones.
 The game runs at full quality on modest hardware, integrated graphics included:
 - Static scenery is merged into a few dozen batches, and every distant character is drawn in a single shared batch, so the world costs roughly 250–500 draw calls instead of ~1,400.
 - Grass is split into chunks that are skipped when off-screen or far away.
-- In the bigger city, static batches out in the fog (beyond about 365 m) are hidden, and walls are kept in a spatial grid so collision checks stay cheap however large the city gets. Around 90 static batches are drawn on average.
+- In the bigger city, static batches out in the fog (beyond about 365 m) are hidden, and walls are kept in a spatial grid so collision checks stay cheap however large the city gets. The camera and the minimap look up walls through the same grid.
+- The street grid (thousands of buildings, lamps, palms, awnings and stalls) is written straight into one buffer per material per 300 m cell as it is generated, with untextured pieces sharing a few vertex-coloured materials, so the whole city adds only a few dozen draw calls on screen. Once the GPU has those buffers, the copies in memory are freed.
+- The crowds are three instanced draw calls for every townsperson together, and the sky traffic is two.
 - Only the sun and sky light the world, because every extra light costs every pixel. Glows come from emissive materials and bloom.
 - **Dynamic resolution** (on by default in Settings) renders fewer pixels when frames run long and steps back up when there is headroom. Effects, shadows and anti-aliasing stay on.
 - **Show FPS** in Settings displays frame rate, current resolution and draw calls.
 
 ## The world
-Ad-Nostra is a big city now: the rampart sits about 470 m from the plaza, nearly twice as far out as before, so the city covers roughly 3.5 times the area. The old districts sit in the middle and the **Outer Wards** surround them. Press **M** for the map.
+Ad-Nostra is a proper city now, and four times the size it was: the rampart stands about 940 m from the plaza, twice as far out as before. Where the old wall stood (470 m) there is now the **Rampart Ring**, a palm boulevard. Inside it are the old districts and the **Outer Wards**; outside it the street grid runs all the way to the new wall, and in the south the city meets the sea at the **Harbour**. Press **M** for the map (click it to switch between the whole city and the old city).
+
+### The streets
+- A street every 64 m and an avenue every 256 m, with pavements, kerbs, zebra crossings, street lamps, and palms in planters along the avenues.
+- City blocks are cut into lots, and every lot has a building that comes right up to the pavement: a ground floor of shopfronts with signs and lit windows, striped awnings over the pavement, neon blade signs, and on the roofs water tanks, solar panels, aerials and domes. Here and there a block is a park (acacias, a baobab or a fountain, benches, grass) or a tiled square with a fountain and palms.
+- The city is generated from a fixed seed, so it is the same city every time you log in, and you start where you logged out.
+- Each part of the new city has its own look: **Northgate** (north) has the glass towers, **Sunrise Ward** (east) and **Kopje Heights** (west) are sandstone and terracotta blocks, and the **Dhow Quarter** (south, by the sea) is low whitewashed and coral-stone buildings with domes.
+- **Townsfolk** in robes and headwraps walk the pavements and cross at the zebra crossings, browse the market, wander the quays and the promenade, and ride the ferry. **Hover-cars** run the sky lanes over the avenues.
+- The **seafront promenade** runs along the shore either side of the Harbour, with palms, benches and a railing over the water.
 
 ### Power levels (0–9)
 Like RuneScape: Dragonwilds, every Ascendant, district and Remnant has a **power level** from 0 to 9.
@@ -91,18 +101,23 @@ Like RuneScape: Dragonwilds, every Ascendant, district and Remnant has a **power
 | The Sunken Rail Yards | far east, Outer Wards | 4 |
 | The Ashfall Tenements | far west, Outer Wards | 5 |
 | The Dry Reservoir | far south, Outer Wards | 6 |
+| The Lantern Market | behind the Salt Lantern | sanctuary |
+| The Rampart Ring, Northgate, Sunrise Ward, Kopje Heights, the Dhow Quarter, the Harbour | the new city, out to the wall | 0 (the city) |
 
 ### Getting around
-- **Avenues** run east and west out to the rampart and south past the Salt Lantern to the Dry Reservoir.
-- **Concord tram stops** stand in the plaza and at each district. Walk past a stop to add it to your network, then press E at any stop to ride to any stop you've found. Your companions ride with you. You can't board in combat.
-- **M** (or ⌖ on touch) opens the map: districts coloured by danger for your power level, tram stops, the Mascars, your companions, your objective and you.
+- **Avenues** cross the whole city every 256 m; the central one runs south through the Lantern Market, past the Dry Reservoir, down to the Harbour.
+- **Concord tram stops** stand in the plaza, at each district, in Northgate, Sunrise Ward and Kopje Heights, and at both piers of the Harbour. Walk past a stop to add it to your network, then press E at any stop to ride to any stop you've found. Your companions ride with you. You can't board in combat.
+- **The ferry Talina** crosses the harbour basin between the West Pier and the East Pier, all day and for free. She waits alongside for 18 seconds with her ramp down, then crosses in 40. Walk aboard and stand anywhere on deck: she carries you across, and her rails keep you aboard until she is alongside at the other pier. Your companions come aboard with you. The timetable at each pier (E) tells you where she is and when she'll be back.
+- **M** (or ⌖ on touch) opens the map: the streets, the sea, districts coloured by danger for your power level, tram stops, the ferry, the Mascars, your companions, your objective and you. Click (or tap) the map to zoom in on the old city.
 
 ### Places
 - **Concordia Plaza** is a sanctuary. Governor Mascar stands on his dais beneath the Statue of the Unmaking, and Quartermaster Ilse Varn sells medkits and upgrades.
 - **Scorched Veld** (east, lv 1–3) holds the Hollowed.
 - **Echo Plains** (west, lv 2–4) holds the Echo Drones.
 - **The Catharsis Crater** (north, lv 4–7) holds a crashed Catharsis beacon-ship, its shards, and the **Remnant of the Catharsis**. Vultures circle overhead.
-- **The Salt Lantern** (just south of the plaza) is a sanctuary cantina. Zuri Adeyemi keeps the bar and sells **Lantern Ale** (25 credits: +20% experience for 10 minutes). A bronze plaque in the floor marks where Orion Mascar fought Daniel Brown. Regulars drift in and out.
+- **The Salt Lantern** (just south of the plaza) is a sanctuary cantina. Zuri Adeyemi keeps the bar and sells **Lantern Ale** (25 credits: +20% experience for 10 minutes). A bronze plaque in the floor marks where Orion Mascar fought Daniel Brown. Regulars drift in and out. Market stalls stand either side of its door, with lanterns strung between them.
+- **The Lantern Market** (behind the Salt Lantern) is a sanctuary bazaar: rows of stalls under striped awnings selling fruit, spices, cloth, pottery, salvaged tech and lanterns, with a merchant at every stall, lantern strings over the central aisle, a gate at each end and a crowd browsing the aisles.
+- **The Harbour** (south, on the sea) is the port: a stone basin with paved quays, bollards and fenders, two moles with a beacon and a turning lighthouse, cargo ships alongside the north and east quays, the fish market, the Port Authority and its clock tower, a bronze anchor where the Harbour Road meets the water, jib cranes and a gantry crane over the container yard, warehouses, dhows moored on the west quay and more under sail in the bay, gulls overhead, and the **Concord Ferry** terminals on the West and East Piers.
 - **Orion Mascar** (level 15), the Governor's father, walks the whole map with his greatsword. He strolls the plaza, heads out to the Scorched Veld, the Echo Plains and the Crater to cut down Remnants, and stops in at the Salt Lantern to stand over his plaque. Every fourth swing is a wide sweep that hits everything around him, and when you drop low on health with Remnants on you, he shouts them onto himself.
 - **Malia Mascar** (level 15), the Governor's wife, hunts the Veld, the Plains and the Crater with a short energy blade, and stops in at the Salt Lantern to stand by her husband's corner table. She strikes fast, often twice, and when you fall below half health she heals you for 35% (it also works on hurt companions).
 - If either of them is nearby when a Remnant goes for you, they come over and help, then go back to what they were doing. Walk up and press E to talk to them, and choose **FIGHT AT MY SIDE** to keep them with you: they follow you everywhere, attack whatever is attacking you or what you are fighting, and their kills count as yours (experience, credits, loot and quest progress). Up to three companions at once. They show under your own health frame with their health and where they are, and your companions are saved with your character. `/party` lists them and `/dismiss` (or `/dismiss malia`) sends them off.
@@ -131,7 +146,7 @@ The other Ascendants in the world are simulated. They have names, guilds and cla
 ## Project files
 - `index.html` is the game page and UI.
 - `game.js` is the compiled game, built from `src/`.
-- `src/main.js` holds the engine, world, combat, AI, movement and UI. `src/soldier.js` is the Ascendant soldier: its rig, weapons and every animation, all procedural. Orion and Malia Mascar use the same skeleton, so the same animations drive them. `src/data.js` holds lore, quests and classes. `src/audio.js` makes the sound effects and in-game music in code, and plays the main menu theme.
+- `src/main.js` holds the engine, world, combat, AI, movement and UI. The city is built by `buildCity()` (street grid, blocks, buildings, the Rampart Ring and the promenade), `buildMarket()`, `buildHarbour()` and `buildFerry()`; the townsfolk and the sky traffic live under CITY LIFE. `src/soldier.js` is the Ascendant soldier: its rig, weapons and every animation, all procedural. Orion and Malia Mascar use the same skeleton, so the same animations drive them. `src/data.js` holds lore, quests and classes. `src/audio.js` makes the sound effects and in-game music in code, and plays the main menu theme.
 - `assets/croxian_mascar.glb` is the Governor's model, optimised to 165k triangles. His scythe isn't part of the file: `makeScythe()` in `src/main.js` builds it in code and fixes it in his right hand, so it appears on the menu, on his dais and on the statue. `assets/model.js` is the same model embedded so the game runs from a double-click.
 - `assets/ascendant_soldier.glb` is the player and Ascendant model: cut from 1.9M to 16k triangles, with textures baked onto new UVs, a 19-bone skeleton, and a 2.4k-triangle copy for distant characters. `assets/soldier.js` is the same model embedded.
 - `assets/main_menu_theme.mp3` is the main menu theme. It loops on the title and character-creation screens and fades out when you enter the world.
@@ -162,5 +177,6 @@ npm run build
 - [x] Orion and Malia at level 15: they hunt every zone, help you when Remnants go for you, can fight at your side (Orion taunts, Malia heals), and respawn in Concordia Plaza when defeated
 - [x] Bigger city, phase 1: rampart moved out to 470 m, Outer Wards with three new districts (power levels 4–6), Concord trams, world map
 - [x] Power levels 0–9 from armour, Dragonwilds-style: zone and enemy power levels, damage scaling, coloured diamonds and skulls, armour tiers from Ilse Varn
+- [x] A city that looks like a city, four times the size: rampart at 940 m, a street grid with shopfronts, awnings, lamps and palms, the Rampart Ring, four new wards, the Harbour with the ferry Talina, the Lantern Market, townsfolk and sky traffic
 - [ ] Bigger city, phase 2: the Frontier beyond the rampart, with power level 7–9 districts and bosses
 - [x] Character registry with multiple Ascendants, and Residents: retired characters who live in the city as allies

@@ -34,6 +34,16 @@ export const CODEX = [
     'East, past the Scorched Veld, the Sunken Rail Yards rust in the grass. West, past the Echo Plains, the Ashfall Tenements still smoulder. South of the Salt Lantern lies the Dry Reservoir, drained in the war, where the Catharsis has taken root in the silt.',
     'The Concord tram runs out to all of them. Walk past a stop once and you can ride to it from anywhere.'
   ]},
+  { title: 'The New City', tag: 'THE CITY', body: [
+    'Ad-Nostra outgrew its walls a second time. The old rampart came down and its line became the Rampart Ring, a palm boulevard; the new wall stands twice as far out, and the city inside it is four times the size it was.',
+    'Beyond the Ring the streets run in a grid all the way to the wall: the glass towers of Northgate, the sandstone blocks of Sunrise Ward and Kopje Heights, and down by the water the whitewashed domes and coral-stone alleys of the Dhow Quarter.',
+    'Townsfolk crowd the pavements, the shops keep their awnings out against the sun, and the hover-cars of the Concord sky lanes never stop.'
+  ]},
+  { title: 'The Harbour', tag: 'PORT OF AD-NOSTRA', body: [
+    'South of the city the land ends at the sea, and the Harbour is cut into the shore: a deep stone basin with a mole on either side of its mouth and a red-and-white lighthouse on the eastern one.',
+    'Cargo ships tie up along the north quay below the Port Authority clock tower, the fish market sells the morning catch under its long roof, and the dhows still lie along the west quay as they did before the war.',
+    'The ferry Talina crosses the basin all day between the West Pier and the East Pier, and charges nobody. Walk aboard while she is alongside; her rails will keep you on deck until she reaches the other side.'
+  ]},
   { title: 'Power Levels', tag: 'SURVIVAL', body: [
     'Every Ascendant has a power level from 0 to 9, set by the armour they wear. Every district and every Remnant has one too.',
     'Meet a Remnant at or below your power level and it is a fair fight. Meet one a level above you and it hits harder and shrugs off your blows. Two or more levels above, marked with a skull, and it will kill you in a few hits while your blade barely scratches it.',
@@ -66,7 +76,8 @@ export const CODEX = [
   { title: 'The Salt Lantern', tag: 'CANTINA · AD-NOSTRA', body: [
     'Just south of Concordia Plaza stands the Salt Lantern: a whitewashed cantina with a great crystal lantern burning over its door, warm as the savannah at dusk.',
     'It is the oldest place in the city that anyone still drinks in. It is also where Orion Mascar fought Daniel Brown. A plaque marks the spot, and the regulars will happily argue about the rest.',
-    'The keeper, Zuri Adeyemi, pours Lantern Ale for any Ascendant with credits. It is said to sharpen the mind.'
+    'The keeper, Zuri Adeyemi, pours Lantern Ale for any Ascendant with credits. It is said to sharpen the mind.',
+    'Behind it, and spilling round to its door, is the Lantern Market: rows of stalls under striped awnings selling fruit, spice, cloth, pottery, salvaged tech and, of course, lanterns, strung on lines over the aisles.'
   ]},
   { title: 'The Remnants', tag: 'THREATS', body: [
     'The Catharsis is defeated. What it left behind is not.',
@@ -96,6 +107,10 @@ export const TIPS = [
   'Walk past a Concord tram stop to add it to your network, then ride to it from any other stop.',
   'Ask Orion or Malia Mascar to fight at your side. Orion draws Remnants off you; Malia heals you when you are hurt.',
   'An Ascendant you no longer play can become a Resident of Ad-Nostra from the ASCENDANTS menu. They will live in the city and hunt the plains.',
+  'The ferry Talina crosses the Harbour between the West and East Piers. Walk aboard while she is alongside and ride across.',
+  'The Lantern Market spreads out behind the Salt Lantern. It is a sanctuary, like the cantina itself.',
+  'Ad-Nostra is four times the size it was. Tram stops in Northgate, Sunrise Ward, Kopje Heights and the Harbour save a long walk.',
+  'On the map (M), click to switch between the whole city and the old city inside the Rampart Ring.',
 ];
 
 export const CLASSES = {
