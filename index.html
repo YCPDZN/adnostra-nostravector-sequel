@@ -256,6 +256,8 @@ input[type=checkbox]{accent-color:var(--cyan);width:18px;height:18px}
 #sat-tabs button.on{color:#fff;border-color:var(--cyan);background:rgba(62,230,255,.12)}
 .inv{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.islot{position:relative;aspect-ratio:1;border:1px solid rgba(255,255,255,.14);background:rgba(5,9,14,.7);display:flex;align-items:center;justify-content:center;overflow:hidden}
 .islot.empty{border-color:rgba(255,255,255,.06)}.islot i{position:absolute;right:4px;top:2px;font-style:normal;font-size:11px;color:#ffd84a;text-shadow:0 1px 2px #000}.islot em{position:absolute;left:0;right:0;bottom:2px;font-style:normal;font-size:8px;letter-spacing:.04em;color:var(--dim);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 2px}
+.islot[data-i]{cursor:pointer}.islot.sel{border-color:var(--cyan);box-shadow:inset 0 0 12px rgba(62,230,255,.25)}
+.sat-info{margin-top:10px;min-height:20px;font-size:12px;line-height:1.5;color:var(--dim)}.sat-info b{margin-right:6px;letter-spacing:.06em}
 .ig{font-size:18px;font-weight:700;text-shadow:0 0 6px rgba(0,0,0,.8)}.sat-note{margin-top:12px;font-size:12px;color:var(--dim);line-height:1.6}
 .sk-total{font-size:12px;letter-spacing:.25em;color:var(--dim);margin-bottom:10px}.sk-total b{color:#fff;font-size:16px}
 .skrow{display:grid;grid-template-columns:30px 1fr;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06)}.skrow>b{font-size:22px;text-align:center}
@@ -309,6 +311,13 @@ canvas#scene{touch-action:none}
 .touch #chat-input.open{display:block;position:fixed;left:50%;top:calc(10px + var(--st));transform:translateX(-50%);width:min(560px,92vw);font-size:16px;opacity:1;z-index:5}
 .touch #tooltip{display:none!important}
 .touch .mbtn:hover{padding-left:22px}
+.touch .kh,.touch .bblk em{display:none}
+.touch #castbar{bottom:auto;top:calc(28% + var(--st))}
+/* building on a phone: the block bar takes the hotbar's place */
+.touch.building #hotbar,.touch.building #wallet,.touch.building #tb-target{display:none}
+.touch #buildbar{left:auto;right:calc(12px + var(--sr));bottom:calc(14px + var(--sb));transform:none;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100vw - 210px - var(--sl) - var(--sr))}
+.touch #buildbar .btn{padding:12px 14px}
+.touch .bblk{width:44px;height:44px}
 
 /* ---------- SMALL SCREENS (phones, small windows) ---------- */
 @media (max-width:900px),(max-height:540px){
@@ -384,6 +393,12 @@ canvas#scene{touch-action:none}
   #dialog .txt{font-size:13px;line-height:1.6}
   #dialog .opts{flex-wrap:wrap}
   #vendor,#sheet{max-height:88vh;overflow:auto;padding:18px}
+  #satchel{padding:16px 16px 14px;max-height:92vh}
+  #sat-tabs{position:sticky;top:-16px;z-index:2;margin:10px 0 12px;padding:6px 0;background:#0a0f16}
+  #sat-tabs button{padding:10px 0;letter-spacing:.15em}
+  .crow .btn{padding:9px 12px}
+  #wm-canvas{width:min(calc(100vh - 150px - var(--st) - var(--sb)),92vw);height:min(calc(100vh - 150px - var(--st) - var(--sb)),92vw)}
+  .wm-box{padding:14px 16px 12px;max-width:96vw}
   #pause{width:min(360px,90vw);padding:18px;max-height:92vh;overflow:auto}
   #pause .btn{margin-top:8px;padding:10px}
   #death{padding:22px;width:min(420px,90vw)}
@@ -401,6 +416,15 @@ canvas#scene{touch-action:none}
   nav.mainnav{margin-top:2vh}
   .np-quote{display:none}
   .touch #tracker{display:none}
+  #satchel h2{font-size:15px!important}#satchel h2 small{display:none!important}
+  #sat-tabs{margin:6px 0 8px}#sat-tabs button{padding:8px 0;font-size:11px}
+  .inv{grid-template-columns:repeat(10,1fr);gap:4px}
+  .sat-note{display:none}
+  /* map: canvas on the left, title and legend beside it */
+  .wm-box{display:grid;grid-template-columns:auto minmax(150px,230px);grid-template-rows:auto 1fr;column-gap:16px;padding:10px 14px}
+  .wm-box h2{grid-column:2;font-size:20px!important;margin-top:28px}
+  #wm-canvas{grid-column:1;grid-row:1 / 3;margin:0;width:calc(100vh - 24px - var(--st) - var(--sb));height:calc(100vh - 24px - var(--st) - var(--sb))}
+  .wm-foot{grid-column:2;flex-direction:column;justify-content:flex-start;gap:10px;line-height:1.9}
 }
 /* portrait phones */
 @media (max-width:600px) and (orientation:portrait){
@@ -434,6 +458,13 @@ canvas#scene{touch-action:none}
   .touch #tbtns{bottom:calc(106px + var(--sb))}
   .touch #wallet{right:auto;left:50%;transform:translateX(-50%);bottom:calc(96px + var(--sb))}
   .touch #tmenu{top:auto;right:calc(12px + var(--sr));bottom:calc(186px + var(--sb))}
+  .touch #buildbar{left:50%;right:auto;transform:translateX(-50%);max-width:96vw;justify-content:center;padding:6px}
+  .touch .bblk{width:40px;height:40px}
+  #bb-blocks{gap:4px!important}
+  .touch #castbar{top:calc(56% - 52px)}
+  .touch.building #joy{bottom:calc(116px + var(--sb))}
+  .touch.building #tbtns{bottom:calc(122px + var(--sb))}
+  .touch.building #tmenu{bottom:calc(196px + var(--sb))}
 }
 </style>
 </head>
@@ -479,7 +510,7 @@ canvas#scene{touch-action:none}
     <div class="np-rule"></div>
     <div class="np-quote">“We did not win the war to inherit ashes. We won it to build.”<span>— ON HIS RETURN FROM CARAX, 2127</span></div>
   </div>
-  <div class="menu-foot"><span>CONCORD BUILD 2137.05 · v0.3.0</span><span><span class="dot"></span><span id="online">4,812</span> ASCENDANTS ONLINE</span></div>
+  <div class="menu-foot"><span>CONCORD BUILD 2137.05 · v0.3.1</span><span><span class="dot"></span><span id="online">4,812</span> ASCENDANTS ONLINE</span></div>
 </div>
 
 <!-- CODEX -->
@@ -632,16 +663,16 @@ canvas#scene{touch-action:none}
       <button class="xbtn" id="wm-x">✕</button>
       <h2 style="font-size:26px;letter-spacing:.04em;font-family:'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif;font-style:italic;text-transform:none"><small style="display:block;font-size:10px;color:var(--cyan);letter-spacing:.35em;margin-bottom:6px;font-weight:400;font-style:normal;font-family:inherit">CONCORD SURVEY</small>Ad Nostra</h2>
       <canvas id="wm-canvas" width="760" height="760"></canvas>
-      <div class="wm-foot"><span id="wm-pl"></span><span><b style="color:#4dff9a">◆</b> BELOW YOU · <b style="color:#ffd84a">◆</b> YOUR LEVEL · <b style="color:#ff9a3c">◆</b> ONE ABOVE · <b style="color:#ff4a5e">◆ ☠</b> DEADLY · <b style="color:#5ab4ff">■</b> SANCTUARY · <b style="color:#3ee6ff">⇄</b> TRAM · <b style="color:#6a9ae0">⚓</b> FERRY</span></div>
+      <div class="wm-foot"><span id="wm-pl"></span><span class="wm-legend"><b style="color:#4dff9a">◆</b> BELOW YOU · <b style="color:#ffd84a">◆</b> YOUR LEVEL · <b style="color:#ff9a3c">◆</b> ONE ABOVE · <b style="color:#ff4a5e">◆ ☠</b> DEADLY · <b style="color:#5ab4ff">■</b> SANCTUARY · <b style="color:#3ee6ff">⇄</b> TRAM · <b style="color:#6a9ae0">⚓</b> FERRY</span></div>
     </div>
   </div>
 
   <div id="satchel" class="panel cut hidden">
     <button class="xbtn" id="satchel-x">✕</button>
     <h2 style="font-size:20px;letter-spacing:.3em"><small style="display:block;font-size:10px;color:var(--cyan);letter-spacing:.35em;margin-bottom:6px;font-weight:400">CONCORD SUPPLY</small>SATCHEL</h2>
-    <div id="sat-tabs"><button data-tab="inv">SATCHEL · I</button><button data-tab="skills">SKILLS · O</button><button data-tab="craft">CRAFTING · K</button></div>
+    <div id="sat-tabs"><button data-tab="inv">SATCHEL<span class="kh"> · I</span></button><button data-tab="skills">SKILLS<span class="kh"> · O</span></button><button data-tab="craft">CRAFTING<span class="kh"> · K</span></button></div>
     <div id="sat-body"></div>
-    <button class="btn ghost" id="sat-build" style="margin-top:12px;width:100%">BUILD AT YOUR HOMESTEAD · H</button>
+    <button class="btn ghost" id="sat-build" style="margin-top:12px;width:100%">BUILD AT YOUR HOMESTEAD<span class="kh"> · H</span></button>
   </div>
   <div id="sheet" class="panel cut hidden">
     <button class="xbtn" id="sheet-x">✕</button>
@@ -671,6 +702,6 @@ canvas#scene{touch-action:none}
 <div id="err" class="panel hidden"></div>
 <div id="fps" class="hidden"></div>
 
-<script src="game.js?v=0.3.0"></script>
+<script src="game.js?v=0.3.1"></script>
 </body>
 </html>

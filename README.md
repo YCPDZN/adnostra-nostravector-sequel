@@ -48,7 +48,13 @@ It also plays on phones and tablets: host the folder anywhere static (or open it
 | Hotbar | Abilities and medkit |
 | Gold prompt | Talk / interact / pick up shards |
 | ◎ / ⤵ / ▲ | Cycle target / slide or roll / jump (hold to glide) |
-| ✉ ☰ ⌖ ❚❚ | Chat / character sheet / map / menu |
+| ✉ ☰ ⌖ ⚒ ❚❚ | Chat / character sheet / map / satchel, skills and crafting / menu |
+| Gold prompt at a rock, tree or wreck | Gather |
+| Tap an item in the satchel | Read what it is |
+| While building: tap / press and hold | Place a block / take a block back |
+| While building: block bar, REMOVE, DONE | Pick a block, switch to removing, stop building |
+
+The game fits phones in either orientation. While you build, the block bar takes the hotbar's place; on short landscape screens the satchel shows ten slots per row and the map puts its legend beside the chart.
 
 ## Movement
 Every Ascendant, you and the simulated players alike, wears the same rigged soldier armour and moves like a Warframe:

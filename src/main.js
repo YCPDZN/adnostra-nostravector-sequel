@@ -2425,16 +2425,19 @@ function craft(r, times = 1) {
 }
 
 // ---- the satchel panel: items, skills, crafting
-function openSatchel(tab = 'inv') { closeAllUI(); G.ui = 'satchel'; G.satTab = tab; $('satchel').classList.remove('hidden'); renderSatchel(); }
+function openSatchel(tab = 'inv') { closeAllUI(); G.ui = 'satchel'; G.satTab = tab; G.satSel = -1; $('satchel').classList.remove('hidden'); renderSatchel(); }
 function renderSatchel() {
   const D = G.D, el = $('sat-body'); if (!D || !el) return;
   for (const b of document.querySelectorAll('#sat-tabs button')) b.classList.toggle('on', b.dataset.tab === G.satTab);
   const ic = (id, big) => { const I = ITEMS[id]; return `<b class="ig" style="color:${I.col}${big ? ';font-size:24px' : ''}">${I.icon}</b>`; };
   if (G.satTab === 'inv') {
     let h = '<div class="inv">';
-    for (let i = 0; i < INV_SLOTS; i++) { const s = D.inv[i]; h += s ? `<div class="islot" title="${esc(ITEMS[s.id].name)}: ${esc(ITEMS[s.id].desc)}">${ic(s.id, true)}${s.n > 1 ? `<i>${s.n}</i>` : ''}<em>${esc(ITEMS[s.id].name)}</em></div>` : '<div class="islot empty"></div>'; }
-    h += `</div><p class="sat-note">${D.inv.length} / ${INV_SLOTS} slots. Gather with E at rocks, trees and wrecks out in the districts. Build at your Homestead in the Dhow Quarter with <b>H</b>.</p>`;
+    for (let i = 0; i < INV_SLOTS; i++) { const s = D.inv[i]; h += s ? `<div class="islot${G.satSel === i ? ' sel' : ''}" data-i="${i}" title="${esc(ITEMS[s.id].name)}: ${esc(ITEMS[s.id].desc)}">${ic(s.id, true)}${s.n > 1 ? `<i>${s.n}</i>` : ''}<em>${esc(ITEMS[s.id].name)}</em></div>` : '<div class="islot empty"></div>'; }
+    const sel = D.inv[G.satSel];
+    h += `</div><p class="sat-info">${sel ? `<b style="color:${ITEMS[sel.id].col}">${esc(ITEMS[sel.id].name)}${sel.n > 1 ? ' ×' + sel.n : ''}</b> ${esc(ITEMS[sel.id].desc)}` : `${TOUCH ? 'Tap' : 'Click'} an item to read about it.`}</p>`;
+    h += `<p class="sat-note">${D.inv.length} / ${INV_SLOTS} slots. Gather at rocks, trees and wrecks out in the districts (${TOUCH ? 'tap the gold prompt' : 'press E'}). Build at your Homestead in the Dhow Quarter${TOUCH ? '' : ' with <b>H</b>'}.</p>`;
     el.innerHTML = h;
+    for (const d of el.querySelectorAll('.islot[data-i]')) d.onclick = () => { G.satSel = G.satSel === +d.dataset.i ? -1 : +d.dataset.i; renderSatchel(); };
   } else if (G.satTab === 'skills') {
     let h = `<div class="sk-total">TOTAL LEVEL <b>${totalLv()}</b> / ${SKILL_IDS.length * 99}</div>`;
     for (const id of SKILL_IDS) {
@@ -2541,9 +2544,9 @@ function toggleBuild(on = !G.build) {
   const P = G.P;
   if (on && !inHomeArea(P.pos.x, P.pos.z, 8)) { msg('Build at your Homestead in the Dhow Quarter (tram: Homestead).'); return; }
   if (on && G.ui) closeAllUI();
-  G.build = on; stopGather();
+  G.build = on; stopGather(); document.documentElement.classList.toggle('building', on);
   HOME.ghost.visible = HOME.lines.visible = on; $('buildbar').classList.toggle('hidden', !on);
-  if (on) { if (!invCount(BLOCK_IDS[HOME.sel - 1])) { const k = BLOCK_IDS.findIndex(id => invCount(id) > 0); if (k >= 0) HOME.sel = k + 1; } renderBuildBar(); addChat('sys', null, `Building. ${TOUCH ? 'Tap to place a block; switch to REMOVE to take one back.' : 'Click to place a block, right-click to take one back, 1-8 to choose a block, H or Esc when you are done.'}`); }
+  if (on) { if (!invCount(BLOCK_IDS[HOME.sel - 1])) { const k = BLOCK_IDS.findIndex(id => invCount(id) > 0); if (k >= 0) HOME.sel = k + 1; } renderBuildBar(); addChat('sys', null, `Building. ${TOUCH ? 'Tap to place a block; press and hold a block (or switch to REMOVE) to take it back. Drag to look around.' : 'Click to place a block, right-click to take one back, 1-8 to choose a block, H or Esc when you are done.'}`); }
 }
 function renderBuildBar() {
   const el = $('bb-blocks'); if (!el) return;
@@ -2595,7 +2598,7 @@ function buildAction(remove) {
     const [x, y, z] = tg.place, id = BLOCK_IDS[HOME.sel - 1];
     if (x < 0 || z < 0 || y < 0 || x >= HOME.n || z >= HOME.n || y >= HOME.h) { msg('That is outside your plot.'); return; }
     if (homeAt(x, y, z)) return;
-    if (!invCount(id)) { msg(`You have no ${ITEMS[id].name.toLowerCase()}s. Make some under Construction (K).`); return; }
+    if (!invCount(id)) { msg(`You have no ${ITEMS[id].name.toLowerCase()}s. Make some under Construction (${TOUCH ? '⚒ → Crafting' : 'K'}).`); return; }
     const wx = HOME.x0 + x, wz = HOME.z0 + z;   // not inside yourself
     if (P.pos.x + P.radius > wx && P.pos.x - P.radius < wx + 1 && P.pos.z + P.radius > wz && P.pos.z - P.radius < wz + 1 && y + 1 > P.pos.y + 0.05 && y < P.pos.y + 1.9) { msg('You are standing there.'); return; }
     if (Math.hypot(wx + 0.5 - P.pos.x, wz + 0.5 - P.pos.z, y + 0.5 - P.pos.y) > 12) { msg('Too far away.'); return; }
@@ -5095,13 +5098,21 @@ function touchEnd(e) {
   for (const t of e.changedTouches) {
     if (t.identifier === joy.id) { joyEnd(); continue; }
     const c = tcam.get(t.identifier); if (!c) continue; tcam.delete(t.identifier);
-    if (G.mode === 'world' && !c.moved && tcam.size === 0 && performance.now() - c.t < 350 && !G.ui) pick3D(t.clientX, t.clientY);
+    const held = performance.now() - c.t;
+    if (G.mode === 'world' && G.build && !c.moved && tcam.size === 0 && held >= 450 && !G.ui) { HOME.tap = [t.clientX, t.clientY]; updateBuild(); buildAction(true); continue; }
+    if (G.mode === 'world' && !c.moved && tcam.size === 0 && held < 350 && !G.ui) pick3D(t.clientX, t.clientY);
   }
   if (tcam.size === 0) { menu.drag = false; pinchD = 0; }
 }
 window.addEventListener('touchend', touchEnd); window.addEventListener('touchcancel', touchEnd);
 // action buttons (pointerdown so they respond instantly, without the click delay)
-const tap = (id, fn) => $(id).addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); Sound.init(); fn(); });
+let ghostT = 0;
+window.addEventListener('click', e => { if (performance.now() < ghostT) { e.preventDefault(); e.stopPropagation(); } }, true);
+const tap = (id, fn) => {
+  const el = $(id);
+  el.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); Sound.init(); ghostT = performance.now() + 500; fn(); });
+  el.addEventListener('touchstart', e => e.preventDefault(), { passive: false });   // no synthesized mouse events / click
+};
 tap('tb-jump', () => playerJump());
 tap('tb-slide', () => playerCrouch(true));
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
