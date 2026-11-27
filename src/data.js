@@ -238,6 +238,20 @@ export const ORION_LINES = {
 };
 
 // Malia Mascar, the Governor's wife. She hunts the zones too, and she keeps Ascendants alive.
+// Croxian Mascar, very rarely, leaving his dais to stand over his wife with his scythe.
+export const CROXIAN_LINES = {
+  arrive: ['Step away from her.', 'Not her. Not while I stand.', 'You picked the wrong Mascar to corner.', 'Malia. Behind me.'],
+  strike: ['For Carax.', 'Down.', 'Enough.'],
+  leave: ['The city is waiting. Be careful out here, Malia.', 'Go carefully. I cannot do this every day.', 'Back to the dais. The Concord will have words with me.'],
+  malia: ['I had it in hand, you know.', 'You should not be out here. Thank you.', 'Go back before the Concord notices you left.'],
+  fall: ['...Malia...', 'Not... like this.'],
+  rise: ['I am all right. Where is she?', 'Father. You did not have to do that. ...Thank you.'],
+  fury: ['THAT WAS MY SON.', 'You put my son on the ground. Stand up and face me.', 'I fought a world war. You are nothing.'],
+  furyDone: ['...It is done. Somebody carry my son home.', 'Enough. Enough. I am an old man again.'],
+  furySeen: ['ORION MASCAR JUST WENT ◆9. I SAW IT. THE WHOLE VELD SHOOK', 'someone took down the Governor and Orion did NOT take it well', 'never seen Orion like that. gold light everywhere. that Remnant is just gone'],
+  seen: ['did anyone else just see the GOVERNOR out on the plains??', 'croxian mascar just blinked in with the scythe. i am not ok', 'the Governor himself just turned up for Malia. that scythe is no decoration', 'saw Croxian Mascar fighting. ten seconds. it was over in ten seconds'],
+};
+
 export const MALIA_LINES = {
   greet: [
     'Good evening, Ascendant. If you are looking for my husband, he is on his dais. If you are looking for his father, good luck.',
