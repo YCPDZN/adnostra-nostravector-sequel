@@ -11,7 +11,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Sound } from './audio.js';
 import { loadSoldier, loadOrion, loadMalia, loadNico, soldierReady, makeSoldier, animSoldier, MOVE_DUR } from './soldier.js';
-import { initNico, spawnNico, updateNico, talkNico } from './nico.js';
+import { initNico, spawnNico, talkNico } from './nico.js';
 import { LAIR_R, LAIRS, DRAGON_PL, DRAGON_VARIANTS, lairAt, initDragons, loadDragons, buildLairs, spawnDragons, updateDragon, dragonSlain } from './dragons.js';
 import {
   CODEX, TIPS, CLASSES, VISORS, QUESTS, MASCAR_IDLE, BOT_NAMES, GUILDS,
@@ -3248,7 +3248,7 @@ function allyPlate(b, cls) {
 // for the whole realm, not per Ascendant.
 const MASCAR_KEY = 'adnostra_mascars';
 // Balance: they are strong friends, not a substitute for your own blade. See the BALANCE notes in the README.
-const MASCAR_BASE = { orion: { pl: 4, hp: 820, dmg: 28 }, malia: { pl: 3, hp: 640, dmg: 20 } };
+const MASCAR_BASE = { orion: { pl: 4, hp: 820, dmg: 28 }, malia: { pl: 3, hp: 640, dmg: 20 }, nico: { pl: 3, hp: 600, dmg: 19 } };   // Nico Brown (src/nico.js) lives like the Mascars
 const legendPL = b => clamp(MASCAR_BASE[b.id].pl + Math.floor((b.level - 15) / 5), 0, 9);
 const plZones = pl => { const l = HUNT_ZONES.filter(z => ZONES[z].pl <= pl); return l.length ? l : ['ashen']; };
 function applyLegendLevel(b) {
@@ -3398,11 +3398,12 @@ function restoreParty() {
   G.D.party = partyList().map(x => x.id);
   renderParty();
 }
+const isMascar = b => b.id === 'orion' || b.id === 'malia';   // one Mascar at a time; Nico Brown is not one
 function partyOpt(b, talk) {
   return b.party ? { label: 'PART WAYS', fn: () => { leaveParty(b); talk(b, fmtQ(b.lines.part)); } }
     : { label: 'FIGHT AT MY SIDE', gold: true, fn: () => {
       if (partyList().length >= PARTY_MAX) { talk(b, fmtQ(b.lines.full)); return; }
-      if (b.legend && partyList().some(o => o.legend)) { talk(b, fmtQ(b.lines.family)); return; }   // the city needs the other one
+      if (isMascar(b) && partyList().some(isMascar)) { talk(b, fmtQ(b.lines.family)); return; }   // the city needs the other one
       joinParty(b); talk(b, fmtQ(b.lines.join));
     } };
 }
@@ -4357,7 +4358,6 @@ function updateAmbient(dt) {
   const zuri = G.npcs.find(n => n.id === 'zuri');
   if (zuri && zuri.lodNear) { animHumanoid(zuri.rig, 0, t); zuri.rig.arms[1].rotation.x = -1.0 + Math.sin(t * 2.6) * 0.25; zuri.rig.arms[1].rotation.z = Math.sin(t * 1.3) * 0.3; // polishing the bar
     zuri.rig.head.rotation.y = d2(P.pos, zuri.pos) < 9 ? clamp(Math.atan2(P.pos.x - zuri.pos.x, P.pos.z - zuri.pos.z) - Math.PI, -0.8, 0.8) : Math.sin(t * 0.3) * 0.3; }
-  updateNico(dt);   // Nico Brown, between the Lantern and the Market
   W.blink.emissiveIntensity = (Math.sin(t * 3) > 0.6) ? 4 : 0.3;
   for (const f of W.fires) { const s = 0.8 + Math.random() * 0.4; f.scale.set(s, 0.8 + Math.random() * 0.5, s); if (f.userData.light) f.userData.light.intensity = 30 + Math.random() * 20; }
   for (const p of W.pylons) { p.r.rotation.z += dt; p.r.position.y = 12 + Math.sin(t + p.ph) * 1.5; p.top.material.emissiveIntensity = 2 + Math.sin(t * 4 + p.ph) * 2; }
@@ -4486,7 +4486,7 @@ function interact(ent = nearestInteract()) {
   else if (ent.id === 'plaque') readPlaque();
   else if (ent.id === 'orion') talkOrion(ent);
   else if (ent.id === 'malia') talkMalia(ent);
-  else if (ent.id === 'nico') talkNico();
+  else if (ent.id === 'nico') talkNico(ent);
   else if (ent.resident) talkResident(ent);
   else if (ent.kind === 'tram') openTram(ent.tram);
   else if (ent.kind === 'ferry') openFerry(ent.side);
@@ -5369,7 +5369,7 @@ function loop() {
   catch (err) { console.error(err); }   // likewise Malia
   try { await loadNico(); }
   catch (err) { console.error(err); }   // and Nico Brown
-  initNico({ V3, G, W, makeSoldier, soldierReady, SOLDIER_MATS, makePlate, addHitbox, moveToward, resolveCollision, turnTo, animSoldier, dialog, closeAllUI, addChat, rand, pick, d2 });
+  initNico({ V3, G, W, CONC, makeSoldier, soldierReady, SOLDIER_MATS, allyBase, loadLegend, allyPlate, allyDialog, addHitbox, rand, pick });
   initDragons({
     THREE: { Group: THREE.Group, Mesh: THREE.Mesh, MeshStandardMaterial: THREE.MeshStandardMaterial, CircleGeometry: THREE.CircleGeometry, TorusGeometry: THREE.TorusGeometry, PlaneGeometry: THREE.PlaneGeometry, Vector3: THREE.Vector3, Color: THREE.Color, Box3: THREE.Box3, DoubleSide: THREE.DoubleSide, Object3D: THREE.Object3D },
     GLTFLoader, G, W, GEO, Sound, glowMat, canvasTex, addCollider, pointBlocked, makeEnemy, makePlate, addHitbox, damage, telegraph, projectile, burst, ringFx, addChat, botSay, chatBots, rand, randi, pick, d2, esc,

@@ -41,7 +41,7 @@ export const CODEX = [
     'Not long after she woke, she met Croxian Mascar, long before he met Malia de Toro. They had one night together, and she conceived his son.',
     'She married Daniel Brown, the man Orion Mascar fought in the Salt Lantern.',
     'In 2125 she was in labour with her son when a lion came for her, and Orion Mascar and the Wanderer killed it. She named the boy Orion Brown, for the man who saved them both and for Orion\'s Belt.',
-    'She lives in Ad-Nostra now. Most days you will find her in the Salt Lantern, standing by the plaque, or walking the Lantern Market behind it.'
+    'She lives in Ad-Nostra now, and she does not sit still. She walks the city and hunts the Remnants in the Dry Reservoir, the Ashfall Tenements and the Sunken Rail Yards with a pair of daggers, and she will fight beside any Ascendant who asks. Between hunts she stops in at the Salt Lantern, to stand by the plaque.'
   ]},
   { title: 'The Outer Wards', tag: 'THE CITY', body: [
     'Ad-Nostra did not stop at the old rampart. The city grew outward in every direction until a new wall had to be raised nearly twice as far out, and the districts in between were never properly reclaimed.',
@@ -458,10 +458,21 @@ export const NODES = {
 
 // Nico Brown: born 2000, frozen in the 2030s, awake since 2123. Wife of Daniel Brown; mother of Orion Brown (born 2125, Croxian's son).
 export const NICO_LINES = {
-  greet: 'Oh. Hello. You\'re one of the Governor\'s Ascendants, aren\'t you? You all walk the same way.\n\nI\'m Nico. Nico Brown.',
+  greet: [
+    'Oh. Hello. You\'re one of the Governor\'s Ascendants, aren\'t you? You all walk the same way.\n\nI\'m Nico. Nico Brown.',
+    'I was born in the year 2000, and I still can\'t get used to the sky having traffic in it. Can I help you?',
+    'Out on the Rail Yards again today. Someone has to, and I sleep better when I\'ve been.',
+  ],
   woke: 'I was born in the year 2000. That\'s not a joke, though everyone laughs.\n\nSome time in the 2030s they froze me. The next thing I knew it was 2123, and everyone I had ever known had been gone for longer than I had been alive.\n\nThe sky was the one thing that hadn\'t changed. I found that very comforting.',
-  daniel: 'I married Daniel Brown in this century. The first person in it who made me laugh.\n\nYou\'ve seen the plaque. Orion Mascar fought him in this room. I won\'t tell you how it started, and I won\'t tell you how it ended. Zuri will tell you both anyway, and she\'ll charge you for the ale while she does.',
+  daniel: 'I married Daniel Brown in this century. The first person in it who made me laugh.\n\nYou\'ve seen the plaque. Orion Mascar fought him in the Salt Lantern. I won\'t tell you how it started, and I won\'t tell you how it ended. Zuri will tell you both anyway, and she\'ll charge you for the ale while she does.',
   son: 'My son is Orion. Orion Brown. He was born in 2125.\n\nHis father is Croxian Mascar. We had one night together, long before he ever met Malia de Toro, before she was Malia Mascar. One night, and then there was Orion.\n\nI was in labour with him when a lion came. Orion Mascar and the Wanderer stood between it and me and killed it. So I named my boy after the man who saved us both, and after Orion\'s Belt: three stars I used to look for in the year 2000, still in the same place when I woke up.',
-  bye: ['Take care out there.', 'Mind the Remnants. And the lions.', 'It was nice to talk to someone who listens.'],
-  near: ['Same three stars. Every night.', 'Zuri, just water, please.'],
+  join: 'All right. I\'ll come.\n\nI\'m quick and I don\'t stand still, so don\'t wait for me. If I go down I\'ll wake in Concordia Plaza and come and find you.',
+  part: 'Go on, then. Be careful.\n\nI\'ll be about. The Lantern, mostly, or out in the Yards.',
+  full: 'You\'ve got a full company already. Send someone home and I\'ll come.',
+  family: 'You\'ve got a full company already. Send someone home and I\'ll come.',
+  rejoin: 'Still here. Lead on.',
+  joinSay: ['Right behind you.', 'Let\'s go.', 'Don\'t worry about me. I\'ve survived a century.'],
+  partSay: ['Take care out there.', 'Mind the Remnants. And the lions.'],
+  fallen: ['Not like this... not again...', 'Back to the plaza, then...'],
+  back: ['I\'m up. Coming to you.', 'Concordia again. On my way back.'],
 };
