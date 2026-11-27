@@ -15,10 +15,12 @@ export const MOVE_DUR = { flip: 0.5, bj: 0.62, roll: 0.5, landHard: 0.55, landSo
 // soldier: the Ascendant armour (player + other Ascendants); its emissive mask lights up in each visor colour.
 // orion:   Orion Mascar, the Governor's father, who wanders the map (see main.js).
 // malia:   Malia Mascar, the Governor's wife, who strolls the plaza and the Salt Lantern. Her left hand rests on her hip.
+// nico:    Nico Brown, who walks between the Salt Lantern and the Lantern Market (see nico.js).
 const MODELS = {
   soldier: { script: 'assets/soldier.js', global: 'SOLDIER_GLB_B64', mesh: 'soldier', lod: 'soldier_lod', energyGlow: true, proto: null, lodGeo: null },
   orion: { script: 'assets/orion.js', global: 'ORION_GLB_B64', mesh: 'orion', lod: 'orion_lod', energyGlow: false, proto: null, lodGeo: null },
   malia: { script: 'assets/malia.js', global: 'MALIA_GLB_B64', mesh: 'malia', lod: 'malia_lod', energyGlow: false, proto: null, lodGeo: null },
+  nico: { script: 'assets/nico.js', global: 'NICO_GLB_B64', mesh: 'nico', lod: 'nico_lod', energyGlow: false, proto: null, lodGeo: null },
 };
 export const soldierReady = (model = 'soldier') => !!MODELS[model].proto;
 
@@ -51,6 +53,7 @@ async function loadRigged(model) {
 export const loadSoldier = () => loadRigged('soldier');
 export const loadOrion = () => loadRigged('orion');
 export const loadMalia = () => loadRigged('malia');
+export const loadNico = () => loadRigged('nico');
 
 // ---------------------------------------------------------------- channels
 const BONES = ['hips', 'spine', 'chest', 'neck', 'head', 'clavL', 'uarmL', 'farmL', 'handL', 'thighL', 'shinL', 'footL', 'clavR', 'uarmR', 'farmR', 'handR', 'thighR', 'shinR', 'footR'];

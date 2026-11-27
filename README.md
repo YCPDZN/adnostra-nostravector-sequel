@@ -6,14 +6,18 @@ An MMO RPG set in 2137, ten years after the Catharsis was defeated at Carax. You
 ## Timeline
 | Year | Event |
 |---|---|
+| 2000 | Nico is born |
+| 2030s | Nico is frozen cryogenically |
 | 2069 | Orion Mascar is born |
 | 2080–2095 | The Third World War. Thomas Hawthorne is Orion's apprentice and fights alongside him, then makes his own path after the Siege of Harbin, China |
 | 2094 | Croxian Mascar is born in the winter of Kaliningrad, to Orion and Talina Mascar (née Alvarez) |
+| 2123 | Nico wakes. Afterwards she meets Croxian Mascar, long before he meets Malia de Toro (now Malia Mascar); one night together, and she conceives his son. She marries Daniel Brown |
+| 2125 | Orion Brown is born. While Nico is in labour, Orion Mascar and the Wanderer kill a lion; she names her son after Orion and after Orion's Belt |
 | 2125 | Croxian serves in Terra Imperia, Hawthorne's far-right faction, then breaks away with the help of a wanderer |
 | 2127 | The Catharsis under Lord Zark invades the Milky Way. On the planet Carax, in Sagittarius A*, Croxian and the Wanderer defeat Lord Zark and the Catharsis-turned Thomas Hawthorne |
 | 2137 | The game. Croxian Mascar is Governor of Ad-Nostra |
 
-The Salt Lantern is the cantina in Ad-Nostra where Orion Mascar fought Daniel Brown.
+The Salt Lantern is the cantina in Ad-Nostra where Orion Mascar fought Daniel Brown. Daniel's wife, Nico Brown, still comes to stand by the plaque.
 
 ## Play
 Double-click **`index.html`**. It runs in Chrome, Edge or Firefox with no install and no server. Your progress saves in the browser by itself.
@@ -140,6 +144,7 @@ Power levels run outward from Concordia Plaza: the Dry Reservoir beside it is wh
 - **The Harbour** (south, on the sea) is the port: a stone basin with paved quays, bollards and fenders, two moles with a beacon and a turning lighthouse, cargo ships alongside the north and east quays, the fish market, the Port Authority and its clock tower, a bronze anchor where the Harbour Road meets the water, jib cranes and a gantry crane over the container yard, warehouses, dhows moored on the west quay and more under sail in the bay, gulls overhead, and the **Concord Ferry** terminals on the West and East Piers.
 - **Orion Mascar** (level 15, power level 4), the Governor's father, walks the whole map with his greatsword. He strolls the plaza, heads out to the Scorched Veld, the Echo Plains, the Crater and the Sunken Rail Yards to cut down Remnants, and stops in at the Salt Lantern to stand over his plaque. Every fifth swing is a wide sweep that hits everything around him, and when you drop below 30% health with Remnants on you, he shouts them onto himself (once every 30 seconds).
 - **Malia Mascar** (level 15, power level 3), the Governor's wife, hunts the Veld, the Plains and the Crater with a short energy blade, and stops in at the Salt Lantern to stand by her husband's corner table. She strikes fast, often twice, and when you fall below 40% health she heals you for 22%, once every 24 seconds (it also works on hurt companions).
+- **Nico Brown**, born in 2000, frozen in the 2030s and awake since 2123, is Daniel Brown's wife and the mother of Orion Brown (born 2125; Croxian's son, from one night together long before he met Malia de Toro). She is a townsperson, not a fighter: she spends her days by the plaque in the Salt Lantern and at the stalls of the Lantern Market, walking between them by the lane on the Lantern's east side. Walk up and she stops and turns to you; press E to ask her about the year 2000, Daniel, or her son.
 - If either of them is nearby when a Remnant goes for you, they come over and help, then go back to what they were doing. Walk up and press E to talk to them, and choose **FIGHT AT MY SIDE** to keep them with you: they follow you everywhere, attack whatever is attacking you or what you are fighting, and their kills count as yours (experience, credits, loot and quest progress). Up to three companions at once. They show under your own health frame with their health and where they are, and your companions are saved with your character. `/party` lists them and `/dismiss` (or `/dismiss malia`) sends them off.
 - They can be defeated. When they are, they get back up in **Concordia Plaza** after 45 seconds, and if they were with you, they walk back out to find you.
 - **Residents**: from the **ASCENDANTS** menu you can retire a character you no longer play as a **Resident of Ad-Nostra**. Residents live in the world as allies, at their own level and class and in their own visor colour: they walk the plaza, drink at the Salt Lantern, hunt the plains, come to your aid in a fight and respawn in Concordia Plaza when defeated. Talk to one to see their record, or ask them to fight at your side. **RECALL** a Resident to play them again.
@@ -206,6 +211,7 @@ The other Ascendants in the world are simulated. They have names, guilds and cla
 - `assets/orion_mascar.glb` is Orion Mascar: cut from 2M to 110k triangles with his original textures kept, rigged with the soldier's 19-bone skeleton, with a 2.6k-triangle copy for distant rendering. `assets/orion.js` is the same model embedded. `tools/orion/` is the pipeline.
 - `assets/tuldran.glb` and `assets/taiman.glb` are the dragons: each cut from 4.8M to 80k triangles with its original textures kept, and rigged (Tuldran 43 bones with a jaw, Taiman 32). Taiman's tail, which stopped short in the export, is regrown with its own baked texture. `src/dragons.js` animates them. `assets/tuldran.js` and `assets/taiman.js` are the same models embedded. `tools/dragons/` is the pipeline.
 - `src/dragons.js` holds the dragons and their lairs: where the lairs are, the scenery, the Sworn, and the dragons' attacks. `main.js` hands it what it needs through `initDragons()`.
+- `assets/nico.glb` is Nico Brown: cut from 4.8M to 110k triangles with her original textures kept, rigged with the soldier's 19-bone skeleton (her hair stays with her head and shoulders), with a 5.7k-triangle copy for distant rendering. `assets/nico.js` is the same model embedded. `src/nico.js` is her routine and dialogue; `tools/nico/` is the pipeline.
 - `assets/malia_mascar.glb` is Malia Mascar: cut from 4.9M to 110k triangles with her original textures kept, rigged the same way, with her left hand held on her hip. `assets/malia.js` is the same model embedded. `tools/malia/` has her rig script.
 
 To rebuild after editing `src/`, run:
@@ -235,5 +241,6 @@ npm run build
 - [x] Skills 1–99 on RuneScape's curve (Mining, Woodcutting, Salvage, Crafting, Construction), a satchel, crafting, and a Homestead to build on block by block
 - [x] Dragons: Tuldran (west) and Taiman (east), stationary world bosses sworn to the Catharsis Remnants, in two power level 8 lairs
 - [x] Dragons rigged and animated; Taiman's tail regrown
+- [x] Nico Brown: rigged, walking between the Salt Lantern and the Lantern Market, and talkable
 - [ ] Bigger city, phase 2: the Frontier beyond the rampart, with power level 7–9 districts and bosses
 - [x] Character registry with multiple Ascendants, and Residents: retired characters who live in the city as allies

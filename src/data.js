@@ -1,8 +1,14 @@
 // AD-NOSTRA — world data, lore, quests, classes, chatter.
 // Canon timeline:
+//   2000  Nico born
+//   2030s Nico is frozen cryogenically
 //   2069  Orion Mascar born
 //   2080–2095  The Third World War (Siege of Harbin; Thomas Hawthorne is Orion's apprentice)
 //   2094  Croxian Mascar born in the winter of Kaliningrad, to Orion and Talina Mascar (née Alvarez)
+//   2123  Nico wakes. Afterwards she meets Croxian Mascar, long before he meets Malia de Toro (now Malia Mascar):
+//         one night together, and she conceives his son. She marries Daniel Brown
+//   2125  Orion Brown is born. Orion Mascar and the Wanderer kill a lion while Nico is in labour, and she names the
+//         boy after Orion and after Orion's Belt
 //   2125  Croxian serves in Terra Imperia under Thomas Hawthorne; breaks away with the help of a wanderer
 //   2127  The Catharsis under Lord Zark invades the Milky Way. On Carax, in Sagittarius A*,
 //         Croxian and the Wanderer defeat Lord Zark and the Catharsis-turned Thomas Hawthorne
@@ -26,8 +32,16 @@ export const CODEX = [
     'These days he walks the whole savannah with his greatsword, cutting down Remnants, and he will fight beside any Ascendant who asks. When the Remnants swarm someone, he calls them onto himself.'
   ]},
   { title: 'Malia Mascar', tag: 'WIFE OF THE GOVERNOR', body: [
+    'She was born Malia de Toro. She took the Mascar name when she married the Governor.',
     'The Concord forbids the Governor to leave Ad-Nostra. His wife is under no such order. Malia Mascar goes out to the Scorched Veld, the Echo Plains and the Crater herself, with a short energy blade in one hand and a Concord mending kit within reach of the other.',
     'Ascendants who fight beside her say she closes wounds faster than the Remnants can open them.'
+  ]},
+  { title: 'Nico Brown', tag: 'BORN 2000 · AWOKE 2123', body: [
+    'Nico was born in the year 2000. Some time in the 2030s she was frozen cryogenically, and she did not wake until 2123, into a world that had forgotten hers.',
+    'Not long after she woke, she met Croxian Mascar, long before he met Malia de Toro. They had one night together, and she conceived his son.',
+    'She married Daniel Brown, the man Orion Mascar fought in the Salt Lantern.',
+    'In 2125 she was in labour with her son when a lion came for her, and Orion Mascar and the Wanderer killed it. She named the boy Orion Brown, for the man who saved them both and for Orion\'s Belt.',
+    'She lives in Ad-Nostra now. Most days you will find her in the Salt Lantern, standing by the plaque, or walking the Lantern Market behind it.'
   ]},
   { title: 'The Outer Wards', tag: 'THE CITY', body: [
     'Ad-Nostra did not stop at the old rampart. The city grew outward in every direction until a new wall had to be raised nearly twice as far out, and the districts in between were never properly reclaimed.',
@@ -305,6 +319,7 @@ export const BOT_NAMES = ['Kaelith','Vex_2137','NovaRook','Seraphyn','Draxx','Il
 export const GUILDS = ['Concord Legion','Savannah Watch','Lantern Regulars','Pale Hunters','Dawnbreakers','',''];
 
 export const WORLD_CHAT = [
+  'did you know nico brown is from the year 2000? like actually from it',
   'LFG crater remnant, need 2 more',
   'anyone know where the beacon shards spawn? crater right?',
   'first round at the Salt Lantern is on me tonight',
@@ -338,6 +353,7 @@ export const ZONE_CHAT = [
   'lol that crit',
 ];
 export const CANTINA_CHAT = [
+  'nico\'s at the plaque again. nobody bother her',
   'zuri another round please',
   'that\'s the spot. right there. where orion fought daniel brown',
   'who keeps playing that song',
@@ -438,4 +454,14 @@ export const NODES = {
   scrap: { skill: 'salvage', level: 1, xp: 18, item: 'scrap', verb: 'Salvage', name: 'Scrap heap', uses: [2, 5], respawn: 14, where: [['reservoir', 4], ['tenements', 8]] },
   circuit: { skill: 'salvage', level: 25, xp: 48, item: 'circuitry', verb: 'Salvage', name: 'Signal wreck', uses: [2, 4], respawn: 26, where: [['rail', 8]] },
   wreck: { skill: 'salvage', level: 50, xp: 95, item: 'alloy', verb: 'Salvage', name: 'Hull fragment', uses: [1, 3], respawn: 45, where: [['crater', 6]] },
+};
+
+// Nico Brown: born 2000, frozen in the 2030s, awake since 2123. Wife of Daniel Brown; mother of Orion Brown (born 2125, Croxian's son).
+export const NICO_LINES = {
+  greet: 'Oh. Hello. You\'re one of the Governor\'s Ascendants, aren\'t you? You all walk the same way.\n\nI\'m Nico. Nico Brown.',
+  woke: 'I was born in the year 2000. That\'s not a joke, though everyone laughs.\n\nSome time in the 2030s they froze me. The next thing I knew it was 2123, and everyone I had ever known had been gone for longer than I had been alive.\n\nThe sky was the one thing that hadn\'t changed. I found that very comforting.',
+  daniel: 'I married Daniel Brown in this century. The first person in it who made me laugh.\n\nYou\'ve seen the plaque. Orion Mascar fought him in this room. I won\'t tell you how it started, and I won\'t tell you how it ended. Zuri will tell you both anyway, and she\'ll charge you for the ale while she does.',
+  son: 'My son is Orion. Orion Brown. He was born in 2125.\n\nHis father is Croxian Mascar. We had one night together, long before he ever met Malia de Toro, before she was Malia Mascar. One night, and then there was Orion.\n\nI was in labour with him when a lion came. Orion Mascar and the Wanderer stood between it and me and killed it. So I named my boy after the man who saved us both, and after Orion\'s Belt: three stars I used to look for in the year 2000, still in the same place when I woke up.',
+  bye: ['Take care out there.', 'Mind the Remnants. And the lions.', 'It was nice to talk to someone who listens.'],
+  near: ['Same three stars. Every night.', 'Zuri, just water, please.'],
 };
