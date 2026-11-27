@@ -2795,6 +2795,7 @@ function spawnShards() {
 // ---------------------------------------------------------------- bots
 const GATES = { ashen: [new V3(36, 0, 0)], echo: [new V3(-36, 0, 0)], crater: [new V3(0, 0, -38), new V3(0, 0, -106)], plaza: [], cantina: [new V3(0, 0, 40), new V3(0, 0, 49)],
   market: [new V3(21, 0, 30), new V3(21, 0, 86)],
+  concordia: [new V3(21, 0, 30), new V3(21, 0, 86), new V3(0, 0, 98), new V3(0, 0, 192), new V3(128, 0, 192), new V3(128, 0, 505), new V3(40, 0, 512)],
   rail: [new V3(36, 0, 0), new V3(232, 0, 0)], tenements: [new V3(-36, 0, 0), new V3(-232, 0, 0)], reservoir: [new V3(21, 0, 30), new V3(21, 0, 88), new V3(0, 0, 98), new V3(0, 0, 240)] };
 // Reachable spots in each Outer Ward district: clear of scenery, with a clear straight walk from the district's entry.
 const DPOINTS = {};
@@ -2834,8 +2835,12 @@ function zonePoint(z) {
   for (let i = 0; i < 12 && z !== 'cantina' && pointBlocked(p.x, p.z); i++) p = zonePoint0(z);
   return p;
 }
+// Where a bot calls home: Orion and Malia live in Concordia Plaza with the Governor; everyone else gathers at the Frontier.
+const homeZone = b => b.legend ? 'concordia' : 'plaza';
+const homePoint = b => zonePoint(homeZone(b));
 function zonePoint0(z) {
   if (z === 'cantina') return cantinaSpot();
+  if (z === 'concordia') { const a = rand(0, Math.PI * 2), r = rand(8, 26); const p = new V3(CONC.x + Math.cos(a) * r, 0, CONC.z + Math.sin(a) * r); if (p.z < CONC.z - 6 && Math.abs(p.x - CONC.x) < 8) p.z = CONC.z + 4; return p; }
   if (z === 'ashen') return new V3(rand(46, 145), 0, rand(-50, 50));
   if (z === 'echo') return new V3(rand(-145, -46), 0, rand(-50, 50));
   if (z === 'crater') { const a = rand(0, Math.PI * 2), r = rand(12, 50); return new V3(CRATER.x + Math.cos(a) * r, 0, CRATER.z + Math.sin(a) * r); }
@@ -2928,7 +2933,7 @@ function spawnOrion() {
   if (!soldierReady('orion')) return;
   const rig = makeSoldier({ model: 'orion', accent: 0x8fe6ff, weapon: 'greatsword', mats: SOLDIER_MATS });
   const o = allyBase({ legend: true, id: 'orion', name: 'Orion Mascar', title: 'Father of the Governor', cls: 'vanguard', level: 15, rig, group: rig.group,
-    pos: zonePoint('plaza'), hp: 820, maxHp: 820, dmg: 28, atkCd: [1.3, 1.7], reach: 2.7, glow: 0x8fe6ff, pron: 'He', poss: 'his', lines: ORION_LINES,
+    pos: zonePoint('concordia'), hp: 820, maxHp: 820, dmg: 28, atkCd: [1.3, 1.7], reach: 2.7, glow: 0x8fe6ff, pron: 'He', poss: 'his', lines: ORION_LINES,
     pl: 4, zones: ['ashen', 'echo', 'crater', 'crater', 'rail'], respawnT: 45, loungeSpot: ORION_PLAQUE_SPOT, loungeLook: new V3(0.6, 0, 56) });
   loadLegend(o);
   o.group.position.copy(o.pos); W.scene.add(o.group);
@@ -2940,7 +2945,7 @@ function spawnMalia() {
   if (!soldierReady('malia')) return;
   const rig = makeSoldier({ model: 'malia', accent: 0x8fe6ff, weapon: 'sabre', mats: SOLDIER_MATS, hold: ['clavL', 'uarmL', 'farmL', 'handL'] });
   const m = allyBase({ legend: true, id: 'malia', name: 'Malia Mascar', title: 'Wife of the Governor', cls: 'vanguard', level: 15, rig, group: rig.group,
-    pos: new V3(rand(-6, 6), 0, rand(-4, 2)), hp: 640, maxHp: 640, dmg: 20, atkCd: [0.9, 1.25], reach: 2.4, glow: 0x8fe6ff, pron: 'She', poss: 'her', lines: MALIA_LINES,
+    pos: new V3(CONC.x + rand(-6, 6), 0, CONC.z + rand(-2, 4)), hp: 640, maxHp: 640, dmg: 20, atkCd: [0.9, 1.25], reach: 2.4, glow: 0x8fe6ff, pron: 'She', poss: 'her', lines: MALIA_LINES,
     pl: 3, zones: ['ashen', 'echo', 'echo', 'crater'], respawnT: 45, height: 2.0, idleT: rand(10, 25), loungeSpot: new V3(-7.0, 0, 65.6), loungeLook: new V3(-8.6, 0, 67.4) });
   loadLegend(m);
   m.group.position.copy(m.pos); W.scene.add(m.group);
@@ -3006,8 +3011,8 @@ function sendHome(b) {   // back to their own business, wherever they are
   const z = zoneAt(b.pos.x, b.pos.z);
   if (z === 'ashen' || z === 'echo' || z === 'crater') { b.state = 'hunt'; b.act = z; b.actT = rand(40, 120); }
   else if (z === 'cantina') { b.state = 'lounge'; b.act = 'cantina'; b.actT = rand(20, 60); }
-  else if (z === 'plaza') { b.state = 'idle'; b.act = 'plaza'; b.idleT = rand(6, 16); }
-  else { b.state = 'travel'; b.act = 'plaza'; b.path = routeTo(b.pos, zonePoint('plaza')); }
+  else if (z === homeZone(b)) { b.state = 'idle'; b.act = 'plaza'; b.idleT = rand(6, 16); }
+  else { b.state = 'travel'; b.act = 'plaza'; b.path = routeTo(b.pos, homePoint(b)); }
 }
 function joinParty(b) {
   b.party = true; b.resume = null; b.target = null; b.path = []; b.wp = null;
@@ -3275,12 +3280,12 @@ function croxianLeave(c, m) {
 }
 function reviveBot(b) {
   Object.assign(b, { alive: true, hp: b.maxHp, act: 'plaza', idleT: rand(5, 20), path: [], vy: 0, slideT: -1, bjT: 0, flipT: 0, landT: 0, target: null, wp: null, resume: null, talkT: 0 });
-  b.pos.copy(zonePoint('plaza')); b.group.rotation.x = 0;
+  b.pos.copy(homePoint(b)); b.group.rotation.x = 0;
   b.state = b.party ? 'escort' : 'idle';
   if (!b.ally) return;
   b.hitT = 0; b.medT = 0;
   if (d2(b.pos, G.P.pos) < 60) burst(b.pos.clone().setY(1), 0x3ee6ff, 30, 3);
-  if (b.party || b.legend) addChat('sys', null, `${b.name} is back on ${b.poss} feet at the Frontier.`);
+  if (b.party || b.legend) addChat('sys', null, `${b.name} is back on ${b.poss} feet ${b.legend ? 'in Concordia Plaza' : 'at the Frontier'}.`);
   if (b.party && b.lines.back) setTimeout(() => addChat('say', b.name, pick(b.lines.back)), 900);
 }
 // ---- talking to them
@@ -3480,7 +3485,7 @@ function botDie(b) {
   if (b.ally) {
     b.resume = null; b.path = [];
     const near = d2(b.pos, G.P.pos) < 45;
-    if (b.party || b.legend || near) addChat('sys', null, `${b.name} has fallen in ${ZONE_IN[zoneAt(b.pos.x, b.pos.z)]}. ${b.pron} will return to the Frontier.`);
+    if (b.party || b.legend || near) addChat('sys', null, `${b.name} has fallen in ${ZONE_IN[zoneAt(b.pos.x, b.pos.z)]}. ${b.pron} will return to ${b.legend ? 'Concordia Plaza' : 'the Frontier'}.`);
     if (near && b.lines.fallen) setTimeout(() => addChat('say', b.name, pick(b.lines.fallen)), 500);
     return;
   }
@@ -3902,28 +3907,28 @@ function updateBots(dt) {
       assistLogic(b, dt);
     } else if (b.state === 'idle') {
       b.idleT -= dt;
-      if (!b.wp || moveToward(b, b.wp, 2.2, dt)) { if (Math.random() < 0.01) b.wp = zonePoint('plaza'); }
+      if (!b.wp || moveToward(b, b.wp, 2.2, dt)) { if (Math.random() < 0.01) b.wp = homePoint(b); }
       if (Math.random() < 0.0008 && !b.legend) b.danceT = 4;
       if (!b.ally) b.hp = Math.min(b.maxHp, b.hp + 20 * dt);
       if (b.ally && G.P && d2(b.pos, G.P.pos) < 7 && (!b.wp || d2(b.pos, b.wp) < 0.5)) faceTo(b, G.P.pos);
-      if (b.idleT <= 0) { b.act = Math.random() < (b.legend ? 0.3 : 0.25) ? 'cantina' : pick(b.zones || botZones(b)); b.path = b.act === 'cantina' ? [...GATES.cantina, b.loungeSpot ? b.loungeSpot.clone() : zonePoint('cantina')] : routeTo(b.pos, zonePoint(b.act)); b.state = 'travel'; b.actT = b.act === 'cantina' ? rand(40, 110) : rand(60, 180); b.wp = null; }
+      if (b.idleT <= 0) { b.act = Math.random() < (b.legend ? 0.3 : 0.25) ? 'cantina' : pick(b.zones || botZones(b)); b.path = b.act === 'cantina' ? routeTo(b.pos, b.loungeSpot ? b.loungeSpot.clone() : zonePoint('cantina')) : routeTo(b.pos, zonePoint(b.act)); b.state = 'travel'; b.actT = b.act === 'cantina' ? rand(40, 110) : rand(60, 180); b.wp = null; }
     } else if (b.state === 'travel') {
       if (!b.path.length) { b.state = b.act === 'plaza' ? 'idle' : b.act === 'cantina' ? 'lounge' : 'hunt'; b.idleT = rand(15, 50); continue; }
       if (b.rig.isSoldier && !b.legend && b.pos.y === 0 && b.slideT < 0 && b.act !== 'cantina' && d2(b.pos, b.path[0]) > 24) {
         if (Math.random() < dt * 0.3) { b.vy = 10.5; b.bjT = 1e-4; b.boost = 1.6; b.canFlip = Math.random() < 0.6; }   // bullet jump
         else if (Math.random() < dt * 0.12) b.slideT = 0;                                                         // slide
       }
-      const tsp = b.legend ? (zoneAt(b.pos.x, b.pos.z) === 'cantina' || zoneAt(b.pos.x, b.pos.z) === 'plaza' ? 2.2 : 6.5)   // the Mascars walk in town and jog the plains
+      const tsp = b.legend ? (zoneAt(b.pos.x, b.pos.z) === 'cantina' || zoneAt(b.pos.x, b.pos.z) === 'plaza' || zoneAt(b.pos.x, b.pos.z) === 'concordia' ? 2.2 : 6.5)   // the Mascars walk in town and jog the plains
         : (b.act === 'cantina' && zoneAt(b.pos.x, b.pos.z) === 'cantina' ? 3 : 13) * (b.pos.y > 0 ? b.boost : 1) * (b.slideT >= 0 ? 1.15 : 1);
       if (moveToward(b, b.path[0], tsp, dt, 1)) b.path.shift();
     } else if (b.state === 'lounge') {   // a regular at the Lantern: stand about, raise a glass, then wander back out
       b.actT -= dt; b.move = Math.max(0, b.move - dt * 5);
       if (b.legend) { if (G.P && d2(b.pos, G.P.pos) < 7) faceTo(b, G.P.pos); else if (b.loungeLook) faceTo(b, b.loungeLook); }   // Orion's plaque, Croxian's table, unless you come over
       else if (Math.random() < 0.0015) b.danceT = 2.5;
-      if (b.actT <= 0) { b.act = 'plaza'; b.path = [...GATES.cantina].reverse().concat([zonePoint('plaza')]); b.state = 'travel'; }
+      if (b.actT <= 0) { b.act = 'plaza'; b.path = routeTo(b.pos, homePoint(b)); b.state = 'travel'; }
     } else if (b.state === 'hunt') {
       b.actT -= dt;
-      if (b.actT <= 0) { b.act = 'plaza'; b.path = routeTo(b.pos, zonePoint('plaza')); b.state = 'travel'; b.target = null; b.wp = null; continue; }
+      if (b.actT <= 0) { b.act = 'plaza'; b.path = routeTo(b.pos, homePoint(b)); b.state = 'travel'; b.target = null; b.wp = null; continue; }
       if (!b.target || !b.target.alive) {
         b.target = null; let bd = 30;
         for (const e of G.enemies) { if (!e.alive || (e.isBoss && Math.random() < 0.995)) continue; const d = d2(b.pos, e.pos); if (d < bd && zoneAt(e.pos.x, e.pos.z) === zoneAt(b.pos.x, b.pos.z)) { bd = d; b.target = e; } }
