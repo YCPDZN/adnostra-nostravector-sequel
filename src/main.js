@@ -13,7 +13,7 @@ import { Sound } from './audio.js';
 import { loadSoldier, loadOrion, loadMalia, soldierReady, makeSoldier, animSoldier, MOVE_DUR } from './soldier.js';
 import {
   CODEX, TIPS, CLASSES, VISORS, QUESTS, MASCAR_IDLE, BOT_NAMES, GUILDS,
-  WORLD_CHAT, ZONE_CHAT, GOV_ANNOUNCE, LORE_REPLIES, GREET_REPLIES, ZURI_LINES, CANTINA_CHAT, PLAQUE, ORION_LINES, MALIA_LINES, RESIDENT_LINES
+  WORLD_CHAT, ZONE_CHAT, GOV_ANNOUNCE, LORE_REPLIES, GREET_REPLIES, ZURI_LINES, CANTINA_CHAT, PLAQUE, ORION_LINES, MALIA_LINES, RESIDENT_LINES, CROXIAN_LINES
 } from './data.js';
 
 const V3 = THREE.Vector3;
@@ -2694,8 +2694,8 @@ function addHitbox(ent, w, h, d, y) {
 function spawnNPCs() {
   // Governor Croxian Mascar
   const m = mascarInstance(2.25); m.position.set(0, 1.2, -12); W.scene.add(m);
-  const mascar = { kind: 'npc', id: 'mascar', name: 'Croxian Mascar', title: 'Governor of Ad-Nostra', pos: new V3(0, 1.2, -12), group: m, height: 2.6, radius: 1, alive: true };
-  mascar.plate = makePlate('npc', `<div class="qm"></div><div class="n">Croxian Mascar</div><div class="g">&lt;Governor of Ad-Nostra&gt;</div>`);
+  const mascar = { kind: 'npc', id: 'mascar', name: 'Croxian Mascar', title: 'Governor of Ad-Nostra', pos: new V3(0, 1.2, -12), group: m, height: 2.6, radius: 1, alive: true, pl: 7, hp: 1e6, maxHp: 1e6 };
+  mascar.plate = makePlate('npc', `<div class="qm"></div><div class="n"><b class="pld">◆7</b> Croxian Mascar</div><div class="g">&lt;Governor of Ad-Nostra&gt;</div>`);
   addHitbox(mascar, 1.2 / m.scale.x, 2.4, 1.2, 1.2);
   G.npcs.push(mascar);
   // Quartermaster Ilse Varn
@@ -3146,6 +3146,62 @@ function allySupport(b, dt) {
     addChat('say', b.name, pick(ORION_LINES.taunt));
     if (!b.party && b.state !== 'assist') startAssist(b, foes[0]); else b.target = foes[0];
   }
+}
+// ---- the Governor steps in
+// Very rarely, when Malia is close to falling with Remnants on her, Croxian leaves his dais in a flash of Carax light,
+// draws them onto himself and cuts them down with his scythe, then goes straight back: the Concord does not like its
+// Governor out on the plains. He is power level 7, above everything in the city except whatever waits beyond the wall.
+// He only ever comes for her: not for you, and not on any schedule you can count on.
+const CROX = { state: 'dais', t: 0, cd: 180, rollT: 0, calm: 0, atkT: 0, spin: 0, home: new V3(0, 1.2, -12) };
+function croxianNear() { return G.P && d2(G.P.pos, G.npcs[0].pos) < 150; }
+function croxianLogic(dt) {
+  const c = G.npcs[0], m = G.bots.find(b => b.id === 'malia'); if (!c || !m || c.id !== 'mascar') return;
+  CROX.cd -= dt; CROX.rollT -= dt;
+  if (CROX.state === 'dais') {
+    if (CROX.cd > 0 || CROX.rollT > 0 || !m.alive || m.hp > m.maxHp * 0.35) return;
+    const foes = G.enemies.filter(e => e.alive && e.target === m && d2(e.pos, m.pos) < 16);
+    if (!foes.length) return;
+    CROX.rollT = 60;                                   // one roll per time she's in trouble...
+    if (Math.random() > 0.2) return;                   // ...and usually she handles it herself
+    // a flash on the dais, and he's beside her
+    if (d2(G.P.pos, c.pos) < 80) burst(c.pos.clone().setY(2), 0x3ee6ff, 40, 4);
+    const a = rand(0, 6.28); c.pos.set(m.pos.x + Math.cos(a) * 2.6, 0, m.pos.z + Math.sin(a) * 2.6); resolveCollision(c.pos, 0.8); c.group.position.copy(c.pos);
+    ringFx(c.pos, 0x3ee6ff, 6, 0.7); burst(c.pos.clone().setY(1.5), 0x3ee6ff, 60, 5);
+    for (const e of foes) { e.target = c; e.state = 'chase'; }
+    Object.assign(CROX, { state: 'fight', t: 24, calm: 0, atkT: 0.4, spin: 0 }); c.hp = c.maxHp;
+    if (croxianNear()) {
+      banner('THE GOVERNOR', 'CROXIAN MASCAR', 'STANDS OVER HIS WIFE · ◆7');
+      addChat('say', c.name, pick(CROXIAN_LINES.arrive));
+    } else setTimeout(() => botSay(pick(chatBots()), pick(CROXIAN_LINES.seen)), 2500);
+    return;
+  }
+  // fighting: Remnants on Malia or on him, within reach of her
+  CROX.t -= dt;
+  let tgt = null, bd = 18;
+  for (const e of G.enemies) { if (!e.alive || !(e.target === m || e.target === c || d2(e.pos, m.pos) < 8)) continue; const d = d2(e.pos, c.pos); if (d < bd) { bd = d; tgt = e; } }
+  CROX.calm = tgt ? 0 : CROX.calm + dt;
+  if (CROX.t <= 0 || CROX.calm > 3.5) { croxianLeave(c, m); return; }
+  if (CROX.spin > 0) { CROX.spin -= dt; c.group.rotation.y += dt * 22; }   // the scythe, all the way round
+  else if (tgt) {
+    if (d2(c.pos, tgt.pos) > 3.6 + tgt.radius) moveToward(c, tgt.pos, 9, dt, 3.2 + tgt.radius);
+    turnTo(c.group, Math.atan2(tgt.pos.x - c.pos.x, tgt.pos.z - c.pos.z), dt, 10);
+    CROX.atkT -= dt;
+    if (CROX.atkT <= 0 && d2(c.pos, tgt.pos) < 4.6 + tgt.radius) {
+      CROX.atkT = 1.7; CROX.spin = 0.45;
+      for (const e of G.enemies) if (e.alive && d2(e.pos, c.pos) < 4.8 + e.radius) damage(e, 52 * rand(0.9, 1.1), c);
+      if (d2(G.P.pos, c.pos) < 60) { ringFx(c.pos, 0x3ee6ff, 4.8, 0.45); slashFx(tgt, 0x8fe6ff, 2); Sound.sfx('heavy'); if (Math.random() < 0.25) addChat('say', c.name, pick(CROXIAN_LINES.strike)); }
+    }
+  } else if (d2(c.pos, m.pos) > 5) { moveToward(c, m.pos, 9, dt, 3); turnTo(c.group, Math.atan2(m.pos.x - c.pos.x, m.pos.z - c.pos.z), dt, 8); }
+  resolveCollision(c.pos, 0.8); c.group.position.set(c.pos.x, 0, c.pos.z);
+}
+function croxianLeave(c, m) {
+  for (const e of G.enemies) if (e.target === c) { e.target = null; e.state = 'return'; }
+  const near = croxianNear();
+  if (near) { addChat('say', c.name, pick(CROXIAN_LINES.leave)); if (m.alive) setTimeout(() => addChat('say', m.name, pick(CROXIAN_LINES.malia)), 1400); }
+  burst(c.pos.clone().setY(1.5), 0x3ee6ff, 40, 4);
+  c.pos.copy(CROX.home); c.group.position.copy(CROX.home); c.group.rotation.y = 0; c.hp = c.maxHp;
+  if (d2(G.P.pos, c.pos) < 80) burst(c.pos.clone().setY(2), 0x3ee6ff, 40, 4);
+  Object.assign(CROX, { state: 'dais', cd: 900, rollT: 0 });   // at least a quarter of an hour before he can slip away again
 }
 function reviveBot(b) {
   Object.assign(b, { alive: true, hp: b.maxHp, act: 'plaza', idleT: rand(5, 20), path: [], vy: 0, slideT: -1, bjT: 0, flipT: 0, landT: 0, target: null, wp: null, resume: null, talkT: 0 });
@@ -3872,7 +3928,7 @@ function updateAmbient(dt) {
   W.sun.position.set(P.pos.x + SUN_DIR.x * 120, SUN_DIR.y * 120, P.pos.z + SUN_DIR.z * 120); W.sun.target.position.copy(P.pos);
   // npc idle
   const ilse = G.npcs[1]; animHumanoid(ilse.rig, 0, t); ilse.rig.head.rotation.y = Math.sin(t * 0.4) * 0.4;
-  const masc = G.npcs[0]; if (d2(P.pos, masc.pos) < 14) turnTo(masc.group, Math.atan2(P.pos.x - masc.pos.x, P.pos.z - masc.pos.z), dt, 2); else turnTo(masc.group, 0, dt, 1);
+  const masc = G.npcs[0]; if (CROX.state !== 'dais') { /* out defending Malia */ } else if (d2(P.pos, masc.pos) < 14) turnTo(masc.group, Math.atan2(P.pos.x - masc.pos.x, P.pos.z - masc.pos.z), dt, 2); else turnTo(masc.group, 0, dt, 1);
 }
 function updateCamera(dt) {
   const P = G.P, c = G.cam;
@@ -3895,7 +3951,7 @@ function updateCamera(dt) {
 }
 
 function updateWorld(dt) {
-  updatePlayer(dt); updateEnemies(dt); updateBots(dt); updateCityLife(dt); updateProjectiles(dt); updateFx(dt); updateShards(dt); updateAmbient(dt); updateCamera(dt);
+  updatePlayer(dt); updateEnemies(dt); updateBots(dt); croxianLogic(dt); updateCityLife(dt); updateProjectiles(dt); updateFx(dt); updateShards(dt); updateAmbient(dt); updateCamera(dt);
   // target ring
   const t = G.P.target;
   if (t && t.alive) { W.targetRing.visible = true; W.targetRing.position.set(t.pos.x, 0.1, t.pos.z); W.targetRing.scale.setScalar(t.radius * 1.3); W.targetRing.rotation.z += dt; } else W.targetRing.visible = false;
@@ -4109,7 +4165,7 @@ function updatePlates() {
       if (hurt && e._pw !== w) { e._pw = w; e.plateBar.style.width = w; }
       if (e._pp !== e.party) { e._pp = e.party; el.classList.toggle('party', e.party); }
     }
-    if (e.kind === 'enemy' || e.ally) { const tag = plTag(e.pl | 0); if (e._pl !== tag) { if (e._pl) el.classList.remove(e._pl); el.classList.add(tag); e._pl = tag; } }
+    if (e.kind === 'enemy' || e.ally || e.id === 'mascar') { const tag = plTag(e.pl | 0); if (e._pl !== tag) { if (e._pl) el.classList.remove(e._pl); el.classList.add(tag); e._pl = tag; } }
     if (e.kind === 'enemy') { const w = (e.hp / e.maxHp * 100).toFixed(0) + '%'; if (e._pw !== w) { e._pw = w; e.plateBar.style.width = w; } const isT = P.target === e; if (e._pt !== isT) { e._pt = isT; el.classList.toggle('tgt', isT); } }
   }
 }
@@ -4827,5 +4883,5 @@ function loop() {
   setTimeout(() => { hide('splash-load'); show('splash-press'); G.ready = true; }, 400);
   $('splash').addEventListener('pointerdown', () => { if (G.ready && G.mode === 'splash') enterMenuFromSplash(); });
   if (TOUCH) $('splash-press').textContent = 'TAP TO BEGIN';
-  window.__AD = G; window.__ADdbg = { W, menu, damage, killEnemy, talkMascar, updateTracker, LIFE, FERRY, toggleMap, stats: () => ({ batch: W.batch, res: RES_STEPS[perf.level], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries, tex: renderer.info.memory.textures, pr: renderer.getPixelRatio() }) }; // debug handles
+  window.__AD = G; window.__ADdbg = { W, menu, damage, killEnemy, talkMascar, updateTracker, LIFE, FERRY, CROX, toggleMap, stats: () => ({ batch: W.batch, res: RES_STEPS[perf.level], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries, tex: renderer.info.memory.textures, pr: renderer.getPixelRatio() }) }; // debug handles
 })();
