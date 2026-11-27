@@ -39,6 +39,11 @@ export const CODEX = [
     'Beyond the Ring the streets run in a grid all the way to the wall: the glass towers of Northgate, the sandstone blocks of Sunrise Ward and Kopje Heights, and down by the water the whitewashed domes and coral-stone alleys of the Dhow Quarter.',
     'Townsfolk crowd the pavements, the shops keep their awnings out against the sun, and the hover-cars of the Concord sky lanes never stop.'
   ]},
+  { title: 'Trades and the Homestead', tag: 'SKILLS', body: [
+    'An Ascendant does not only fight. Mining, Woodcutting and Salvage gather what the city needs; Crafting turns it into planks, glass, steel and tools; Construction turns those into building blocks. Each skill runs from level 1 to 99, and 99 is a long road.',
+    'The best materials lie furthest from Concordia: sandstone and acacia close by, iron and baobab in the Outer Wards, Carax ore in the Crater, ironwood and crimson crystal out on the Scorched Veld.',
+    'Every Ascendant is granted a Homestead plot in the Dhow Quarter, by the sea. What you build there, block by block, is yours.'
+  ]},
   { title: 'The Harbour', tag: 'PORT OF AD-NOSTRA', body: [
     'South of the city the land ends at the sea, and the Harbour is cut into the shore: a deep stone basin with a mole on either side of its mouth and a red-and-white lighthouse on the eastern one.',
     'Cargo ships tie up along the north quay below the Port Authority clock tower, the fish market sells the morning catch under its long roof, and the dhows still lie along the west quay as they did before the war.',
@@ -111,6 +116,8 @@ export const TIPS = [
   'The Lantern Market spreads out behind the Salt Lantern. It is a sanctuary, like the cantina itself.',
   'Ad-Nostra is four times the size it was. Tram stops in Northgate, Sunrise Ward, Kopje Heights and the Harbour save a long walk.',
   'On the map (M), click to switch between the whole city and the old city inside the Rampart Ring.',
+  'Press I for your satchel, O for your skills and K to craft. Gather with E at rocks, trees and wrecks; better tools gather faster.',
+  'Your Homestead plot is in the Dhow Quarter (tram: Homestead). Press H there to build with the blocks you have made.',
 ];
 
 export const CLASSES = {
@@ -347,3 +354,83 @@ export const LORE_REPLIES = [
   'born in kaliningrad in the middle of ww3. no wonder he\'s like that',
 ];
 export const GREET_REPLIES = ['o7', 'hey {name}!', 'welcome to Ad-Nostra {name}', 'yo', 'hi hi', 'o/', 'sawubona!', 'jambo!'];
+
+// ---------------------------------------------------------------- skills, items and recipes
+// Skills level 1 to 99 on RuneScape's experience curve (13,034,431 xp for 99).
+export const SKILLS = {
+  mining: { name: 'Mining', icon: '⛏', col: '#c9a679' },
+  woodcutting: { name: 'Woodcutting', icon: '♣', col: '#7fb34a' },
+  salvage: { name: 'Salvage', icon: '⚙', col: '#9aa4ae' },
+  crafting: { name: 'Crafting', icon: '⚒', col: '#e8c46a' },
+  construction: { name: 'Construction', icon: '⌂', col: '#3ee6ff' },
+};
+// kind: resource | material | tool | block. Tools: { tool: skill, tier }. Blocks: { block: index into BLOCKS }.
+export const ITEMS = {
+  sandstone: { name: 'Sandstone', icon: '◆', col: '#d8b47a', kind: 'resource', desc: 'Soft, warm stone from the Dry Reservoir.' },
+  iron_ore: { name: 'Iron ore', icon: '◆', col: '#b0704a', kind: 'resource', desc: 'Rust-red ore from the Outer Wards.' },
+  carax_ore: { name: 'Carax ore', icon: '◆', col: '#5fd8e8', kind: 'resource', desc: 'Ore from the beacon-ship\'s impact, faintly cold.' },
+  crimson_crystal: { name: 'Crimson crystal', icon: '✦', col: '#ff3a5a', kind: 'resource', desc: 'Catharsis crystal from the Scorched Veld. It hums.' },
+  acacia_log: { name: 'Acacia logs', icon: '▬', col: '#b07a46', kind: 'resource', desc: 'Light, hard savannah wood.' },
+  baobab_log: { name: 'Baobab logs', icon: '▬', col: '#9a7a5a', kind: 'resource', desc: 'Thick, soft baobab wood. Planks for days.' },
+  ironwood_log: { name: 'Ironwood logs', icon: '▬', col: '#6a3a2e', kind: 'resource', desc: 'Black, dense wood from the burnt Veld.' },
+  scrap: { name: 'Scrap metal', icon: '⚙', col: '#9a9a94', kind: 'resource', desc: 'Twisted metal from the ruins. Also dropped by Remnants.' },
+  circuitry: { name: 'Circuitry', icon: '⌁', col: '#6dff9a', kind: 'resource', desc: 'Salvaged boards from the Rail Yards.' },
+  alloy: { name: 'Catharsis alloy', icon: '⬢', col: '#d04a6a', kind: 'resource', desc: 'Hull alloy from the wreck in the Crater.' },
+  plank: { name: 'Planks', icon: '▭', col: '#d8a868', kind: 'material', desc: 'Sawn timber.' },
+  glass: { name: 'Glass', icon: '◇', col: '#bfe6ff', kind: 'material', desc: 'Sand-glass, poured in the Concord kilns.' },
+  steel_bar: { name: 'Steel bar', icon: '▬', col: '#c8d0d8', kind: 'material', desc: 'Iron and scrap, worked into steel.' },
+  lamp_core: { name: 'Lamp core', icon: '✺', col: '#ffd27a', kind: 'material', desc: 'A little Concord light in a glass shell.' },
+  carax_plate: { name: 'Carax plate', icon: '⬣', col: '#3ee6ff', kind: 'material', desc: 'The alloy they forge Carax armour from.' },
+  pick1: { name: 'Concord pickaxe', icon: '⛏', col: '#b8a07a', kind: 'tool', tool: 'mining', tier: 1, desc: 'Standard issue. It will do.' },
+  pick2: { name: 'Steel pickaxe', icon: '⛏', col: '#d8e0e8', kind: 'tool', tool: 'mining', tier: 2, desc: 'Mines a third faster.' },
+  pick3: { name: 'Carax pickaxe', icon: '⛏', col: '#3ee6ff', kind: 'tool', tool: 'mining', tier: 3, desc: 'Mines nearly twice as fast.' },
+  hatchet1: { name: 'Concord hatchet', icon: '♠', col: '#b8a07a', kind: 'tool', tool: 'woodcutting', tier: 1, desc: 'Standard issue. It will do.' },
+  hatchet2: { name: 'Steel hatchet', icon: '♠', col: '#d8e0e8', kind: 'tool', tool: 'woodcutting', tier: 2, desc: 'Chops a third faster.' },
+  hatchet3: { name: 'Carax hatchet', icon: '♠', col: '#3ee6ff', kind: 'tool', tool: 'woodcutting', tier: 3, desc: 'Chops nearly twice as fast.' },
+  cutter1: { name: 'Salvage cutter', icon: '✂', col: '#b8a07a', kind: 'tool', tool: 'salvage', tier: 1, desc: 'Standard issue. It will do.' },
+  cutter2: { name: 'Steel cutter', icon: '✂', col: '#d8e0e8', kind: 'tool', tool: 'salvage', tier: 2, desc: 'Salvages a third faster.' },
+  cutter3: { name: 'Carax cutter', icon: '✂', col: '#3ee6ff', kind: 'tool', tool: 'salvage', tier: 3, desc: 'Salvages nearly twice as fast.' },
+  block_sandstone: { name: 'Sandstone block', icon: '■', col: '#d8b47a', kind: 'block', block: 1, desc: 'A building block. Press H at your Homestead.' },
+  block_timber: { name: 'Timber block', icon: '■', col: '#a8743e', kind: 'block', block: 2, desc: 'A building block. Press H at your Homestead.' },
+  block_whitewash: { name: 'Whitewash block', icon: '■', col: '#f0ebe0', kind: 'block', block: 3, desc: 'A building block. Press H at your Homestead.' },
+  block_glass: { name: 'Glass block', icon: '■', col: '#9fd8ff', kind: 'block', block: 4, desc: 'See-through. Press H at your Homestead.' },
+  block_steel: { name: 'Steel block', icon: '■', col: '#8a949e', kind: 'block', block: 5, desc: 'A building block. Press H at your Homestead.' },
+  block_lamp: { name: 'Lamp block', icon: '■', col: '#ffd27a', kind: 'block', block: 6, desc: 'It glows. Press H at your Homestead.' },
+  block_carax: { name: 'Carax block', icon: '■', col: '#3ee6ff', kind: 'block', block: 7, desc: 'Lit with Concord cyan. Press H at your Homestead.' },
+  block_crystal: { name: 'Crystal block', icon: '■', col: '#ff3a5a', kind: 'block', block: 8, desc: 'Catharsis crystal, tamed. Press H at your Homestead.' },
+};
+export const RECIPES = [
+  { skill: 'crafting', level: 1, xp: 8, in: { acacia_log: 1 }, out: { plank: 2 } },
+  { skill: 'crafting', level: 8, xp: 18, in: { sandstone: 2 }, out: { glass: 1 } },
+  { skill: 'crafting', level: 15, xp: 32, in: { iron_ore: 1, scrap: 1 }, out: { steel_bar: 1 } },
+  { skill: 'crafting', level: 30, xp: 25, in: { baobab_log: 1 }, out: { plank: 5 } },
+  { skill: 'crafting', level: 30, xp: 60, in: { circuitry: 1, glass: 1 }, out: { lamp_core: 1 } },
+  { skill: 'crafting', level: 55, xp: 140, in: { carax_ore: 2, alloy: 1 }, out: { carax_plate: 1 } },
+  { skill: 'crafting', level: 20, xp: 90, in: { steel_bar: 3, plank: 2 }, out: { pick2: 1 } },
+  { skill: 'crafting', level: 20, xp: 90, in: { steel_bar: 2, plank: 3 }, out: { hatchet2: 1 } },
+  { skill: 'crafting', level: 22, xp: 95, in: { steel_bar: 2, circuitry: 1 }, out: { cutter2: 1 } },
+  { skill: 'crafting', level: 60, xp: 400, in: { carax_plate: 3, ironwood_log: 2 }, out: { pick3: 1 } },
+  { skill: 'crafting', level: 60, xp: 400, in: { carax_plate: 2, ironwood_log: 3 }, out: { hatchet3: 1 } },
+  { skill: 'crafting', level: 62, xp: 420, in: { carax_plate: 2, alloy: 2 }, out: { cutter3: 1 } },
+  { skill: 'construction', level: 1, xp: 6, in: { sandstone: 2 }, out: { block_sandstone: 4 } },
+  { skill: 'construction', level: 5, xp: 10, in: { plank: 2 }, out: { block_timber: 4 } },
+  { skill: 'construction', level: 12, xp: 16, in: { sandstone: 2, plank: 1 }, out: { block_whitewash: 4 } },
+  { skill: 'construction', level: 20, xp: 22, in: { glass: 2 }, out: { block_glass: 4 } },
+  { skill: 'construction', level: 35, xp: 45, in: { steel_bar: 2 }, out: { block_steel: 4 } },
+  { skill: 'construction', level: 45, xp: 70, in: { lamp_core: 1, glass: 1 }, out: { block_lamp: 2 } },
+  { skill: 'construction', level: 65, xp: 160, in: { carax_plate: 1 }, out: { block_carax: 4 } },
+  { skill: 'construction', level: 85, xp: 300, in: { crimson_crystal: 2 }, out: { block_crystal: 2 } },
+];
+// What you can gather, and where it grows. (count, where: zone id or 'parks')
+export const NODES = {
+  sandstone: { skill: 'mining', level: 1, xp: 18, item: 'sandstone', verb: 'Mine', name: 'Sandstone rock', uses: [2, 5], respawn: 14, where: [['reservoir', 12]] },
+  iron: { skill: 'mining', level: 20, xp: 40, item: 'iron_ore', verb: 'Mine', name: 'Iron vein', uses: [2, 4], respawn: 22, where: [['tenements', 6], ['rail', 5]] },
+  carax: { skill: 'mining', level: 45, xp: 85, item: 'carax_ore', verb: 'Mine', name: 'Carax vein', uses: [1, 3], respawn: 40, where: [['crater', 8]] },
+  crystal: { skill: 'mining', level: 75, xp: 160, item: 'crimson_crystal', verb: 'Mine', name: 'Crimson crystal', uses: [1, 2], respawn: 70, where: [['ashen', 6]] },
+  acacia: { skill: 'woodcutting', level: 1, xp: 20, item: 'acacia_log', verb: 'Chop', name: 'Acacia tree', uses: [2, 5], respawn: 16, where: [['parks', 2], ['reservoir', 3]] },
+  baobab: { skill: 'woodcutting', level: 30, xp: 55, item: 'baobab_log', verb: 'Chop', name: 'Baobab tree', uses: [3, 6], respawn: 35, where: [['echo', 5], ['tenements', 2]] },
+  ironwood: { skill: 'woodcutting', level: 60, xp: 110, item: 'ironwood_log', verb: 'Chop', name: 'Ironwood tree', uses: [1, 3], respawn: 55, where: [['ashen', 5]] },
+  scrap: { skill: 'salvage', level: 1, xp: 18, item: 'scrap', verb: 'Salvage', name: 'Scrap heap', uses: [2, 5], respawn: 14, where: [['reservoir', 4], ['tenements', 8]] },
+  circuit: { skill: 'salvage', level: 25, xp: 48, item: 'circuitry', verb: 'Salvage', name: 'Signal wreck', uses: [2, 4], respawn: 26, where: [['rail', 8]] },
+  wreck: { skill: 'salvage', level: 50, xp: 95, item: 'alloy', verb: 'Salvage', name: 'Hull fragment', uses: [1, 3], respawn: 45, where: [['crater', 6]] },
+};

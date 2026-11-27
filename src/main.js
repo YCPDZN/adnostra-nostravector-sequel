@@ -13,7 +13,7 @@ import { Sound } from './audio.js';
 import { loadSoldier, loadOrion, loadMalia, soldierReady, makeSoldier, animSoldier, MOVE_DUR } from './soldier.js';
 import {
   CODEX, TIPS, CLASSES, VISORS, QUESTS, MASCAR_IDLE, BOT_NAMES, GUILDS,
-  WORLD_CHAT, ZONE_CHAT, GOV_ANNOUNCE, LORE_REPLIES, GREET_REPLIES, ZURI_LINES, CANTINA_CHAT, PLAQUE, ORION_LINES, MALIA_LINES, RESIDENT_LINES, CROXIAN_LINES
+  WORLD_CHAT, ZONE_CHAT, GOV_ANNOUNCE, LORE_REPLIES, GREET_REPLIES, ZURI_LINES, CANTINA_CHAT, PLAQUE, ORION_LINES, MALIA_LINES, RESIDENT_LINES, CROXIAN_LINES, SKILLS, ITEMS, RECIPES, NODES
 } from './data.js';
 
 const V3 = THREE.Vector3;
@@ -104,7 +104,7 @@ function setScene(scene, cam) {
 const G = {
   mode: 'splash', time: 0, world: null, P: null, D: null,
   enemies: [], bots: [], npcs: [], shards: [], proj: [], fx: [], timers: [], floaters: [], props: [], animals: [], herds: [],
-  colliders: [], ui: null, zone: '', autosave: 20, chatT: 6,
+  colliders: [], ui: null, zone: '', autosave: 20, chatT: 6, nodes: [], build: false, satTab: 'inv',
 };
 
 // ---------------------------------------------------------------- textures
@@ -1026,6 +1026,7 @@ function buildWorld() {
   buildDistricts(S);
   buildTrams(S);
   buildCity(S);
+  buildHomestead(S);
   buildPeople(S); buildTraffic(S);
   // grass: burnt on the veld, pale on the Echo Plains, gold in the parks, none on the streets or in the crater
   const grassAt = (x, z) => {
@@ -1056,7 +1057,7 @@ function buildWorld() {
   W.batch.list.push(...W.city);   // the street grid was batched as it was built
   initFarChars(S);
   buildColliderGrid(); buildDistrictPoints();
-  spawnNPCs(); spawnZuri(); spawnEnemies(); spawnShards(); spawnBots(); spawnOrion(); spawnMalia(); spawnAnimals();
+  spawnNPCs(); spawnZuri(); spawnEnemies(); spawnShards(); spawnBots(); spawnOrion(); spawnMalia(); spawnAnimals(); spawnNodes();
   buildColliderGrid();   // again, with the NPCs' counters
   G.world = true;
 }
@@ -1166,6 +1167,7 @@ const TRAMS = [
   { id: 'northgate', name: 'Northgate', pos: new V3(16, 0, -688) },
   { id: 'sunrise', name: 'Sunrise Ward', pos: new V3(688, 0, 16) },
   { id: 'kopje', name: 'Kopje Heights', pos: new V3(-688, 0, 16) },
+  { id: 'homestead', name: 'Homestead', pos: new V3(309, 0, 692) },
 ];
 function buildTrams(S) {
   const postM = armorMat(0x2a313b), ringM = glowMat(0x3ee6ff, 3), padM = mat('tramPad', () => new THREE.MeshStandardMaterial({ color: 0x3a4250, metalness: 0.6, roughness: 0.4 }));
@@ -1437,7 +1439,7 @@ const WILD = [
   { c: [0, 0], r: 36 }, { rect: { x0: -17, x1: 17, z0: 28, z1: 78 } }, { rect: MARKET },
   { rect: { x0: 30, x1: 160, z0: -66, z1: 66 } }, { rect: { x0: -160, x1: -30, z0: -66, z1: 66 } },
   { c: [CRATER.x, CRATER.z], r: 76 }, { rect: growR(RAIL, 4) }, { rect: growR(TENE, 4) }, { rect: SOUTH_LANE },
-  { c: [RESV.x, RESV.z], r: RESV_R + 4 }, { rect: HARBOUR }, { c: [CONC.x, CONC.z], r: 38 }, { rect: { x0: -2000, x1: 2000, z0: COAST_Z - 29, z1: 4000 } },
+  { c: [RESV.x, RESV.z], r: RESV_R + 4 }, { rect: HARBOUR }, { c: [CONC.x, CONC.z], r: 38 }, { rect: { x0: 267, x1: 311, z0: 649, z1: 695 } }, { rect: { x0: -2000, x1: 2000, z0: COAST_Z - 29, z1: 4000 } },
 ];
 function wildReason(R, m) {   // why a rectangle can't simply be built over: '' if it can
   for (const Z of WILD) {
@@ -2276,6 +2278,331 @@ function updateTraffic(dt) {
   for (const m of LIFE.carMesh) m.instanceMatrix.needsUpdate = true;
 }
 function updateCityLife(dt) { updateHarbour(dt); updatePeople(dt); updateTraffic(dt); }
+
+// =====================================================================
+//  SKILLS, ITEMS, CRAFTING AND THE HOMESTEAD
+// =====================================================================
+// Five skills on RuneScape's experience curve, 1 to 99. Gather from rocks, trees and wrecks out in the districts (the
+// better the resource, the further from Concordia it lies), craft materials and tools, turn them into building blocks,
+// and build a home, block by block, on your Homestead plot in the Dhow Quarter.
+const XP_TABLE = (() => { const t = [0, 0]; let pts = 0; for (let l = 1; l < 99; l++) { pts += Math.floor(l + 300 * Math.pow(2, l / 7)); t.push(Math.floor(pts / 4)); } return t; })();   // t[L] = xp for level L (t[99] = 13,034,431)
+const SKILL_IDS = Object.keys(SKILLS), INV_SLOTS = 28, STACK = 999;
+const skillXp = id => (G.D && G.D.skills && G.D.skills[id]) || 0;
+const lvForXp = x => { let L = 1; while (L < 99 && x >= XP_TABLE[L + 1]) L++; return L; };
+const skillLv = id => lvForXp(skillXp(id));
+const totalLv = () => SKILL_IDS.reduce((a, id) => a + skillLv(id), 0);
+function ensureSkills(D) {   // new characters and old saves alike
+  if (!D.skills) D.skills = {};
+  for (const id of SKILL_IDS) D.skills[id] = D.skills[id] | 0;
+  if (!Array.isArray(D.inv)) D.inv = [{ id: 'pick1', n: 1 }, { id: 'hatchet1', n: 1 }, { id: 'cutter1', n: 1 }];
+  if (!Array.isArray(D.home)) D.home = [];
+}
+function gainSkillXp(id, n) {
+  const D = G.D, before = skillLv(id);
+  D.skills[id] = Math.min(200000000, skillXp(id) + n);
+  floater(G.P.pos, `+${n} ${SKILLS[id].name}`, SKILLS[id].col, 3.0);
+  const after = skillLv(id);
+  if (after > before) {
+    const S = SKILLS[id];
+    banner(`${S.icon} ${S.name.toUpperCase()}`, `LEVEL ${after}`, after === 99 ? '99 / 99 · MASTERED' : `${after} / 99`, 'lv');
+    ringFx(G.P.pos, 0xe8c46a, 4, 0.9); burst(G.P.pos.clone().setY(1.2), 0xe8c46a, 24, 3);
+    addChat('sys', null, `Congratulations, you've just advanced a ${S.name} level. You are now level ${after}.`);
+    if (after === 99) { addChat('world', null, `${D.name} has reached 99 ${S.name}!`, 'sys'); setTimeout(() => botSay(pick(chatBots()), pick(['GZ ON 99!!!', 'gz 99 ' + D.name, 'skill cape time', 'insane grind, gz'])), 1500); }
+    saveGame();
+  }
+  if (G.ui === 'satchel') renderSatchel();
+}
+// ---- the satchel: 28 slots, stacks of up to 999
+const invCount = id => G.D.inv.reduce((a, s) => a + (s.id === id ? s.n : 0), 0);
+function invRoom(id) { let r = 0; for (const s of G.D.inv) if (s.id === id) r += STACK - s.n; return r + (INV_SLOTS - G.D.inv.length) * STACK; }
+function invAdd(id, n) {
+  let left = n;
+  for (const s of G.D.inv) if (s.id === id && left) { const k = Math.min(left, STACK - s.n); s.n += k; left -= k; }
+  while (left > 0 && G.D.inv.length < INV_SLOTS) { const k = Math.min(left, STACK); G.D.inv.push({ id, n: k }); left -= k; }
+  if (G.ui === 'satchel') renderSatchel(); if (G.build) renderBuildBar();
+  return n - left;
+}
+function invTake(id, n) {
+  if (invCount(id) < n) return false;
+  for (let i = G.D.inv.length - 1; i >= 0 && n > 0; i--) { const s = G.D.inv[i]; if (s.id !== id) continue; const k = Math.min(n, s.n); s.n -= k; n -= k; if (!s.n) G.D.inv.splice(i, 1); }
+  if (G.ui === 'satchel') renderSatchel(); if (G.build) renderBuildBar();
+  return true;
+}
+const toolTier = skill => G.D.inv.reduce((a, s) => { const I = ITEMS[s.id]; return I && I.tool === skill ? Math.max(a, I.tier) : a; }, 0);
+
+// ---- gathering: rocks, trees and wrecks out in the districts
+function nodeMesh(type) {
+  const g = new THREE.Group(), full = new THREE.Group(), gone = new THREE.Group(); g.add(full, gone); gone.visible = false; g.userData.dynamic = true;
+  const M = (k, c, o = {}) => mat('node' + k, () => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.85, flatShading: true }, o)));
+  const rock = (m, s, parent = full) => { const r = new THREE.Mesh(GEO.rock, m); r.scale.set(s * 1.2, s * 0.8, s); r.position.y = s * 0.45; r.rotation.set(rand(-.3, .3), rand(0, 6), rand(-.3, .3)); parent.add(r); return r; };
+  const specks = (m, n, s) => { for (let k = 0; k < n; k++) { const o = new THREE.Mesh(GEO.oct, m); o.scale.setScalar(rand(0.12, 0.22) * s); const a = rand(0, 6.28); o.position.set(Math.cos(a) * s * 0.9, s * rand(0.4, 1.0), Math.sin(a) * s * 0.75); o.rotation.set(rand(0, 3), rand(0, 3), 0); full.add(o); } };
+  const stump = (c) => { const s = new THREE.Mesh(GEO.cyl, M('stump' + c, c)); s.scale.set(0.35, 0.5, 0.35); s.position.y = 0.25; gone.add(s); };
+  if (type === 'sandstone') { rock(M('sand', 0xc8a272), 1.3); rock(M('sand', 0xc8a272), 0.7).position.set(1, 0.3, 0.4); rock(M('sandD', 0x9a7a52), 0.6, gone); }
+  else if (type === 'iron') { rock(M('ironR', 0x5a4a44), 1.3); specks(M('rust', 0xb0603a, { roughness: 0.6 }), 7, 1.3); rock(M('ironR', 0x5a4a44), 0.6, gone); }
+  else if (type === 'carax') { rock(M('caraxR', 0x3a4048), 1.4); specks(glowMat(0x5fd8e8, 2.2), 7, 1.4); rock(M('caraxR', 0x3a4048), 0.6, gone); }
+  else if (type === 'crystal') { rock(M('crysR', 0x2a1e22), 1.2); for (let k = 0; k < 5; k++) { const c = new THREE.Mesh(GEO.oct, glowMat(0xff2b4a, 2.4)); c.scale.set(0.25, rand(0.8, 1.4), 0.25); c.position.set(rand(-0.6, 0.6), 1.2, rand(-0.5, 0.5)); c.rotation.set(rand(-.4, .4), rand(0, 3), rand(-.4, .4)); full.add(c); } rock(M('crysR', 0x2a1e22), 0.6, gone); }
+  else if (type === 'acacia' || type === 'ironwood') {
+    const bark = M('bark' + type, type === 'acacia' ? 0x5a4030 : 0x1c1412), leaf = M('leaf' + type, type === 'acacia' ? 0x5d6a2c : 0x6a1c1e);
+    const t = new THREE.Mesh(GEO.cyl, bark); t.scale.set(0.22, 3.4, 0.22); t.position.y = 1.7; full.add(t);
+    for (let k = 0; k < 3; k++) { const c = new THREE.Mesh(GEO.ico1, leaf); const r = rand(1.6, 2.2); c.scale.set(r, r * 0.25, r); c.position.set(rand(-1, 1), 3.5 + rand(-0.2, 0.3), rand(-1, 1)); full.add(c); }
+    stump(type === 'acacia' ? 0x5a4030 : 0x1c1412);
+  } else if (type === 'baobab') { const b = makeBaobab(0.75); full.add(b); const s = new THREE.Mesh(GEO.cyl, mat('bark', () => new THREE.MeshStandardMaterial({ color: 0x7d6650 }))); s.scale.set(1.2, 0.8, 1.2); s.position.y = 0.4; gone.add(s); }
+  else if (type === 'scrap') { const m = M('scrap', 0x6a5a50, { metalness: 0.5 }); for (let k = 0; k < 6; k++) { const b = bx(rand(0.5, 1.2), rand(0.2, 0.6), rand(0.4, 1), m, rand(-0.8, 0.8), rand(0.2, 0.8), rand(-0.8, 0.8), full); b.rotation.set(rand(0, 1), rand(0, 3), rand(0, 1)); } bx(1.2, 0.15, 1.2, m, 0, 0.08, 0, gone); }
+  else if (type === 'circuit') { bx(1.4, 1.0, 0.9, M('crate', 0x2a2e34, { metalness: 0.4 }), 0, 0.5, 0, full); bx(1.0, 0.5, 0.05, glowMat(0x6dff9a, 1.8), 0, 0.7, 0.46, full); bx(0.3, 1.6, 0.3, M('crate', 0x2a2e34), 0.8, 0.8, 0, full); bx(1.2, 0.15, 0.8, M('crate', 0x2a2e34), 0, 0.08, 0, gone); }
+  else if (type === 'wreck') { const h = new THREE.Mesh(GEO.oct, M('hull', 0x1a1416, { metalness: 0.7 })); h.scale.set(0.9, 2.2, 0.6); h.position.y = 1; h.rotation.z = 0.5; full.add(h); const s = bx(0.08, 1.8, 0.62, glowMat(0xff2b4a, 2), 0, 1, 0, full); s.rotation.z = 0.5; bx(1.0, 0.2, 0.7, M('hull', 0x1a1416), 0, 0.1, 0, gone); }
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return { g, full, gone };
+}
+function nodeSpot(where, park) {
+  for (let k = 0; k < 30; k++) {
+    let p;
+    if (park) p = new V3(rand(park.x0 + 2.5, park.x1 - 2.5), 0, rand(park.z0 + 2.5, park.z1 - 2.5));
+    else p = zonePoint0(where);
+    if (park && (Math.abs(p.x - (park.x0 + park.x1) / 2) < 5 || Math.abs(p.z - (park.z0 + park.z1) / 2) < 5)) continue;   // off the paths
+    if (where === 'reservoir' && Math.hypot(p.x - RESV.x, p.z - RESV.z) > RESV_R - 10) continue;
+    if (pointBlocked(p.x, p.z, 2.2) || G.nodes.some(n => d2(n.pos, p) < 4)) continue;
+    return p;
+  }
+  return null;
+}
+function spawnNodes() {
+  for (const [type, N] of Object.entries(NODES)) for (const [where, n] of N.where) {
+    const spots = where === 'parks' ? (W.parks || []).flatMap(R => Array.from({ length: n }, () => nodeSpot(null, R))) : Array.from({ length: n }, () => nodeSpot(where));
+    for (const p of spots) {
+      if (!p) continue;
+      const m = nodeMesh(type); m.g.position.copy(p); m.g.rotation.y = rand(0, 6.28); W.scene.add(m.g);
+      const node = { kind: 'node', id: 'node', type, N, name: N.name, pos: p, full: m.full, gone: m.gone, uses: randi(...N.uses), down: 0 };
+      const r = type === 'baobab' ? 2.6 : N.skill === 'woodcutting' ? 0.8 : 1.6; addCollider(p.x, p.z, r, r, 3);
+      G.nodes.push(node); G.props.push(node);
+    }
+  }
+}
+function updateNodes(dt) {
+  for (const n of G.nodes) if (n.down > 0 && (n.down -= dt) <= 0) { n.uses = randi(...n.N.uses); n.full.visible = true; n.gone.visible = false; }
+}
+function startGather(n) {
+  const P = G.P, N = n.N, S = SKILLS[N.skill];
+  if (n.down > 0) { msg('Nothing left here. It will be back soon.'); return; }
+  if (skillLv(N.skill) < N.level) { msg(`You need ${S.name} level ${N.level}.`); return; }
+  const tier = toolTier(N.skill); if (!tier) { msg(`You need a ${N.skill === 'mining' ? 'pickaxe' : N.skill === 'woodcutting' ? 'hatchet' : 'salvage cutter'}.`); return; }
+  if (!invRoom(N.item)) { msg('Your satchel is full.'); return; }
+  P.gather = { n, t: 0, period: 2.4 / [1, 1, 1.35, 1.8][tier] }; faceTo(P, n.pos);
+  addChat('sys', null, `You ${N.verb.toLowerCase()} the ${N.name.toLowerCase()}...`);
+}
+function stopGather() { if (!G.P.gather) return; G.P.gather = null; $('castbar').classList.add('hidden'); }
+function updateGather(dt) {
+  const P = G.P, Gt = P.gather; if (!Gt) return;
+  const n = Gt.n, N = n.N;
+  if (P.dead || G.build || n.down > 0 || d2(P.pos, n.pos) > 3.6 || P.vel.length() > 1.5) { stopGather(); return; }
+  Gt.t += dt; P.move = 0; faceTo(P, n.pos);
+  if ((Gt.anim = (Gt.anim || 0) - dt) <= 0) { Gt.anim = 0.75; P.atk = 0.3; }
+  const bar = $('castbar'); bar.classList.remove('hidden'); bar.querySelector('span').textContent = `${N.verb} ${N.name}`; bar.querySelector('i').style.width = Math.min(100, Gt.t / Gt.period * 100) + '%';
+  if (Gt.t < Gt.period) return;
+  Gt.t = 0;
+  const p = clamp(0.4 + 0.012 * (skillLv(N.skill) - N.level), 0.4, 0.95);
+  if (Math.random() > p) return;   // a miss: keep at it
+  invAdd(N.item, 1); gainSkillXp(N.skill, N.xp);
+  addChat('loot', null, `You get some ${ITEMS[N.item].name.toLowerCase()}.`);
+  if (--n.uses <= 0) { n.down = N.respawn; n.full.visible = false; n.gone.visible = true; stopGather(); return; }
+  if (!invRoom(N.item)) { msg('Your satchel is full.'); stopGather(); }
+}
+
+// ---- crafting
+function canCraft(r) { return skillLv(r.skill) >= r.level && Object.entries(r.in).every(([id, n]) => invCount(id) >= n); }
+function craft(r, times = 1) {
+  if (G.P.combatT > 0) { msg('You cannot craft in combat.'); return; }
+  let made = 0;
+  for (let k = 0; k < times && canCraft(r); k++) {
+    const [oid, on] = Object.entries(r.out)[0];
+    if (invRoom(oid) < on) { msg('Your satchel is full.'); break; }
+    for (const [id, n] of Object.entries(r.in)) invTake(id, n);
+    invAdd(oid, on); made++;
+  }
+  if (!made) { if (skillLv(r.skill) < r.level) msg(`You need ${SKILLS[r.skill].name} level ${r.level}.`); else msg('You do not have the materials.'); return; }
+  const [oid, on] = Object.entries(r.out)[0];
+  addChat('loot', null, `You make ${on * made} × ${ITEMS[oid].name}.`); Sound.sfx('coin');
+  gainSkillXp(r.skill, r.xp * made); saveGame(); renderSatchel();
+}
+
+// ---- the satchel panel: items, skills, crafting
+function openSatchel(tab = 'inv') { closeAllUI(); G.ui = 'satchel'; G.satTab = tab; $('satchel').classList.remove('hidden'); renderSatchel(); }
+function renderSatchel() {
+  const D = G.D, el = $('sat-body'); if (!D || !el) return;
+  for (const b of document.querySelectorAll('#sat-tabs button')) b.classList.toggle('on', b.dataset.tab === G.satTab);
+  const ic = (id, big) => { const I = ITEMS[id]; return `<b class="ig" style="color:${I.col}${big ? ';font-size:24px' : ''}">${I.icon}</b>`; };
+  if (G.satTab === 'inv') {
+    let h = '<div class="inv">';
+    for (let i = 0; i < INV_SLOTS; i++) { const s = D.inv[i]; h += s ? `<div class="islot" title="${esc(ITEMS[s.id].name)}: ${esc(ITEMS[s.id].desc)}">${ic(s.id, true)}${s.n > 1 ? `<i>${s.n}</i>` : ''}<em>${esc(ITEMS[s.id].name)}</em></div>` : '<div class="islot empty"></div>'; }
+    h += `</div><p class="sat-note">${D.inv.length} / ${INV_SLOTS} slots. Gather with E at rocks, trees and wrecks out in the districts. Build at your Homestead in the Dhow Quarter with <b>H</b>.</p>`;
+    el.innerHTML = h;
+  } else if (G.satTab === 'skills') {
+    let h = `<div class="sk-total">TOTAL LEVEL <b>${totalLv()}</b> / ${SKILL_IDS.length * 99}</div>`;
+    for (const id of SKILL_IDS) {
+      const S = SKILLS[id], x = skillXp(id), L = lvForXp(x), lo = XP_TABLE[L], hi = L < 99 ? XP_TABLE[L + 1] : lo, pct = L < 99 ? (x - lo) / (hi - lo) * 100 : 100;
+      h += `<div class="skrow${L === 99 ? ' max' : ''}"><b style="color:${S.col}">${S.icon}</b><div><div class="skn">${S.name.toUpperCase()}<span>${L} / 99</span></div><div class="skbar"><i style="width:${pct.toFixed(1)}%;background:${S.col}"></i></div><div class="skx">${fmtNum(x)} xp${L < 99 ? ` · ${fmtNum(hi - x)} to level ${L + 1}` : ' · MASTERED'}</div></div></div>`;
+    }
+    el.innerHTML = h;
+  } else {
+    let h = '';
+    for (const sk of ['crafting', 'construction']) {
+      h += `<div class="cr-h">${SKILLS[sk].icon} ${SKILLS[sk].name.toUpperCase()} <span>LEVEL ${skillLv(sk)}</span></div>`;
+      RECIPES.forEach((r, i) => {
+        if (r.skill !== sk) return;
+        const [oid, on] = Object.entries(r.out)[0], lvOk = skillLv(sk) >= r.level, ok = canCraft(r);
+        const ins = Object.entries(r.in).map(([id, n]) => `<span class="${invCount(id) >= n ? '' : 'bad'}">${n} ${esc(ITEMS[id].name)}</span>`).join(' + ');
+        h += `<div class="crow${ok ? '' : ' no'}">${ic(oid)}<div><b>${esc(ITEMS[oid].name)}${on > 1 ? ' ×' + on : ''}</b><p><span class="${lvOk ? '' : 'bad'}">Lv ${r.level}</span> · ${ins} · ${r.xp} xp</p></div>
+          <button class="btn ${ok ? 'gold' : 'ghost'}" data-r="${i}" data-n="1">MAKE</button><button class="btn ghost" data-r="${i}" data-n="999">ALL</button></div>`;
+      });
+    }
+    el.innerHTML = h;
+    for (const b of el.querySelectorAll('button[data-r]')) b.onclick = () => craft(RECIPES[+b.dataset.r], +b.dataset.n);
+  }
+}
+
+// ---- the Homestead: a 32 x 32 m plot, up to 16 blocks high, in the Dhow Quarter
+const HOME = { x0: 273, z0: 656, n: 32, h: 16, grid: null, meshes: [], ghost: null, sel: 1, remove: false, target: null };
+const HOME_C = new V3(HOME.x0 + HOME.n / 2, 0, HOME.z0 + HOME.n / 2);
+const BLOCK_IDS = Object.keys(ITEMS).filter(id => ITEMS[id].kind === 'block').sort((a, b) => ITEMS[a].block - ITEMS[b].block);
+const hIdx = (x, y, z) => (y * HOME.n + z) * HOME.n + x;
+const inHomeArea = (x, z, m = 1) => x > HOME.x0 - m && x < HOME.x0 + HOME.n + m && z > HOME.z0 - m && z < HOME.z0 + HOME.n + m;
+function homeAt(cx, cy, cz) { return cx < 0 || cz < 0 || cy < 0 || cx >= HOME.n || cz >= HOME.n || cy >= HOME.h ? 0 : HOME.grid[hIdx(cx, cy, cz)]; }
+function blockMats() {
+  const tex = (draw) => canvasTex(128, 128, draw);
+  const sand = tex((g, w, h) => { g.fillStyle = '#d0aa76'; g.fillRect(0, 0, w, h); speckle(g, w, h, 900, ['#c49c68', '#dcb886', '#b88e5c'], 2); g.strokeStyle = 'rgba(90,60,30,0.5)'; g.lineWidth = 3; g.strokeRect(1, 1, w - 2, h - 2); g.beginPath(); g.moveTo(0, h / 2); g.lineTo(w, h / 2); g.moveTo(w / 2, 0); g.lineTo(w / 2, h / 2); g.stroke(); });
+  const steel = tex((g, w, h) => { g.fillStyle = '#7d8790'; g.fillRect(0, 0, w, h); speckle(g, w, h, 600, ['#6d7780', '#8d97a0'], 2); g.strokeStyle = '#4a525a'; g.lineWidth = 4; g.strokeRect(2, 2, w - 4, h - 4); g.fillStyle = '#4a525a'; for (const [x, y] of [[12, 12], [w - 12, 12], [12, h - 12], [w - 12, h - 12]]) { g.beginPath(); g.arc(x, y, 4, 0, 7); g.fill(); } });
+  const carax = tex((g, w, h) => { g.fillStyle = '#1a2028'; g.fillRect(0, 0, w, h); g.strokeStyle = '#3ee6ff'; g.lineWidth = 3; g.strokeRect(10, 10, w - 20, h - 20); g.beginPath(); g.moveTo(10, h / 2); g.lineTo(w - 10, h / 2); g.stroke(); });
+  return [null,
+    new THREE.MeshStandardMaterial({ map: sand, roughness: 0.9 }),
+    new THREE.MeshStandardMaterial({ map: planksTex(), roughness: 0.75 }),
+    new THREE.MeshStandardMaterial({ map: plasterTex(), roughness: 0.95 }),
+    new THREE.MeshStandardMaterial({ color: 0x9fd8ff, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.35, depthWrite: false }),
+    new THREE.MeshStandardMaterial({ map: steel, metalness: 0.6, roughness: 0.4 }),
+    new THREE.MeshStandardMaterial({ color: 0xfff0c8, emissive: 0xffc060, emissiveIntensity: 1.6, roughness: 0.5 }),
+    new THREE.MeshStandardMaterial({ map: carax, emissive: 0xffffff, emissiveMap: carax, emissiveIntensity: 1.2, metalness: 0.6, roughness: 0.35 }),
+    new THREE.MeshStandardMaterial({ color: 0x6a0a18, emissive: 0xff2b4a, emissiveIntensity: 1.3, roughness: 0.25, flatShading: true }),
+  ];
+}
+function buildHomestead(S) {
+  HOME.grid = new Uint8Array(HOME.n * HOME.n * HOME.h);
+  const box = new THREE.BoxGeometry(1, 1, 1), mats = blockMats();
+  HOME.meshes = mats.map((m, t) => { if (!t) return null; const im = new THREE.InstancedMesh(box, m, 4096); im.count = 0; im.castShadow = t !== 4; im.receiveShadow = true; im.userData.dynamic = true; im.frustumCulled = false; S.add(im); return im; });
+  // the ghost block, and the plot's grid (shown while building)
+  HOME.ghost = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.02, 1.02, 1.02)), new THREE.LineBasicMaterial({ color: 0x4dff9a })); HOME.ghost.visible = false; HOME.ghost.userData.dynamic = true; S.add(HOME.ghost);
+  const pts = []; for (let k = 0; k <= HOME.n; k++) { pts.push(HOME.x0 + k, 0.06, HOME.z0, HOME.x0 + k, 0.06, HOME.z0 + HOME.n, HOME.x0, 0.06, HOME.z0 + k, HOME.x0 + HOME.n, 0.06, HOME.z0 + k); }
+  const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  HOME.lines = new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color: 0x3ee6ff, transparent: true, opacity: 0.35 })); HOME.lines.visible = false; HOME.lines.userData.dynamic = true; S.add(HOME.lines);
+  // the plot itself: a sandstone pad, corner posts lit in Concord cyan, and a sign
+  const padTex = canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#a8946e'; g.fillRect(0, 0, w, h); speckle(g, w, h, 4000, ['#9c8862', '#b4a07a'], 2); g.strokeStyle = 'rgba(70,50,30,0.35)'; g.lineWidth = 2; for (let k = 0; k <= 8; k++) { g.beginPath(); g.moveTo(k * 32, 0); g.lineTo(k * 32, h); g.moveTo(0, k * 32); g.lineTo(w, k * 32); g.stroke(); } }, HOME.n / 8);
+  const pad = new THREE.Mesh(new THREE.PlaneGeometry(HOME.n, HOME.n), new THREE.MeshStandardMaterial({ map: padTex, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
+  pad.rotation.x = -Math.PI / 2; pad.position.set(HOME_C.x, 0.03, HOME_C.z); pad.receiveShadow = true; S.add(pad);
+  for (const [x, z] of [[0, 0], [HOME.n, 0], [0, HOME.n], [HOME.n, HOME.n]]) { bx(0.4, 1.6, 0.4, armorMat(0x2b323b), HOME.x0 + x, 0.8, HOME.z0 + z, S); bx(0.5, 0.15, 0.5, glowMat(0x3ee6ff, 2.4), HOME.x0 + x, 1.65, HOME.z0 + z, S); addCollider(HOME.x0 + x, HOME.z0 + z, 0.5, 0.5, 2); }
+  const sign = textTex(512, 160, '#0b1118', [{ t: 'HOMESTEAD', y: 64, c: '#3ee6ff', f: 'bold 64px Bahnschrift, sans-serif' }, { t: 'PRESS H TO BUILD', y: 126, c: '#e8c46a', f: '36px Bahnschrift, sans-serif' }]);
+  for (const sd of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.0), new THREE.MeshStandardMaterial({ map: sign, emissive: 0xffffff, emissiveMap: sign, emissiveIntensity: 0.6 })); m.position.set(HOME.x0 - 1.5, 2.2, HOME.z0 - 1.5 + sd * 0.03); m.rotation.y = sd > 0 ? 0 : Math.PI; S.add(m); }
+  bx(0.2, 2.2, 0.2, armorMat(0x2b323b), HOME.x0 - 1.5, 1.1, HOME.z0 - 1.6, S); addCollider(HOME.x0 - 1.5, HOME.z0 - 1.6, 0.4, 0.4, 2.5);
+}
+function loadHome() {
+  HOME.grid.fill(0);
+  for (const [i, t] of G.D.home || []) if (i >= 0 && i < HOME.grid.length && t > 0 && t < 9) HOME.grid[i] = t;
+  rebuildHome();
+}
+function saveHome() { const out = []; HOME.grid.forEach((t, i) => { if (t) out.push([i, t]); }); G.D.home = out; }
+const _hm = new THREE.Matrix4();
+function rebuildHome() {
+  const counts = new Array(9).fill(0);
+  for (let y = 0; y < HOME.h; y++) for (let z = 0; z < HOME.n; z++) for (let x = 0; x < HOME.n; x++) {
+    const t = HOME.grid[hIdx(x, y, z)]; if (!t) continue; const im = HOME.meshes[t]; if (counts[t] >= 4096) continue;
+    im.setMatrixAt(counts[t]++, _hm.makeTranslation(HOME.x0 + x + 0.5, y + 0.5, HOME.z0 + z + 0.5));
+  }
+  HOME.meshes.forEach((im, t) => { if (!im) return; im.count = counts[t]; im.instanceMatrix.needsUpdate = true; });
+}
+// Standing on what you build: the top of the highest block under you that you aren't already inside.
+function homeGround(x, y, z, r = 0.3) {
+  if (!HOME.grid || !inHomeArea(x, z)) return 0;
+  let g = 0; const top = Math.min(HOME.h, Math.floor(y + 0.05));
+  for (let cx = Math.floor(x - r - HOME.x0); cx <= Math.floor(x + r - HOME.x0); cx++) for (let cz = Math.floor(z - r - HOME.z0); cz <= Math.floor(z + r - HOME.z0); cz++)
+    for (let cy = top - 1; cy >= 0; cy--) if (homeAt(cx, cy, cz)) { if (cy + 1 > g) g = cy + 1; break; }
+  return g;
+}
+// Walls: blocks at body height push you out, like any other wall; and you bump your head on a ceiling.
+function homePush(P) {
+  const p = P.pos, r = P.radius; if (!HOME.grid || !inHomeArea(p.x, p.z, 2)) return;
+  for (let cy = Math.max(0, Math.floor(p.y + 0.15)); cy <= Math.floor(p.y + 1.8) && cy < HOME.h; cy++)
+    for (let cx = Math.floor(p.x - r - HOME.x0); cx <= Math.floor(p.x + r - HOME.x0); cx++) for (let cz = Math.floor(p.z - r - HOME.z0); cz <= Math.floor(p.z + r - HOME.z0); cz++) {
+      if (!homeAt(cx, cy, cz)) continue;
+      const minX = HOME.x0 + cx, maxX = minX + 1, minZ = HOME.z0 + cz, maxZ = minZ + 1;
+      if (p.x + r < minX || p.x - r > maxX || p.z + r < minZ || p.z - r > maxZ) continue;
+      const dl = p.x + r - minX, dr = maxX - (p.x - r), dt = p.z + r - minZ, db = maxZ - (p.z - r), m = Math.min(dl, dr, dt, db);
+      if (m === dl) p.x -= dl; else if (m === dr) p.x += dr; else if (m === dt) p.z -= dt; else p.z += db;
+    }
+  if (P.vy > 0) { const hy = Math.floor(p.y + 2.0); for (let cx = Math.floor(p.x - 0.25 - HOME.x0); cx <= Math.floor(p.x + 0.25 - HOME.x0); cx++) for (let cz = Math.floor(p.z - 0.25 - HOME.z0); cz <= Math.floor(p.z + 0.25 - HOME.z0); cz++) if (homeAt(cx, hy, cz)) { P.vy = 0; p.y = Math.min(p.y, hy - 2.0); } }
+}
+// ---- build mode
+function toggleBuild(on = !G.build) {
+  const P = G.P;
+  if (on && !inHomeArea(P.pos.x, P.pos.z, 8)) { msg('Build at your Homestead in the Dhow Quarter (tram: Homestead).'); return; }
+  if (on && G.ui) closeAllUI();
+  G.build = on; stopGather();
+  HOME.ghost.visible = HOME.lines.visible = on; $('buildbar').classList.toggle('hidden', !on);
+  if (on) { if (!invCount(BLOCK_IDS[HOME.sel - 1])) { const k = BLOCK_IDS.findIndex(id => invCount(id) > 0); if (k >= 0) HOME.sel = k + 1; } renderBuildBar(); addChat('sys', null, `Building. ${TOUCH ? 'Tap to place a block; switch to REMOVE to take one back.' : 'Click to place a block, right-click to take one back, 1-8 to choose a block, H or Esc when you are done.'}`); }
+}
+function renderBuildBar() {
+  const el = $('bb-blocks'); if (!el) return;
+  el.innerHTML = BLOCK_IDS.map((id, k) => { const I = ITEMS[id], n = invCount(id); return `<button class="bblk${HOME.sel === k + 1 ? ' on' : ''}${n ? '' : ' none'}" data-k="${k + 1}" title="${esc(I.name)}"><b style="background:${I.col}"></b><i>${n}</i><em>${k + 1}</em></button>`; }).join('');
+  for (const b of el.querySelectorAll('button')) b.onclick = () => { HOME.sel = +b.dataset.k; HOME.remove = false; renderBuildBar(); };
+  $('bb-remove').classList.toggle('on', HOME.remove);
+}
+const _br = new THREE.Raycaster(), _bv = new THREE.Vector2();
+// What the pointer is on: the block it hits (and which face), or the plot floor.
+function homeTarget(sx, sy) {
+  _bv.set(sx / innerWidth * 2 - 1, -(sy / innerHeight) * 2 + 1); _br.setFromCamera(_bv, W.cam);
+  const o = _br.ray.origin, d = _br.ray.direction;
+  let x = o.x - HOME.x0, y = o.y, z = o.z - HOME.z0;
+  let cx = Math.floor(x), cy = Math.floor(y), cz = Math.floor(z);
+  const sx_ = Math.sign(d.x), sy_ = Math.sign(d.y), sz_ = Math.sign(d.z);
+  const tdx = Math.abs(1 / d.x), tdy = Math.abs(1 / d.y), tdz = Math.abs(1 / d.z);
+  let tx = d.x ? ((sx_ > 0 ? cx + 1 - x : x - cx) * tdx) : 1e9, ty = d.y ? ((sy_ > 0 ? cy + 1 - y : y - cy) * tdy) : 1e9, tz = d.z ? ((sz_ > 0 ? cz + 1 - z : z - cz) * tdz) : 1e9;
+  let face = [0, 0, 0], t = 0;
+  for (let k = 0; k < 400 && t < 40; k++) {
+    if (cy < 0) {   // reached the floor
+      if (cx >= 0 && cz >= 0 && cx < HOME.n && cz < HOME.n) return { hit: null, place: [cx, 0, cz] };
+      return null;
+    }
+    if (homeAt(cx, cy, cz)) return { hit: [cx, cy, cz], place: [cx - face[0], cy - face[1], cz - face[2]] };
+    if (tx < ty && tx < tz) { cx += sx_; t = tx; tx += tdx; face = [sx_, 0, 0]; }
+    else if (ty < tz) { cy += sy_; t = ty; ty += tdy; face = [0, sy_, 0]; }
+    else { cz += sz_; t = tz; tz += tdz; face = [0, 0, sz_]; }
+  }
+  return null;
+}
+function updateBuild() {
+  if (!G.build) return;
+  const P = G.P;
+  if (!inHomeArea(P.pos.x, P.pos.z, 10)) { toggleBuild(false); return; }
+  const sx = TOUCH ? (HOME.tap ? HOME.tap[0] : innerWidth / 2) : mouse.lx, sy = TOUCH ? (HOME.tap ? HOME.tap[1] : innerHeight / 2) : mouse.ly;
+  const tg = homeTarget(sx, sy); HOME.target = tg;
+  const cell = tg && (HOME.remove ? tg.hit : tg.place);
+  const ok = cell && cell[0] >= 0 && cell[2] >= 0 && cell[0] < HOME.n && cell[2] < HOME.n && cell[1] >= 0 && cell[1] < HOME.h;
+  HOME.ghost.visible = !!ok;
+  if (ok) { HOME.ghost.position.set(HOME.x0 + cell[0] + 0.5, cell[1] + 0.5, HOME.z0 + cell[2] + 0.5); HOME.ghost.material.color.setHex(HOME.remove ? 0xff4a5e : invCount(BLOCK_IDS[HOME.sel - 1]) ? 0x4dff9a : 0xffd84a); }
+}
+function buildAction(remove) {
+  const P = G.P, tg = HOME.target; if (!tg) return;
+  if (remove) {
+    if (!tg.hit) return; const [x, y, z] = tg.hit, t = homeAt(x, y, z), id = BLOCK_IDS[t - 1];
+    if (!invRoom(id)) { msg('Your satchel is full.'); return; }
+    HOME.grid[hIdx(x, y, z)] = 0; invAdd(id, 1);
+  } else {
+    const [x, y, z] = tg.place, id = BLOCK_IDS[HOME.sel - 1];
+    if (x < 0 || z < 0 || y < 0 || x >= HOME.n || z >= HOME.n || y >= HOME.h) { msg('That is outside your plot.'); return; }
+    if (homeAt(x, y, z)) return;
+    if (!invCount(id)) { msg(`You have no ${ITEMS[id].name.toLowerCase()}s. Make some under Construction (K).`); return; }
+    const wx = HOME.x0 + x, wz = HOME.z0 + z;   // not inside yourself
+    if (P.pos.x + P.radius > wx && P.pos.x - P.radius < wx + 1 && P.pos.z + P.radius > wz && P.pos.z - P.radius < wz + 1 && y + 1 > P.pos.y + 0.05 && y < P.pos.y + 1.9) { msg('You are standing there.'); return; }
+    if (Math.hypot(wx + 0.5 - P.pos.x, wz + 0.5 - P.pos.z, y + 0.5 - P.pos.y) > 12) { msg('Too far away.'); return; }
+    HOME.grid[hIdx(x, y, z)] = HOME.sel; invTake(id, 1);
+  }
+  rebuildHome(); saveHome(); renderBuildBar();
+}
 
 // =====================================================================
 //  ENTITIES
@@ -3383,6 +3710,7 @@ function setupPlayer() {
   const D = G.D, c = CL();
   if (D.armour == null) D.armour = Math.min(3, 1 + Math.floor((D.level - 1) / 6));   // saves from before power levels
   if (!Array.isArray(D.trams)) D.trams = ['plaza'];
+  ensureSkills(D);
   if (!D.trams.includes('concordia')) D.trams.unshift('concordia');   // everyone knows the way home
   if (G.P && G.P.group) { W.scene.remove(G.P.group); G.P.plate?.remove(); }
   const visor = new THREE.Color(D.visor).getHex();
@@ -3401,6 +3729,7 @@ function setupPlayer() {
   G.cam = { yaw: 0, pitch: 0.2, dist: TOUCH ? 6 : 5.2 };   // framed on the body, over the right shoulder (wheel or pinch to pull back)
   if (P.pos.distanceTo(SPAWN) > 1) G.cam.yaw = Math.atan2(P.pos.x - CONC.x, P.pos.z - CONC.z);
   buildHotbar();
+  loadHome(); if (G.build) toggleBuild(false);
 }
 
 // =====================================================================
@@ -3464,6 +3793,8 @@ function killEnemy(e, src) {
     questEvent(e.isBoss ? 'boss' : e.type, e);
     if (zoneAt(e.pos.x, e.pos.z) === 'crater' && !e.isBoss && D.q.i === 2 && D.q.st === 'active' && Math.random() < 0.4) { addChat('loot', null, 'You loot: [Beacon Shard]'); questEvent('shard'); }
     if (Math.random() < 0.06 && !e.isBoss) { D.medkits++; addChat('loot', null, 'You loot: [Concord Medkit]'); }
+    if (Math.random() < 0.22 && invAdd('scrap', 1)) addChat('loot', null, 'You loot: [Scrap metal]');
+    if (e.level >= 4 && Math.random() < 0.06 && invAdd('circuitry', 1)) addChat('loot', null, 'You loot: [Circuitry]');
     if (e.isBoss) { addChat('world', null, `${D.name} has destroyed the Remnant of the Catharsis!`, 'sys'); setTimeout(() => botSay(pick(chatBots()), pick(['GG ' + D.name + '!!', 'legend', 'WOW', 'grats ' + D.name, 'o7 hero'])), 1500); }
   }
   if (e.isBoss) { $('bossbar').classList.add('hidden'); Sound.playMusic('world'); }
@@ -3680,7 +4011,7 @@ function energyHex() { return new THREE.Color(G.D.visor).getHex(); }
 function playerJump() {
   const P = G.P; if (!P || P.dead || G.ui || G.mode !== 'world') return;
   P.jumpHeld = true;
-  const grounded = P.pos.y <= 0.001 && P.vy <= 0.001;
+  const grounded = P.pos.y <= (P.gy || 0) + 0.001 && P.vy <= 0.001;
   if (grounded) {
     if (P.slideT >= 0 || P.qHeld) return bulletJump(P);
     if (P.rollT > 0) return;
@@ -3702,7 +4033,7 @@ function bulletJump(P) {
 function playerCrouch(down) {
   const P = G.P; if (!P) return;
   P.qHeld = down; if (!down || P.dead || G.ui || G.mode !== 'world') return;
-  if (P.pos.y > 0.001 || P.rollT > 0 || P.slideT >= 0) return;
+  if (P.pos.y > (P.gy || 0) + 0.001 || P.rollT > 0 || P.slideT >= 0) return;
   const sp = P.vel.length();
   if (sp > 6) { P.slideT = 0; P.landT = 0; P.vel.multiplyScalar((Math.max(sp, MV.sprint) + MV.slideBoost) / sp); Sound.sfx('slide'); }
   else {
@@ -3722,7 +4053,8 @@ function landPlayer(P) {
 function updateMotion(P, dt) {
   const d = inputDir(), hv = P.vel;
   const sprint = keys.ShiftLeft || keys.ShiftRight || joy.mag > 0.92;
-  const grounded = P.pos.y <= 0.001 && P.vy <= 0;
+  P.gy = homeGround(P.pos.x, P.pos.y, P.pos.z);   // 0, or the top of a block you built
+  const grounded = P.pos.y <= P.gy + 0.001 && P.vy <= 0;
   if (P.flipT > 0 && (P.flipT += dt) >= MOVE_DUR.flip) P.flipT = 0;
   if (P.bjT > 0 && (P.bjT += dt) >= MOVE_DUR.bj) P.bjT = 0;
   if (P.landT > 0 && (P.landT += dt) >= (P.landHard ? MOVE_DUR.landHard : MOVE_DUR.landSoft)) P.landT = 0;
@@ -3751,13 +4083,14 @@ function updateMotion(P, dt) {
   }
   P.pos.addScaledVector(hv, dt);
   // vertical: gravity, or a slow aim glide while jump is held on the way down
-  const airborne = P.pos.y > 0.001 || P.vy > 0;
+  const airborne = P.pos.y > P.gy + 0.001 || P.vy > 0;
   P.glide = airborne && P.jumpHeld && P.vy < 0 && P.glideT < MV.glideMax && (P.airJumps === 0 || P.bjUsed) && P.rollT === 0;
   if (P.glide) { P.glideT += dt; P.vy = Math.max(P.vy - MV.g * 0.3 * dt, -MV.glideFall); hv.multiplyScalar(1 - dt * 0.2); }
   else P.vy -= MV.g * dt;
+  const gy = homeGround(P.pos.x, P.pos.y, P.pos.z); P.gy = gy;
   P.pos.y += P.vy * dt;
-  if (P.pos.y <= 0) { if (airborne && P.vy < 0) landPlayer(P); P.pos.y = 0; P.vy = 0; }
-  resolveCollision(P.pos, P.radius);
+  if (P.pos.y <= gy) { if (airborne && P.vy < 0) landPlayer(P); P.pos.y = gy; P.vy = 0; }
+  resolveCollision(P.pos, P.radius); homePush(P);
   // facing: along the motion for moves, toward the input otherwise
   const hsp = hv.length();
   if (P.rollT > 0 || P.slideT >= 0 || P.bjT > 0 || (airborne && hsp > 2)) { if (hsp > 0.5) P.yaw = Math.atan2(hv.x, hv.z); }
@@ -3779,7 +4112,7 @@ function updatePlayer(dt) {
 
   // movement: momentum, sprint, slide, bullet jump, double jump, aim glide, dodge roll
   updateMotion(P, dt);
-  resolveCollision(P.pos, P.radius);
+  resolveCollision(P.pos, P.radius); homePush(P);
 
   // auto-attack
   const t = P.target;
@@ -4050,7 +4383,7 @@ function updateCamera(dt) {
 }
 
 function updateWorld(dt) {
-  updatePlayer(dt); updateEnemies(dt); updateBots(dt); croxianLogic(dt); updateCityLife(dt); updateProjectiles(dt); updateFx(dt); updateShards(dt); updateAmbient(dt); updateCamera(dt);
+  updatePlayer(dt); updateGather(dt); updateNodes(dt); updateBuild(); updateEnemies(dt); updateBots(dt); croxianLogic(dt); updateCityLife(dt); updateProjectiles(dt); updateFx(dt); updateShards(dt); updateAmbient(dt); updateCamera(dt);
   // target ring
   const t = G.P.target;
   if (t && t.alive) { W.targetRing.visible = true; W.targetRing.position.set(t.pos.x, 0.1, t.pos.z); W.targetRing.scale.setScalar(t.radius * 1.3); W.targetRing.rotation.z += dt; } else W.targetRing.visible = false;
@@ -4125,7 +4458,7 @@ function nearestInteract() {
   const P = G.P; let best = null, bd = 5;
   for (const n of G.npcs) { const d = d2(P.pos, n.pos); if (d < bd) { bd = d; best = n; } }
   for (const b of G.bots) if (b.ally && b.alive) { const d = d2(P.pos, b.pos); if (d < (b.party ? 2.6 : 4) && d < bd && !(b.party && best)) { bd = d; best = b; } }   // companions at your heel don't crowd out the NPCs
-  for (const p of G.props) { const d = d2(P.pos, p.pos); if (d < (p.kind === 'tram' || p.kind === 'ferry' ? 3.5 : 2.2) && d < bd) { bd = d; best = p; } }
+  for (const p of G.props) { const d = d2(P.pos, p.pos); if (d < (p.kind === 'tram' || p.kind === 'ferry' ? 3.5 : p.kind === 'node' ? 3.3 : 2.2) && d < bd) { bd = d; best = p; } }
   for (const s of G.shards) { if (!s.active) continue; const d = d2(P.pos, s.pos); if (d < 3 && d < bd) { bd = d; best = s; } }
   return best;
 }
@@ -4140,6 +4473,7 @@ function interact(ent = nearestInteract()) {
   else if (ent.resident) talkResident(ent);
   else if (ent.kind === 'tram') openTram(ent.tram);
   else if (ent.kind === 'ferry') openFerry(ent.side);
+  else if (ent.kind === 'node') startGather(ent);
   else if (ent.kind === 'shard') {
     const D = G.D;
     if (D.q.i === 2 && D.q.st === 'active') { ent.active = false; ent.group.visible = false; ent.respawnT = 25; Sound.sfx('pickup'); addChat('loot', null, 'You recover: [Beacon Shard]'); burst(ent.pos.clone().setY(1), 0xff2b4a, 20, 2); questEvent('shard'); }
@@ -4150,7 +4484,7 @@ function interact(ent = nearestInteract()) {
 function updateInteract() {
   const n = nearestInteract(), pr = $('prompt');
   if (n && !G.ui && !G.P.dead) {
-    const label = n.kind === 'shard' ? 'Recover Beacon Shard' : n.id === 'mascar' ? 'Speak with Governor Mascar' : n.id === 'zuri' ? 'Talk to Zuri Adeyemi' : n.id === 'plaque' ? 'Read the memorial plaque' : n.id === 'orion' ? 'Speak with Orion Mascar' : n.id === 'malia' ? 'Speak with Malia Mascar' : n.resident ? `Speak with ${n.name}` : n.kind === 'tram' ? 'Ride the Concord tram' : n.kind === 'ferry' ? 'Read the ferry timetable' : 'Trade with Ilse Varn';
+    const label = n.kind === 'shard' ? 'Recover Beacon Shard' : n.id === 'mascar' ? 'Speak with Governor Mascar' : n.id === 'zuri' ? 'Talk to Zuri Adeyemi' : n.id === 'plaque' ? 'Read the memorial plaque' : n.id === 'orion' ? 'Speak with Orion Mascar' : n.id === 'malia' ? 'Speak with Malia Mascar' : n.resident ? `Speak with ${n.name}` : n.kind === 'tram' ? 'Ride the Concord tram' : n.kind === 'ferry' ? 'Read the ferry timetable' : n.kind === 'node' ? `${n.N.verb} ${n.name}${n.down > 0 ? ' (depleted)' : skillLv(n.N.skill) < n.N.level ? ` · needs ${SKILLS[n.N.skill].name} ${n.N.level}` : ''}` : 'Trade with Ilse Varn';
     pr.innerHTML = `<b>${TOUCH ? '▶' : '[E]'}</b> ${label}`; pr.classList.remove('hidden');
   } else pr.classList.add('hidden');
 }
@@ -4424,7 +4758,7 @@ function openTram(t) {
   ]);
 }
 function rideTram(t) {
-  const P = G.P; closeAllUI();
+  const P = G.P; closeAllUI(); stopGather(); if (G.build) toggleBuild(false);
   if (P.combatT > 0) { msg('You cannot board the tram while in combat'); return; }
   for (const e of G.enemies) if (e.target === P) { e.target = null; e.state = 'return'; }
   resetMotion(P); P.pos.set(t.pos.x, 0, t.pos.z + 3.6); P.group.position.copy(P.pos); setTarget(null);
@@ -4571,7 +4905,8 @@ function drawWorldMap() {
   mapIcon(g, X(0), Y(zoom ? 58 : 46), '#c87a1e', '✦', r);                           // the Salt Lantern
   mapIcon(g, X(zoom ? -30 : 0), Y(zoom ? 118 : 122), '#b0802a', '¤', r);   // the market
   mapIcon(g, X(CONC.x), Y(CONC.z - 14), '#8a6a1e', '♛', r); mapIcon(g, X(CONC.x + 14), Y(CONC.z + 2), '#6a4a8a', '⚔', r);   // the Governor and the Quartermaster
-  mapIcon(g, X(197), Y(872), '#b3301e', '▲', r);                                          // the lighthouse
+  mapIcon(g, X(197), Y(872), '#b3301e', '▲', r);
+  mapIcon(g, X(HOME_C.x), Y(HOME_C.z), '#2a8a6a', '⌂', r);   // your Homestead                                          // the lighthouse
   mapIcon(g, X(-50), Y(540), '#4a6a7a', '⚓', r - 1);                                      // the anchor on the north quay
   // names
   const labels = zoom ? [['plaza', 0, -48], ['cantina', 0, 80], ['market', 0, 168], ['ashen', 108, 24], ['echo', -108, 24], ['crater', 0, -165], ['rail', 328, -30], ['tenements', -328, -30], ['reservoir', 0, 330], ['ward', 210, -230], ['ward', -230, 230], ['ring', -300, -385]]
@@ -4612,7 +4947,7 @@ function drawWorldMap() {
   g.save(); g.translate(X(P.pos.x), Y(P.pos.z)); g.rotate(-P.group.rotation.y + Math.PI); g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(0, -10); g.lineTo(7, 7); g.lineTo(0, 3); g.lineTo(-7, 7); g.closePath(); g.fill(); g.stroke(); g.restore();
   $('wm-pl').textContent = `YOUR POWER LEVEL: ◆${playerPL()} · ${ARMOUR[playerPL()].name.toUpperCase()}`;
 }
-function closeAllUI() { for (const id of ['dialog', 'vendor', 'sheet', 'pause', 'worldmap']) $(id).classList.add('hidden'); G.ui = null; $('tooltip').classList.add('hidden'); }
+function closeAllUI() { for (const id of ['dialog', 'vendor', 'sheet', 'pause', 'worldmap', 'satchel']) $(id).classList.add('hidden'); G.ui = null; $('tooltip').classList.add('hidden'); }
 function openSheet() {
   const D = G.D, P = G.P, c = CL(); closeAllUI(); G.ui = 'sheet';
   $('sh-name').textContent = D.name.toUpperCase();
@@ -4653,12 +4988,14 @@ window.addEventListener('mousemove', e => {
 });
 window.addEventListener('mouseup', e => {
   if (G.mode === 'menu') { menu.drag = false; mouse.down = -1; return; }
-  if (G.mode === 'world' && e.target === canvas && !mouse.dragged && mouse.down === 0) pick3D(e.clientX, e.clientY);
+  if (G.mode === 'world' && e.target === canvas && !mouse.dragged && G.build && (mouse.down === 0 || mouse.down === 2)) buildAction(mouse.down === 2 || HOME.remove);
+  else if (G.mode === 'world' && e.target === canvas && !mouse.dragged && mouse.down === 0) pick3D(e.clientX, e.clientY);
   mouse.down = -1; mouse.both = false;
 });
 canvas.addEventListener('wheel', e => { if (G.mode === 'world') G.cam.dist = clamp(G.cam.dist + Math.sign(e.deltaY) * 0.8, 2.4, 18); }, { passive: true });
 const ray = new THREE.Raycaster();
 function pick3D(x, y) {
+  if (G.build) { HOME.tap = [x, y]; updateBuild(); buildAction(HOME.remove); return; }   // building: a tap places (or removes) a block
   ray.setFromCamera(new THREE.Vector2(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1), W.cam);
   const hbs = [...G.enemies.filter(e => e.alive), ...G.bots, ...G.npcs].map(e => e.hitbox);
   const hit = ray.intersectObjects(hbs, false)[0];
@@ -4685,9 +5022,17 @@ window.addEventListener('keydown', e => {
   switch (e.code) {
     case 'Enter': e.preventDefault(); chat.focus(); break;
     case 'Slash': e.preventDefault(); chat.focus(); chat.value = '/'; break;
-    case 'Escape': if (G.ui) closeAllUI(); else if (G.P.target) setTarget(null); else togglePause(); break;
+    case 'Escape': if (G.build) toggleBuild(false); else if (G.ui) closeAllUI(); else if (G.P.target) setTarget(null); else togglePause(); break;
     case 'Tab': e.preventDefault(); cycleTarget(); break;
-    case 'Digit1': useAbility(0); break; case 'Digit2': useAbility(1); break; case 'Digit3': useAbility(2); break; case 'Digit4': useAbility(3); break; case 'Digit5': useAbility(4); break;
+    case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4': case 'Digit5': case 'Digit6': case 'Digit7': case 'Digit8': {
+      const k = +e.code.slice(5);
+      if (G.build) { HOME.sel = k; HOME.remove = false; renderBuildBar(); } else if (k <= 5) useAbility(k - 1);
+      break;
+    }
+    case 'KeyI': if (G.ui === 'satchel' && G.satTab === 'inv') closeAllUI(); else openSatchel('inv'); break;
+    case 'KeyK': if (G.ui === 'satchel' && G.satTab === 'craft') closeAllUI(); else openSatchel('craft'); break;
+    case 'KeyO': if (G.ui === 'satchel' && G.satTab === 'skills') closeAllUI(); else openSatchel('skills'); break;
+    case 'KeyH': toggleBuild(); break;
     case 'KeyE': case 'KeyF': if (G.ui === 'dialog') break; interact(); break;
     case 'KeyC': if (G.ui === 'sheet') closeAllUI(); else openSheet(); break;
     case 'KeyM': toggleMap(); break;
@@ -4767,6 +5112,10 @@ tap('tb-target', () => cycleTarget());
 tap('tb-menu', () => { if (G.ui && G.ui !== 'pause') closeAllUI(); else togglePause(); });
 tap('tb-sheet', () => { if (G.ui === 'sheet') closeAllUI(); else openSheet(); });
 tap('tb-map', () => toggleMap());
+tap('tb-bag', () => { if (G.ui === 'satchel') closeAllUI(); else openSatchel('inv'); });
+for (const b of document.querySelectorAll('#sat-tabs button')) b.onclick = () => { G.satTab = b.dataset.tab; renderSatchel(); };
+$('satchel-x').onclick = closeAllUI; $('bb-done').onclick = () => toggleBuild(false); $('bb-remove').onclick = () => { HOME.remove = !HOME.remove; renderBuildBar(); };
+$('sat-build').onclick = () => { closeAllUI(); toggleBuild(true); };
 tap('tb-chat', () => { const c = $('chat-input'); c.classList.add('open'); c.focus(); });
 $('chat-input').addEventListener('blur', () => $('chat-input').classList.remove('open'));
 $('prompt').addEventListener('click', () => { if (G.ui !== 'dialog') interact(); });
@@ -4996,5 +5345,5 @@ function loop() {
   setTimeout(() => { hide('splash-load'); show('splash-press'); G.ready = true; }, 400);
   $('splash').addEventListener('pointerdown', () => { if (G.ready && G.mode === 'splash') enterMenuFromSplash(); });
   if (TOUCH) $('splash-press').textContent = 'TAP TO BEGIN';
-  window.__AD = G; window.__ADdbg = { W, menu, damage, killEnemy, talkMascar, updateTracker, LIFE, FERRY, CROX, toggleMap, stats: () => ({ batch: W.batch, res: RES_STEPS[perf.level], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries, tex: renderer.info.memory.textures, pr: renderer.getPixelRatio() }) }; // debug handles
+  window.__AD = G; window.__ADdbg = { W, menu, damage, killEnemy, talkMascar, updateTracker, LIFE, FERRY, CROX, HOME, homeTarget, toggleMap, stats: () => ({ batch: W.batch, res: RES_STEPS[perf.level], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries, tex: renderer.info.memory.textures, pr: renderer.getPixelRatio() }) }; // debug handles
 })();
