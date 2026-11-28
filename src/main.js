@@ -59,7 +59,11 @@ Sound.volume = settings.volume; Sound.musicOn = settings.music;
 // Touch devices get on-screen controls and a lighter render load.
 const TOUCH = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0 && !matchMedia('(pointer: fine)').matches;
 if (TOUCH) document.documentElement.classList.add('touch');
-const Q = TOUCH ? { pixelRatio: 1.5, shadowMap: 1024, worldGrass: 14000, menuGrass: 4000 } : { pixelRatio: 2, shadowMap: 2048, worldGrass: 36000, menuGrass: 9000 };
+// Phones also get 2x MSAA instead of 4x, cheaper shadow filtering, bloom at a smaller size, a deeper near plane
+// (more depth precision, so roads and pavements don't z-fight) and a 60 fps cap (less heat, so less throttling).
+const Q = TOUCH
+  ? { pixelRatio: 1.5, shadowMap: 1024, worldGrass: 14000, menuGrass: 4000, msaa: 2, bloomScale: 0.5, near: 0.2, fpsCap: 60 }
+  : { pixelRatio: 2, shadowMap: 2048, worldGrass: 36000, menuGrass: 9000, msaa: 4, bloomScale: 1, near: 0.1, fpsCap: 0 };
 
 // ---------------------------------------------------------------- renderer
 const canvas = $('scene');
@@ -71,7 +75,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = settings.shadows;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = TOUCH ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 renderer.info.autoReset = false; // reset once per frame so stats cover every pass
 
 const pmrem = new THREE.PMREMGenerator(renderer);
@@ -84,13 +88,14 @@ function envFromSky(sky) {
   return tex;
 }
 
-const MSAA = 4;
+const MSAA = Q.msaa;
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: MSAA }));
 composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(innerWidth, innerHeight);
 const renderPass = new RenderPass(new THREE.Scene(), new THREE.PerspectiveCamera());
 composer.addPass(renderPass);
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.85, 0.55, 0.72);
 bloom.enabled = settings.bloom;
+if (Q.bloomScale !== 1) { const bs = bloom.setSize.bind(bloom); bloom.setSize = (w, h) => bs(Math.max(2, w * Q.bloomScale), Math.max(2, h * Q.bloomScale)); }
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -332,6 +337,7 @@ function makeBoss() {
 //  SAVANNAH BUILDERS (shared by menu + world)
 // =====================================================================
 const SUN_DIR = new V3(-0.55, 0.5, -0.67).normalize();      // world: golden afternoon sun, west-north-west
+const SUN_R = new V3(0, 1, 0).cross(SUN_DIR).normalize(), SUN_U = SUN_DIR.clone().cross(SUN_R);   // the sun's shadow camera axes
 const MENU_SUN = new V3(-0.18, 0.07, -0.98).normalize();    // menu: sun on the horizon just right of the Governor, rim-lighting him
 const grassTime = { value: 0 };
 
@@ -780,7 +786,7 @@ function updateMenu(dt) {
 // =====================================================================
 //  WORLD
 // =====================================================================
-const W = { scene: new THREE.Scene(), cam: new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 3600) };
+const W = { scene: new THREE.Scene(), cam: new THREE.PerspectiveCamera(60, innerWidth / innerHeight, Q.near, 3600) };
 // Every zone has a power level (0–9). Enemies there share it; fight above your own and they will take you apart.
 const ZONES = {
   plaza: { name: 'AD NOSTRA: FRONTIER', sub: 'THE EDGE OF THE WILDS', pl: 0 },   // the old plaza, where Ascendants set out from
@@ -4369,7 +4375,10 @@ function updateAmbient(dt) {
   for (let i = 0; i < a.count; i++) { let y = a.getY(i) + dt * (0.1 + (i % 5) * 0.04); if (y > 30) y = 0; a.setY(i, y); a.setX(i, a.getX(i) + Math.sin(t * 0.3 + i) * 0.01 + dt * 0.08); }
   a.needsUpdate = true;
   // light follows player
-  W.sun.position.set(P.pos.x + SUN_DIR.x * 120, SUN_DIR.y * 120, P.pos.z + SUN_DIR.z * 120); W.sun.target.position.copy(P.pos);
+  // Snapped to whole shadow-map texels, so shadow edges don't crawl and shimmer as you move.
+  const tx = 90 / Q.shadowMap, sx = Math.round(P.pos.dot(SUN_R) / tx) * tx, sy = Math.round(P.pos.dot(SUN_U) / tx) * tx, sz = P.pos.dot(SUN_DIR);
+  W.sun.target.position.copy(SUN_R).multiplyScalar(sx).addScaledVector(SUN_U, sy).addScaledVector(SUN_DIR, sz);
+  W.sun.position.copy(W.sun.target.position).addScaledVector(SUN_DIR, 120);
   // npc idle
   const ilse = G.npcs[1]; animHumanoid(ilse.rig, 0, t); ilse.rig.head.rotation.y = Math.sin(t * 0.4) * 0.4;
   const masc = G.npcs[0]; if (CROX.state !== 'dais') { /* out defending Malia */ } else if (d2(P.pos, masc.pos) < 14) turnTo(masc.group, Math.atan2(P.pos.x - masc.pos.x, P.pos.z - masc.pos.z), dt, 2); else turnTo(masc.group, 0, dt, 1);
@@ -5313,20 +5322,29 @@ $('pz-exit').onclick = exitToMenu;
 setInterval(() => { onlineCount = clamp(onlineCount + randi(-14, 16), 4200, 5600); $('online').textContent = fmtNum(onlineCount); }, 3000);
 
 // ---------------------------------------------------------------- resize & loop
-window.addEventListener('resize', () => {
+// Mobile browsers fire resize in bursts (address bar, rotation); every real resize reallocates the canvas and the
+// composer's targets, so apply at most one per frame and skip the ones that change nothing.
+let resizeQueued = false, lastSize = innerWidth + 'x' + innerHeight + '@' + devicePixelRatio;
+function applyResize() {
+  resizeQueued = false;
+  const key = innerWidth + 'x' + innerHeight + '@' + devicePixelRatio; if (key === lastSize) return; lastSize = key;
   for (const c of [menu.cam, W.cam]) { c.aspect = innerWidth / innerHeight; c.updateProjectionMatrix(); }
-  renderer.setSize(innerWidth, innerHeight); composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(innerWidth, innerHeight); bloom.resolution.set(innerWidth / 2, innerHeight / 2);
-});
+  renderer.setPixelRatio(basePR()); renderer.setSize(innerWidth, innerHeight); applyRes(true);
+}
+window.addEventListener('resize', () => { if (!resizeQueued) { resizeQueued = true; requestAnimationFrame(applyResize); } });
 // ---------------------------------------------------------------- dynamic resolution
 // Keeps the full-quality look on weak GPUs: if frames run long, render fewer pixels
 // (then upscale); when there is headroom again, step back up. Effects stay on.
+// Only the composer's internal targets change size: the canvas itself never does, so a step doesn't clear
+// the screen (on phones, resizing the canvas mid-game shows as a flash).
 const RES_STEPS = [1, 0.85, 0.72, 0.6];
 const perf = { level: 0, acc: 0, n: 0, cool: 0, grace: 3, fails: 0, frames: 0, fpsT: 0, fps: 0 };
 const basePR = () => Math.min(devicePixelRatio, Q.pixelRatio);
-function applyRes() {
+let curPR = basePR();
+function applyRes(force) {
   const pr = basePR() * (settings.dynres ? RES_STEPS[perf.level] : 1);
-  if (Math.abs(renderer.getPixelRatio() - pr) < 0.01) return;
-  renderer.setPixelRatio(pr); composer.setPixelRatio(pr); composer.setSize(innerWidth, innerHeight);
+  if (!force && Math.abs(curPR - pr) < 0.01) return;
+  curPR = pr; composer.setPixelRatio(pr); composer.setSize(innerWidth, innerHeight);
 }
 function tickPerf(raw) {
   perf.frames++; perf.fpsT += raw;
@@ -5344,8 +5362,16 @@ function tickPerf(raw) {
   else if (ms < 17.8 && perf.level > 0 && perf.cool <= 0) { perf.level--; perf.cool = 4; applyRes(); }
 }
 
-function loop() {
+// On phones, frames are paced to 60 fps even on 90/120 Hz screens: the extra frames only add heat, and a hot
+// phone throttles, which made the frame rate (and the dynamic resolution) swing.
+let nextFrame = 0;
+function loop(now) {
   requestAnimationFrame(loop);
+  if (Q.fpsCap && now) {
+    const iv = 1000 / Q.fpsCap;
+    if (now < nextFrame - 2) return;
+    nextFrame = now - nextFrame > iv ? now + iv : nextFrame + iv;
+  }
   const raw = clock.getDelta(), dt = Math.min(raw, 0.05); G.time += dt;
   tickPerf(raw);
   Sound.tick(dt);
@@ -5381,5 +5407,5 @@ function loop() {
   setTimeout(() => { hide('splash-load'); show('splash-press'); G.ready = true; }, 400);
   $('splash').addEventListener('pointerdown', () => { if (G.ready && G.mode === 'splash') enterMenuFromSplash(); });
   if (TOUCH) $('splash-press').textContent = 'TAP TO BEGIN';
-  window.__AD = G; window.__ADdbg = { W, menu, damage, killEnemy, talkMascar, updateTracker, LIFE, FERRY, CROX, HOME, homeTarget, toggleMap, stats: () => ({ batch: W.batch, res: RES_STEPS[perf.level], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries, tex: renderer.info.memory.textures, pr: renderer.getPixelRatio() }) }; // debug handles
+  window.__AD = G; window.__ADdbg = { W, menu, damage, killEnemy, talkMascar, updateTracker, LIFE, FERRY, CROX, HOME, homeTarget, toggleMap, stats: () => ({ batch: W.batch, res: RES_STEPS[perf.level], calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries, tex: renderer.info.memory.textures, pr: curPR }) }; // debug handles
 })();

@@ -83,6 +83,9 @@ The game runs at full quality on modest hardware, integrated graphics included:
 - Only the sun and sky light the world, because every extra light costs every pixel. Glows come from emissive materials and bloom.
 - **Dynamic resolution** (on by default in Settings) renders fewer pixels when frames run long and steps back up when there is headroom. Effects, shadows and anti-aliasing stay on.
 - **Show FPS** in Settings displays frame rate, current resolution and draw calls.
+- Dynamic resolution only resizes the off-screen render targets, never the canvas, so a step doesn't flash the screen. Resize events (a phone's address bar, rotation) are applied at most once a frame, and skipped when nothing changed.
+- The sun's shadow follows you in whole shadow-map texels, so shadow edges don't crawl or shimmer as you move.
+- **On phones and tablets:** 2x MSAA instead of 4x, cheaper shadow filtering, bloom computed at half size, a deeper camera near plane (more depth precision, so roads and pavements don't z-fight and flicker), no backdrop blur behind panels, and frames capped at 60 fps on 90/120 Hz screens so the phone runs cooler and doesn't throttle.
 
 ## The world
 Ad-Nostra is a proper city now, and four times the size it was: the rampart stands about 940 m from the plaza, twice as far out as before. Where the old wall stood (470 m) there is now the **Rampart Ring**, a palm boulevard. Inside it are the old districts and the **Outer Wards**; outside it the street grid runs all the way to the new wall, and in the south the city meets the sea at the **Harbour**. Press **M** for the map (click it to switch between the whole city and the old city).

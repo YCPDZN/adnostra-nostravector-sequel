@@ -289,6 +289,9 @@ input[type=checkbox]{accent-color:var(--cyan);width:18px;height:18px}
 :root{--sl:env(safe-area-inset-left,0px);--sr:env(safe-area-inset-right,0px);--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px)}
 html,body{-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;overscroll-behavior:none}
 canvas#scene{touch-action:none}
+/* Phones: no backdrop blur over the live 3D view. Re-blurring the canvas under every panel each frame is costly and
+   flickers on mobile GPUs; a slightly more opaque panel reads the same. */
+.touch .panel{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(7,11,17,.9)}
 #touch{display:none}
 .touch #touch{display:block}
 #joy{position:absolute;left:calc(28px + var(--sl));bottom:calc(30px + var(--sb));width:136px;height:136px;border-radius:50%;border:1px solid var(--line);background:radial-gradient(circle,rgba(62,230,255,.1),rgba(5,8,12,.35) 70%);touch-action:none}
