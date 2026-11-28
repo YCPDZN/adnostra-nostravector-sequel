@@ -10,7 +10,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Sound } from './audio.js';
-import { loadSoldier, loadOrion, loadMalia, loadNico, soldierReady, makeSoldier, animSoldier, MOVE_DUR } from './soldier.js';
+import { loadSoldier, loadOrion, loadMalia, loadNico, soldierReady, makeSoldier, animSoldier, MOVE_DUR, setSoldierLook } from './soldier.js';
 import { initNico, spawnNico, talkNico } from './nico.js';
 import { LAIR_R, LAIRS, DRAGON_PL, DRAGON_VARIANTS, lairAt, initDragons, loadDragons, buildLairs, spawnDragons, updateDragon, dragonSlain } from './dragons.js';
 import {
@@ -64,6 +64,7 @@ if (TOUCH) document.documentElement.classList.add('touch');
 const Q = TOUCH
   ? { pixelRatio: 1.5, shadowMap: 1024, worldGrass: 14000, menuGrass: 4000, msaa: 2, bloomScale: 0.5, near: 0.2, fpsCap: 60 }
   : { pixelRatio: 2, shadowMap: 2048, worldGrass: 36000, menuGrass: 9000, msaa: 4, bloomScale: 1, near: 0.1, fpsCap: 0 };
+if (TOUCH) setSoldierLook({ roughMin: 0.42, normal: 0.6 });   // armour that doesn't sparkle at phone resolution
 
 // ---------------------------------------------------------------- renderer
 const canvas = $('scene');
@@ -480,12 +481,16 @@ function showFar(ent, on) {
 const _lodM = new THREE.Matrix4();
 function updateLOD() {
   if (!farChars.body) return;
-  const cp = W.cam.position, n2 = LOD_NEAR * LOD_NEAR, seen = new Set();
+  // Hysteresis: a character turns into its full rig inside LOD_NEAR - 2 and back into the batch past LOD_NEAR + 2,
+  // so someone walking along the boundary (or the camera bobbing) doesn't swap them back and forth every frame.
+  // Rigs are posed a little further out still (lodSoon), so a character never appears in a stale pose for a frame.
+  const cp = W.cam.position, nIn = (LOD_NEAR - 2) ** 2, nOut = (LOD_NEAR + 2) ** 2, nSoon = (LOD_NEAR + 6) ** 2, seen = new Set();
   for (const list of [G.enemies, G.bots, G.npcs, G.animals]) for (const e of list) {
     if (e.lod === undefined) bakeLOD(e);
     if (!e.lod) continue;
     seen.add(e);
-    const g = e.group, near = g.position.distanceToSquared(cp) < n2, shown = g.visible && g.parent !== null;
+    const g = e.group, dd = g.position.distanceToSquared(cp), near = e.lodNear ? dd < nOut : dd < nIn, shown = g.visible && g.parent !== null;
+    e.lodSoon = dd < nSoon;
     if (near !== e.lodNear) { e.lodNear = near; for (const p of e.lodParts) p.visible = near; }
     const far = !near && shown;
     showFar(e, far);
@@ -867,7 +872,7 @@ function buildWorld() {
   sun.castShadow = true; sun.shadow.mapSize.set(Q.shadowMap, Q.shadowMap);
   Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 300 });
   sun.shadow.camera.updateProjectionMatrix();
-  sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+  sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03 * 2048 / Q.shadowMap;   // scaled to the texel size: phones' coarser map needs more, or acne crawls over moving characters
   S.add(sun, sun.target); W.sun = sun;
 
   // sky dome + the great mountain and mesas on the horizon
@@ -3002,7 +3007,7 @@ function updateAnimals(dt) {
     a.pos.x += Math.sin(a.yaw) * a.speed * dt; a.pos.z += Math.cos(a.yaw) * a.speed * dt;
     resolveCollision(a.pos, S.r);
     a.group.position.copy(a.pos); a.group.rotation.y = a.yaw;
-    if (a.lodNear !== false) animAnimal(a, dt, t); // far animals are drawn from the shared batch; no need to pose limbs
+    if (a.lodNear !== false || a.lodSoon) animAnimal(a, dt, t); // far animals are drawn from the shared batch; no need to pose limbs
   }
 }
 
@@ -4263,7 +4268,7 @@ function updateBots(dt) {
   for (const b of G.bots) {
     if (!b.alive) {
       b.deadT += dt; if (b.deadT > (b.respawnT || 12)) reviveBot(b);
-      b.group.position.copy(b.pos).setY(b.alive ? 0 : 0.3); if (b.rig.isSoldier) animSoldier(b.rig, b, dt, G.time, b.lodNear !== false); continue;
+      b.group.position.copy(b.pos).setY(b.alive ? 0 : 0.3); if (b.rig.isSoldier) animSoldier(b.rig, b, dt, G.time, b.lodNear !== false || b.lodSoon); continue;
     }
     b.atk = Math.max(0, b.atk - dt); b.danceT = Math.max(0, b.danceT - dt);
     const px = b.pos.x, pz = b.pos.z;
@@ -4322,7 +4327,7 @@ function updateBots(dt) {
     } else if (want > 0.01 && (b.blockT = (b.blockT || 0) + dt) > 1.5) b.side = 0;
     if (b.rig.isSoldier) botMotion(b, dt);
     b.group.position.copy(b.pos); turnTo(b.group, b.yaw + (b.danceT > 0 ? G.time * 6 : 0), dt, b.danceT > 0 ? 50 : 12);
-    if (b.rig.isSoldier) { b.combat = (b.fury || b.state === 'hunt' || b.state === 'escort' || b.state === 'assist') && !!b.target && b.target.alive && d2(b.pos, b.target.pos) < 18; animSoldier(b.rig, b, dt, G.time, b.lodNear !== false); }
+    if (b.rig.isSoldier) { b.combat = (b.fury || b.state === 'hunt' || b.state === 'escort' || b.state === 'assist') && !!b.target && b.target.alive && d2(b.pos, b.target.pos) < 18; animSoldier(b.rig, b, dt, G.time, b.lodNear !== false || b.lodSoon); }
     else animHumanoid(b.rig, b.move, G.time + b.name.length, b.atk, b.danceT);
   }
 }
