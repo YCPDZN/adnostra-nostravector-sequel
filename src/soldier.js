@@ -24,6 +24,19 @@ const MODELS = {
 };
 export const soldierReady = (model = 'soldier') => !!MODELS[model].proto;
 
+// Phones render fewer pixels, so the armour's fine normal-map detail and glossy metal alias: single bright
+// specular pixels blink on and off as the limbs move, and bloom spreads the blink. There the armour gets a
+// roughness floor and a softer normal map. Set once at boot, before any soldier is made.
+const LOOK = { roughMin: 0, normal: 1 };
+export function setSoldierLook(o) { Object.assign(LOOK, o); }
+function antiSparkle(m) {
+  if (!LOOK.roughMin) return;
+  m.normalScale.multiplyScalar(LOOK.normal);
+  const rm = LOOK.roughMin.toFixed(3);
+  m.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\n\troughnessFactor = max(roughnessFactor, ${rm});`); };
+  m.customProgramCacheKey = () => 'antiSparkle' + rm;
+}
+
 async function loadRigged(model) {
   const M = MODELS[model];
   await new Promise((res, rej) => {
@@ -226,7 +239,7 @@ export function makeSoldier({ model = 'soldier', energy = 0x3ee6ff, accent = 0x3
   const MD = MODELS[model];
   const root = cloneSkinned(MD.proto);
   const mesh = root.getObjectByName(MD.mesh);
-  const m = mesh.material.clone(); if (MD.energyGlow) { m.emissive = new THREE.Color(energy); m.emissiveIntensity = 3.2; } if (tint != null) m.color = new THREE.Color(tint);
+  const m = mesh.material.clone(); antiSparkle(m); if (MD.energyGlow) { m.emissive = new THREE.Color(energy); m.emissiveIntensity = 3.2; } if (tint != null) m.color = new THREE.Color(tint);
   mesh.material = m; mesh.castShadow = true; mesh.receiveShadow = true;
   mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1, 0), 1.9); // posed silhouettes reach past the bind pose
   const B = {}; root.traverse(o => { if (o.isBone) B[o.name] = o; });
